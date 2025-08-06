@@ -8,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class MusicPlayerClient implements ClientModInitializer {
-    public static final Logger LOGGER = LoggerFactory.getLogger("客户端：MusicPlayer");
+    public static final Logger LOGGER = LoggerFactory.getLogger("客户端:MusicPlayer");
 
     @Override
     public void onInitializeClient() {
