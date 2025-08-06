@@ -1,24 +1,28 @@
 package com.junhsiun;
 
+import com.junhsiun.core.channel.MusicChannel;
+import com.junhsiun.core.command.CommandRegister;
 import net.fabricmc.api.ModInitializer;
-
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class MusicPlayer implements ModInitializer {
-	public static final String MOD_ID = "musicplayer";
+    public static final String MOD_ID = "musicplayer";
+    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-	// This logger is used to write text to the console and the log file.
-	// It is considered best practice to use your mod id as the logger's name.
-	// That way, it's clear which mod wrote info, warnings, and errors.
-	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    @Override
+    public void onInitialize() {
+        CommandRegister.register(serverCommandSource -> {
+            ServerPlayerEntity player = serverCommandSource.getPlayer();
+            if (player != null) {
+                MusicChannel.send(player, "你好客户端");
+            }
+            serverCommandSource.sendFeedback(() -> Text.literal("执行结束1"), true);
+            return 1;
+        });
 
-	@Override
-	public void onInitialize() {
-		// This code runs as soon as Minecraft is in a mod-load-ready state.
-		// However, some things (like resources) may still be uninitialized.
-		// Proceed with mild caution.
 
-		LOGGER.info("Hello Fabric world!");
-	}
+    }
 }
