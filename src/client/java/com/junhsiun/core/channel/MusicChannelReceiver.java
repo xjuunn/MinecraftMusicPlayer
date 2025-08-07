@@ -1,9 +1,13 @@
 package com.junhsiun.core.channel;
 
+import javazoom.jl.decoder.JavaLayerException;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.Identifier;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
 
 public class MusicChannelReceiver {
     public static final Identifier MUSIC_CHANNEL = new Identifier("musicplayer", "play_music");
@@ -15,13 +19,21 @@ public class MusicChannelReceiver {
                                                                     packetSender) -> {
             String txt = packetByteBuf.readString();
             minecraftClient.execute(() -> {
-                callback.onReceive(txt, minecraftClient, packetSender);
+                try {
+                    callback.onReceive(txt, minecraftClient, packetSender);
+                } catch (FileNotFoundException e) {
+                    throw new RuntimeException(e);
+                } catch (JavaLayerException e) {
+                    throw new RuntimeException(e);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             });
         });
     }
 
     public interface ReceiveCallBack {
-        void onReceive(String txt, MinecraftClient minecraftClient, PacketSender packetSender);
+        void onReceive(String txt, MinecraftClient minecraftClient, PacketSender packetSender) throws IOException, JavaLayerException;
     }
 
 

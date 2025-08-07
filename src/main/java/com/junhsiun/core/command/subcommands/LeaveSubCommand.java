@@ -6,12 +6,14 @@ import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 
 public class LeaveSubCommand extends BaseSubCommand {
+
     @Override
-    public LiteralArgumentBuilder<ServerCommandSource> build() {
-        return CommandManager.literal(getName()).executes(context -> {
+    LiteralArgumentBuilder<ServerCommandSource> config(LiteralArgumentBuilder<ServerCommandSource> cmd) {
+        cmd.executes(context -> {
             ModLogger.info("离开");
             return 1;
         });
+        return cmd;
     }
 
     @Override

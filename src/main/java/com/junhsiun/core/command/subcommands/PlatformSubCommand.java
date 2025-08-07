@@ -10,15 +10,15 @@ import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.Text;
 
 public class PlatformSubCommand extends BaseSubCommand {
+
     @Override
-    public LiteralArgumentBuilder<ServerCommandSource> build() {
-        LiteralArgumentBuilder<ServerCommandSource> subCmd = CommandManager.literal(this.getName());
+    LiteralArgumentBuilder<ServerCommandSource> config(LiteralArgumentBuilder<ServerCommandSource> cmd) {
         MusicPlatformRegistry.all().forEach(platform -> {
             LiteralArgumentBuilder<ServerCommandSource> platformCmd = CommandManager.literal(platform.getName());
             setSubCommand(platformCmd, platform);
-            subCmd.then(platformCmd);
+            cmd.then(platformCmd);
         });
-        return subCmd;
+        return cmd;
     }
 
     private void setSubCommand(LiteralArgumentBuilder<ServerCommandSource> cmd, BasePlatform platform) {

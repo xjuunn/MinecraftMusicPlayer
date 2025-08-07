@@ -9,15 +9,14 @@ import net.minecraft.server.command.ServerCommandSource;
 
 public class SearchSubCommand extends BaseSubCommand {
     @Override
-    public LiteralArgumentBuilder<ServerCommandSource> build() {
-        LiteralArgumentBuilder<ServerCommandSource> builder = CommandManager.literal(this.getName());
+    LiteralArgumentBuilder<ServerCommandSource> config(LiteralArgumentBuilder<ServerCommandSource> cmd) {
         MusicPlatformRegistry.all().forEach(platform -> {
             LiteralArgumentBuilder<ServerCommandSource> searchCmd = CommandManager.literal(platform.getName());
             setSubCommand(searchCmd, platform);
-            builder.then(searchCmd);
+            cmd.then(searchCmd);
 
         });
-        return builder;
+        return cmd;
     }
 
     private void setSubCommand(LiteralArgumentBuilder<ServerCommandSource> cmd, IMusicPlatform platform) {

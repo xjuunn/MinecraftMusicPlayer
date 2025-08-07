@@ -33,6 +33,7 @@ public class MusicCommand {
             commandArrayList.add(new LeaveSubCommand());
             commandArrayList.add(new NextSubCommand());
             commandArrayList.add(new UISubCommand());
+            commandArrayList.add(new TestSubCommand());
 //            commandArrayList.add(new HelpSubCommand());
             LiteralArgumentBuilder<ServerCommandSource> musicCmd = CommandManager.literal("music");
             commandArrayList.forEach(cmd -> {
@@ -49,10 +50,10 @@ public class MusicCommand {
                         .mapToInt(cmd -> cmd.getName().length())
                         .max().orElse(0);
                 commandArrayList.forEach(cmd -> {
-                    String paddedName = String.format("%-" + (maxLength + 2) + "s", cmd.getName()); // 左对齐填充
+                    String paddedName = String.format("%-" + (maxLength + 2) + "s", cmd.getName());
                     Text line = Text.literal("  ")
-                            .append(Text.literal(paddedName).formatted(Formatting.GOLD)) // 命令名：金色
-                            .append(Text.literal(cmd.getDescription()).formatted(Formatting.GRAY)); // 描述：灰色
+                            .append(Text.literal(paddedName).formatted(Formatting.GOLD))
+                            .append(Text.literal(cmd.getDescription()).formatted(Formatting.GRAY));
 
                     source.sendFeedback(() -> line, false);
                 });

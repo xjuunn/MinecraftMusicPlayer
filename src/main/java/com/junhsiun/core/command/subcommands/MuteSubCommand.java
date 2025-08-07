@@ -5,24 +5,23 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 
-public class MuteSubCommand extends BaseSubCommand{
+public class MuteSubCommand extends BaseSubCommand {
+
     @Override
-    public LiteralArgumentBuilder<ServerCommandSource> build() {
-        LiteralArgumentBuilder<ServerCommandSource> muteCmd = CommandManager.literal(this.getName());
-        muteCmd.then(CommandManager.literal("once").executes(context -> {
+    LiteralArgumentBuilder<ServerCommandSource> config(LiteralArgumentBuilder<ServerCommandSource> cmd) {
+        cmd.then(CommandManager.literal("once").executes(context -> {
             ModLogger.info("静音一次");
             return 1;
         }));
-        muteCmd.then(CommandManager.literal("true").executes(context -> {
+        cmd.then(CommandManager.literal("true").executes(context -> {
             ModLogger.info("静音");
             return 1;
         }));
-        muteCmd.then(CommandManager.literal("false").executes(context -> {
+        cmd.then(CommandManager.literal("false").executes(context -> {
             ModLogger.info("取消静音");
             return 1;
         }));
-
-        return muteCmd;
+        return cmd;
     }
 
     @Override

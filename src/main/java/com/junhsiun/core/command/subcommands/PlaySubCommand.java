@@ -7,12 +7,12 @@ import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 
 public class PlaySubCommand extends BaseSubCommand {
+
     @Override
-    public LiteralArgumentBuilder<ServerCommandSource> build() {
-        LiteralArgumentBuilder<ServerCommandSource> builder = CommandManager.literal(this.getName());
+    LiteralArgumentBuilder<ServerCommandSource> config(LiteralArgumentBuilder<ServerCommandSource> cmd) {
         MusicPlatformRegistry.all().forEach(platform -> {
             String name = platform.getName();
-            builder.then(CommandManager.literal(name)
+            cmd.then(CommandManager.literal(name)
                     .then(CommandManager.argument("music_id", StringArgumentType.word()).executes(context -> {
                         String musicId = StringArgumentType.getString(context, "music_id");
                         platform.play(musicId);
@@ -20,8 +20,7 @@ public class PlaySubCommand extends BaseSubCommand {
                     }))
             );
         });
-
-        return builder;
+        return cmd;
     }
 
     @Override
