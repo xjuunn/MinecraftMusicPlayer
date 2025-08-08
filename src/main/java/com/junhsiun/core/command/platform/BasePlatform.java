@@ -1,5 +1,9 @@
 package com.junhsiun.core.command.platform;
 
+import com.junhsiun.core.command.subcommands.vo.SearchVO;
+
+import java.util.ArrayList;
+
 public abstract class BasePlatform implements IMusicPlatform {
     private String BaseUrl;
 
@@ -12,7 +16,7 @@ public abstract class BasePlatform implements IMusicPlatform {
         BaseUrl = baseUrl;
     }
 
-    public abstract String[] searchPlayList(String keyword);
+    public abstract ArrayList<SearchVO> searchPlayList(String keyword);
 
-    public abstract String[] searchUser(String keyword);
+    public abstract ArrayList<SearchVO> searchUser(String keyword);
 }

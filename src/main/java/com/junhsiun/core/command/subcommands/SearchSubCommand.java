@@ -28,28 +28,72 @@ public class SearchSubCommand extends BaseSubCommand {
         cmd.then(CommandManager.literal("song").then(CommandManager.argument("keyword", StringArgumentType.string()).executes(context -> {
             String keyword = StringArgumentType.getString(context, "keyword");
             ArrayList<SearchVO> searchVOS = platform.searchSong(keyword);
+            if (searchVOS.isEmpty()) {
+                context.getSource().sendFeedback(() -> Text.literal("  未搜索到相关音乐"), false);
+                return 1;
+            }
+            context.getSource().sendFeedback(() -> Text.literal(""), false);
+            context.getSource().sendFeedback(() -> Text.literal("  音乐搜索结果").setStyle(Style.EMPTY.withBold(true)), false);
+            context.getSource().sendFeedback(() -> Text.literal(""), false);
             searchVOS.forEach(song -> {
                 context.getSource().sendFeedback(() -> {
                     MutableText txt = Text.literal("  " + song.getName()).setStyle(Style.EMPTY
-                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music play 网易云音乐 " + song.getId()))
+                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music play " + platform.getName() + " " + song.getId()))
                             .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("点击播放"))));
                     MutableText describe = Text.literal(" - " + song.getDescribe()).setStyle(Style.EMPTY.withColor(Formatting.GRAY));
                     txt.append(describe);
                     return txt;
                 }, false);
             });
+            context.getSource().sendFeedback(() -> Text.literal(""), false);
             return 1;
         })));
 
         cmd.then(CommandManager.literal("playlist").then(CommandManager.argument("keyword", StringArgumentType.string()).executes(context -> {
             String keyword = StringArgumentType.getString(context, "keyword");
-            platform.searchPlayList(keyword);
+            ArrayList<SearchVO> searchVOS = platform.searchPlayList(keyword);
+            if (searchVOS.isEmpty()) {
+                context.getSource().sendFeedback(() -> Text.literal("  未搜索到相关歌单"), false);
+                return 1;
+            }
+            context.getSource().sendFeedback(() -> Text.literal(""), false);
+            context.getSource().sendFeedback(() -> Text.literal("  歌单搜索结果").setStyle(Style.EMPTY.withBold(true)), false);
+            context.getSource().sendFeedback(() -> Text.literal(""), false);
+            searchVOS.forEach(songList -> {
+                context.getSource().sendFeedback(() -> {
+                    MutableText txt = Text.literal("  " + songList.getName()).setStyle(Style.EMPTY
+                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music view playlist " + platform.getName() + " " + songList.getId()))
+                            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("查看歌单"))));
+                    MutableText describe = Text.literal(" - " + songList.getDescribe()).setStyle(Style.EMPTY.withColor(Formatting.GRAY));
+                    txt.append(describe);
+                    return txt;
+                }, false);
+            });
+            context.getSource().sendFeedback(() -> Text.literal(""), false);
             return 1;
         })));
 
         cmd.then(CommandManager.literal("user").then(CommandManager.argument("keyword", StringArgumentType.string()).executes(context -> {
             String keyword = StringArgumentType.getString(context, "keyword");
-            platform.searchUser(keyword);
+            ArrayList<SearchVO> searchVOS = platform.searchUser(keyword);
+            if (searchVOS.isEmpty()) {
+                context.getSource().sendFeedback(() -> Text.literal("  未搜索到相关用户"), false);
+                return 1;
+            }
+            context.getSource().sendFeedback(() -> Text.literal(""), false);
+            context.getSource().sendFeedback(() -> Text.literal("  用户搜索结果").setStyle(Style.EMPTY.withBold(true)), false);
+            context.getSource().sendFeedback(() -> Text.literal(""), false);
+            searchVOS.forEach(user -> {
+                context.getSource().sendFeedback(() -> {
+                    MutableText txt = Text.literal("  " + user.getName()).setStyle(Style.EMPTY
+                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music view user " + platform.getName() + " " + user.getId()))
+                            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("查看用户"))));
+                    MutableText describe = Text.literal(" - " + user.getDescribe()).setStyle(Style.EMPTY.withColor(Formatting.GRAY));
+                    txt.append(describe);
+                    return txt;
+                }, false);
+            });
+            context.getSource().sendFeedback(() -> Text.literal(""), false);
             return 1;
         })));
 

@@ -8,7 +8,7 @@ public interface IMusicPlatform {
     String getName();
     void play(String musicID);
     ArrayList<SearchVO> searchSong(String keyword);
-    String[] searchPlayList(String keyword);
-    String[] searchUser(String keyword);
+    ArrayList<SearchVO> searchPlayList(String keyword);
+    ArrayList<SearchVO> searchUser(String keyword);
 }
 // set

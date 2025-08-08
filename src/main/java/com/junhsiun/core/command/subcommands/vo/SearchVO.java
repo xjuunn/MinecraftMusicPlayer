@@ -6,11 +6,10 @@ public class SearchVO {
     String describe;
     boolean isVip;
 
-    public SearchVO(long id, String name, String describe, String hover, boolean isVip) {
+    public SearchVO(long id, String name, String describe) {
         this.id = id;
         this.name = name;
         this.describe = describe;
-        this.isVip = isVip;
     }
 
     public long getId() {
@@ -35,13 +34,5 @@ public class SearchVO {
 
     public void setDescribe(String describe) {
         this.describe = describe;
-    }
-
-    public boolean isVip() {
-        return isVip;
-    }
-
-    public void setVip(boolean vip) {
-        isVip = vip;
     }
 }

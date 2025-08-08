@@ -11,6 +11,9 @@ public class SearchBean {
     public ResultDTO result;
     @JsonProperty("code")
     public Integer code;
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonProperty("queryRewriteInfo")
+    private Object queryRewriteInfo;
 
     public static class ResultDTO {
         @JsonProperty("searchQcReminder")
@@ -19,6 +22,9 @@ public class SearchBean {
         public List<SongsDTO> songs;
         @JsonProperty("songCount")
         public Integer songCount;
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        @JsonProperty("queryRewriteInfo")
+        private Object queryRewriteInfo;
 
         public static class SongsDTO {
             @JsonProperty("name")
@@ -116,6 +122,9 @@ public class SearchBean {
             @JsonProperty("tns")
             public List<String> tns;
             @JsonIgnoreProperties(ignoreUnknown = true)
+            @JsonProperty("queryRewriteInfo")
+            private Object queryRewriteInfo;
+            @JsonIgnoreProperties(ignoreUnknown = true)
             public static class AlDTO {
                 @JsonProperty("id")
                 public long id;
@@ -129,6 +138,9 @@ public class SearchBean {
                 public String picStr;
                 @JsonProperty("pic")
                 public Long pic;
+                @JsonIgnoreProperties(ignoreUnknown = true)
+                @JsonProperty("queryRewriteInfo")
+                private Object queryRewriteInfo;
             }
             @JsonIgnoreProperties(ignoreUnknown = true)
             public static class HDTO {
@@ -142,6 +154,9 @@ public class SearchBean {
                 public Integer vd;
                 @JsonProperty("sr")
                 public Integer sr;
+                @JsonIgnoreProperties(ignoreUnknown = true)
+                @JsonProperty("queryRewriteInfo")
+                private Object queryRewriteInfo;
             }
             @JsonIgnoreProperties(ignoreUnknown = true)
             public static class PrivilegeDTO {
@@ -212,6 +227,9 @@ public class SearchBean {
                 @JsonProperty("bd")
                 public Object bd;
                 @JsonIgnoreProperties(ignoreUnknown = true)
+                @JsonProperty("queryRewriteInfo")
+                private Object queryRewriteInfo;
+                @JsonIgnoreProperties(ignoreUnknown = true)
                 public static class FreeTrialPrivilegeDTO {
                     @JsonProperty("resConsumable")
                     public Boolean resConsumable;
@@ -225,6 +243,9 @@ public class SearchBean {
                     public Object playReason;
                     @JsonProperty("freeLimitTagType")
                     public Object freeLimitTagType;
+                    @JsonIgnoreProperties(ignoreUnknown = true)
+                    @JsonProperty("queryRewriteInfo")
+                    private Object queryRewriteInfo;
                 }
                 @JsonIgnoreProperties(ignoreUnknown = true)
                 public static class ChargeInfoListDTO {
@@ -236,6 +257,9 @@ public class SearchBean {
                     public Object chargeMessage;
                     @JsonProperty("chargeType")
                     public Integer chargeType;
+                    @JsonIgnoreProperties(ignoreUnknown = true)
+                    @JsonProperty("queryRewriteInfo")
+                    private Object queryRewriteInfo;
                 }
             }
             @JsonIgnoreProperties(ignoreUnknown = true)
@@ -249,6 +273,9 @@ public class SearchBean {
                 @JsonProperty("alias")
                 @JsonIgnoreProperties(ignoreUnknown = true)
                 public List<?> alias;
+                @JsonIgnoreProperties(ignoreUnknown = true)
+                @JsonProperty("queryRewriteInfo")
+                private Object queryRewriteInfo;
             }
         }
     }
