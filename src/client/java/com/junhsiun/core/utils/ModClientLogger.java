@@ -3,7 +3,7 @@ package com.junhsiun.core.utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ModLogger {
+public class ModClientLogger {
     public static final String MOD_ID = "客户端:musicplayer";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 

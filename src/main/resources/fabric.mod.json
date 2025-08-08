@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
 	"id": "musicplayer",
-	"version": "${version}",
+	"version": "1.0.0",
 	"name": "MusicPlayer",
 	"description": "This is an example description! Tell everyone what your mod is about!",
 	"authors": [
@@ -22,13 +22,6 @@
 			"com.junhsiun.MusicPlayerClient"
 		]
 	},
-	"mixins": [
-		"musicplayer.mixins.json",
-		{
-			"config": "musicplayer.client.mixins.json",
-			"environment": "client"
-		}
-	],
 	"depends": {
 		"fabricloader": ">=0.16.14",
 		"minecraft": "~1.20.1",

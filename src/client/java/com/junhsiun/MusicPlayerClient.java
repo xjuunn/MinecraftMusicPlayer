@@ -2,10 +2,9 @@ package com.junhsiun;
 
 import com.junhsiun.core.channel.MusicChannelReceiver;
 import com.junhsiun.core.musicPlayer.ModMusicPlayer;
-import com.junhsiun.core.utils.ModLogger;
+import com.junhsiun.core.utils.ModClientLogger;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,7 +21,7 @@ public class MusicPlayerClient implements ClientModInitializer {
             String[] cmd = txt.split(" ");
             if (Objects.equals(cmd[1], "play")) {
                 musicPlayer.close();
-                ModLogger.info("1播放音乐：" + cmd[2]);
+                ModClientLogger.info("1播放音乐：" + cmd[2]);
                 musicPlayer.loadNetworkMusic(cmd[2]);
                 musicPlayer.play();
             }

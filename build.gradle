@@ -41,6 +41,7 @@ dependencies {
 	implementation 'javazoom:jlayer:1.0.1'
 	implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 	implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
+	include 'javazoom:jlayer:1.0.1'
 	
 }
 
@@ -68,6 +69,8 @@ java {
 
 jar {
 	inputs.property "archivesName", project.base.archivesName
+
+	from sourceSets.main.output
 
 	from("LICENSE") {
 		rename { "${it}_${inputs.properties.archivesName}"}
