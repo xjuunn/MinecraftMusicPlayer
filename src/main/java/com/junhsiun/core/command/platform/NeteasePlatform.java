@@ -1,15 +1,15 @@
 package com.junhsiun.core.command.platform;
 
-import com.junhsiun.core.command.platform.beans.netease.SearchBean;
-import com.junhsiun.core.command.platform.beans.netease.SearchPlayListBean;
-import com.junhsiun.core.command.platform.beans.netease.SearchUserBean;
-import com.junhsiun.core.command.platform.beans.netease.VKeysGetUrlBean;
+import com.junhsiun.core.command.platform.beans.netease.*;
 import com.junhsiun.core.command.subcommands.vo.SearchVO;
 import com.junhsiun.core.utils.ModLogger;
 import com.junhsiun.core.utils.OkHttpUtil;
 
 import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class NeteasePlatform extends BasePlatform {
     @Override
@@ -20,15 +20,49 @@ public class NeteasePlatform extends BasePlatform {
     @Override
     public String getMusicUrl(String musicID) {
         ModLogger.info(getName() + " " + "播放音乐： " + musicID);
-
-        return getMusicUrl1(musicID);
+        String url = getMusicNetease2(musicID);
+        if (url == null) url = getMusicNetease1(musicID);
+        if (url == null) url = getMusicUrl1(musicID);
+        ModLogger.info("获取到了音乐链接：" + url);
+        return url;
     }
 
+    // https://doc.vkeys.cn/api-doc/v2/%E9%9F%B3%E4%B9%90%E6%A8%A1%E5%9D%97/%E7%BD%91%E6%98%93%E4%BA%91%E9%9F%B3%E4%B9%90/1-netease.html
+    // 速度慢 有时候接口出错
     private String getMusicUrl1(String musicId) {
         try {
-            VKeysGetUrlBean vKeysGetUrlBean = OkHttpUtil.get("https://api.vkeys.cn/v2/music/netease?id=" + musicId + "&quality=4", VKeysGetUrlBean.class,true);
+            VKeysGetUrlBean vKeysGetUrlBean = OkHttpUtil.get("https://api.vkeys.cn/v2/music/netease?id=" + musicId + "&quality=4", VKeysGetUrlBean.class, true);
             return vKeysGetUrlBean.data.url;
         } catch (IOException e) {
+            ModLogger.info(e.toString());
+            return null;
+        }
+    }
+
+    // 网易云旧版音乐接口
+    private String getMusicNetease1(String musicId) {
+        try {
+            NeteaseGetUrlBean neteaseGetUrlBean = OkHttpUtil.get("/song/url?id=" + musicId, NeteaseGetUrlBean.class);
+            return neteaseGetUrlBean.data.get(0).url;
+        } catch (IOException e) {
+            ModLogger.info(e.toString());
+            return null;
+        }
+    }
+
+    // 网易云直链获取 速度快 但是可能会重定向到404
+    private String getMusicNetease2(String musicId) {
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL("http://music.163.com/song/media/outer/url?id=" + musicId + ".mp3").openConnection();
+            conn.setInstanceFollowRedirects(false);
+            conn.setConnectTimeout(5000);
+            String location = conn.getHeaderField("location");
+            if (location.contains("music.163.com/404")) {
+                return null;
+            }
+            return location;
+        } catch (IOException e) {
+            ModLogger.info(e.toString());
             return null;
         }
     }

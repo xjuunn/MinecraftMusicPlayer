@@ -11,7 +11,7 @@ import java.net.InetSocketAddress;
 import java.net.Proxy;
 
 public class OkHttpUtil {
-    private static OkHttpClient client = new OkHttpClient.Builder()
+    public static OkHttpClient client = new OkHttpClient.Builder()
             .proxy(new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", 7897)))
             .build();
     private static String Base_Url = "https://odlimemusicapi.vercel.app";
