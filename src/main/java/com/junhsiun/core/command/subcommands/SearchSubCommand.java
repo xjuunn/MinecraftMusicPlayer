@@ -62,7 +62,7 @@ public class SearchSubCommand extends BaseSubCommand {
             searchVOS.forEach(songList -> {
                 context.getSource().sendFeedback(() -> {
                     MutableText txt = Text.literal("  " + songList.getName()).setStyle(Style.EMPTY
-                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music view playlist " + platform.getName() + " " + songList.getId()))
+                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music view playlist " + platform.getName() + " \"" + songList.getId() + "\""))
                             .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("查看歌单"))));
                     MutableText describe = Text.literal(" - " + songList.getDescribe()).setStyle(Style.EMPTY.withColor(Formatting.GRAY));
                     txt.append(describe);

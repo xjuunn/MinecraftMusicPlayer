@@ -1,6 +1,7 @@
 package com.junhsiun.core.command.platform;
 
 import com.junhsiun.core.command.platform.beans.netease.*;
+import com.junhsiun.core.command.subcommands.vo.PlayListVO;
 import com.junhsiun.core.command.subcommands.vo.SearchVO;
 import com.junhsiun.core.utils.ModLogger;
 import com.junhsiun.core.utils.OkHttpUtil;
@@ -9,9 +10,8 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.concurrent.atomic.AtomicReference;
 
-public class NeteasePlatform extends BasePlatform {
+public class NeteasePlatform extends BasePlatform implements IPlayList {
     @Override
     public String getName() {
         return "网易云音乐";
@@ -125,5 +125,32 @@ public class NeteasePlatform extends BasePlatform {
             ModLogger.error(e.toString());
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public PlayListVO playListInfo(String id) {
+        ModLogger.info(getName() + " " + "查看歌单： " + id);
+        try {
+            PlayListBean playListBean = OkHttpUtil.get("/playlist/detail?id=" + id + "&limit=10", PlayListBean.class);
+            PlayListVO playListVO = new PlayListVO();
+            if (playListBean == null || playListBean.playlist == null) {
+                return playListVO;
+            }
+            playListVO.setId(String.valueOf(playListBean.playlist.id));
+            playListVO.setName(playListBean.playlist.name);
+            playListVO.setUserId(String.valueOf(playListBean.playlist.creator.userId));
+            playListVO.setUsername(playListBean.playlist.creator.nickname);
+            ArrayList<SearchVO> searchVOS = new ArrayList<>();
+            playListBean.playlist.tracks.forEach(tracksDTO -> {
+                ModLogger.info(new SearchVO(tracksDTO.id, tracksDTO.name, tracksDTO.al.name).toString());
+                searchVOS.add(new SearchVO(tracksDTO.id, tracksDTO.name, tracksDTO.al.name));
+            });
+            playListVO.setSongsList(searchVOS);
+            return playListVO;
+        } catch (IOException e) {
+            ModLogger.info(e.toString());
+            return null;
+        }
+
     }
 }

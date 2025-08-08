@@ -4,7 +4,6 @@ public class SearchVO {
     long id;
     String name;
     String describe;
-    boolean isVip;
 
     public SearchVO(long id, String name, String describe) {
         this.id = id;
@@ -34,5 +33,14 @@ public class SearchVO {
 
     public void setDescribe(String describe) {
         this.describe = describe;
+    }
+
+    @Override
+    public String toString() {
+        return "SearchVO{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", describe='" + describe + '\'' +
+                '}';
     }
 }
