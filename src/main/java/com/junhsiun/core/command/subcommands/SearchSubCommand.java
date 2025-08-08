@@ -88,8 +88,10 @@ public class SearchSubCommand extends BaseSubCommand {
                     MutableText txt = Text.literal("  " + user.getName()).setStyle(Style.EMPTY
                             .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music view user " + platform.getName() + " " + user.getId()))
                             .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("查看用户"))));
-                    MutableText describe = Text.literal(" - " + user.getDescribe()).setStyle(Style.EMPTY.withColor(Formatting.GRAY));
-                    txt.append(describe);
+                    if (user.getDescribe() != "") {
+                        MutableText describe = Text.literal(" - " + user.getDescribe()).setStyle(Style.EMPTY.withColor(Formatting.GRAY));
+                        txt.append(describe);
+                    }
                     return txt;
                 }, false);
             });

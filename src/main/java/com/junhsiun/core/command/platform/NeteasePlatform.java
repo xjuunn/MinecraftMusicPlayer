@@ -3,6 +3,7 @@ package com.junhsiun.core.command.platform;
 import com.junhsiun.core.command.platform.beans.netease.SearchBean;
 import com.junhsiun.core.command.platform.beans.netease.SearchPlayListBean;
 import com.junhsiun.core.command.platform.beans.netease.SearchUserBean;
+import com.junhsiun.core.command.platform.beans.netease.VKeysGetUrlBean;
 import com.junhsiun.core.command.subcommands.vo.SearchVO;
 import com.junhsiun.core.utils.ModLogger;
 import com.junhsiun.core.utils.OkHttpUtil;
@@ -17,8 +18,19 @@ public class NeteasePlatform extends BasePlatform {
     }
 
     @Override
-    public void play(String musicID) {
+    public String getMusicUrl(String musicID) {
         ModLogger.info(getName() + " " + "播放音乐： " + musicID);
+
+        return getMusicUrl1(musicID);
+    }
+
+    private String getMusicUrl1(String musicId) {
+        try {
+            VKeysGetUrlBean vKeysGetUrlBean = OkHttpUtil.get("https://api.vkeys.cn/v2/music/netease?id=" + musicId + "&quality=4", VKeysGetUrlBean.class,true);
+            return vKeysGetUrlBean.data.url;
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     @Override

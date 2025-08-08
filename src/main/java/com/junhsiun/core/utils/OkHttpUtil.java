@@ -1,8 +1,10 @@
 package com.junhsiun.core.utils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ser.Serializers;
-import okhttp3.*;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -15,23 +17,18 @@ public class OkHttpUtil {
     private static String Base_Url = "https://odlimemusicapi.vercel.app";
 
     public static <T> T get(String url, Class<T> clazz) throws IOException {
-        Request request = new Request.Builder().url(Base_Url + url).build();
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw new IOException("Unexpected code: " + response);
-            }
-            ResponseBody body = response.body();
-            if (body == null) {
-                return null;
-            }
-            String bodyStr = body.string();
-            ObjectMapper mapper = new ObjectMapper();
-            return mapper.readValue(bodyStr, clazz);
-        }
+        return get(url, clazz, false);
     }
 
-    public static String get(String url) throws IOException {
-        Request request = new Request.Builder().url(Base_Url + url)
+    public static <T> T get(String url, Class<T> clazz, Boolean ignoreBaseUrl) throws IOException {
+        String resultStr = getString((ignoreBaseUrl ? "" : Base_Url) + url);
+        ObjectMapper mapper = new ObjectMapper();
+        return mapper.readValue(resultStr, clazz);
+
+    }
+
+    public static String getString(String url) throws IOException {
+        Request request = new Request.Builder().url(url)
                 .build();
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {

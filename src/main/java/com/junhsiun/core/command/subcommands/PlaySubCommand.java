@@ -1,5 +1,6 @@
 package com.junhsiun.core.command.subcommands;
 
+import com.junhsiun.core.channel.MusicChannel;
 import com.junhsiun.core.command.platform.MusicPlatformRegistry;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -15,7 +16,8 @@ public class PlaySubCommand extends BaseSubCommand {
             cmd.then(CommandManager.literal(name)
                     .then(CommandManager.argument("music_id", StringArgumentType.word()).executes(context -> {
                         String musicId = StringArgumentType.getString(context, "music_id");
-                        platform.play(musicId);
+                        String musicUrl = platform.getMusicUrl(musicId);
+                        MusicChannel.broadcast(context.getSource().getServer(), "music play " + musicUrl);
                         return 1;
                     }))
             );

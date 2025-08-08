@@ -6,7 +6,7 @@ import java.util.ArrayList;
 
 public interface IMusicPlatform {
     String getName();
-    void play(String musicID);
+    String getMusicUrl(String musicID);
     ArrayList<SearchVO> searchSong(String keyword);
     ArrayList<SearchVO> searchPlayList(String keyword);
     ArrayList<SearchVO> searchUser(String keyword);

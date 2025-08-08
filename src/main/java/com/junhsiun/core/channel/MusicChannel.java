@@ -3,6 +3,7 @@ package com.junhsiun.core.channel;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.PacketByteBuf;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 
@@ -17,5 +18,11 @@ public class MusicChannel {
         PacketByteBuf packetByteBuf = PacketByteBufs.create();
         packetByteBuf.writeString(txt);
         MusicChannel.send(player, packetByteBuf);
+    }
+
+    public static void broadcast(MinecraftServer server, String txt) {
+        server.getPlayerManager().getPlayerList().forEach(player -> {
+            send(player, txt);
+        });
     }
 }
