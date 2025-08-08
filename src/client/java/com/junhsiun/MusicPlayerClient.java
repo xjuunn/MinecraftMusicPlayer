@@ -18,8 +18,8 @@ public class MusicPlayerClient implements ClientModInitializer {
 
 
 //            musicPlayer.loadLoaclMusic("D:\\xjuun\\Downloads\\music.mp3");
-            musicPlayer.loadNetworkMusic("http://m8.music.126.net/20250807194300/2357e8352913c1b51abef552c26b51ae/ymusic/565e/0e5d/0f5a/a43b41a857976299c79f8023c5db5f99.mp3?vuutv=jpUzoWBjpRuEmIGwJdbKa8rX20g2RTJyeJFWDNC+ZG1a6iFVxKgsRms5E0WRSPhOQGbK+LuFlU6JBjQ1qyrYFZ3Obey1yrIRJWwDiUGQSBA=");
-            musicPlayer.play();
+//            musicPlayer.loadNetworkMusic("http://m8.music.126.net/20250807194300/2357e8352913c1b51abef552c26b51ae/ymusic/565e/0e5d/0f5a/a43b41a857976299c79f8023c5db5f99.mp3?vuutv=jpUzoWBjpRuEmIGwJdbKa8rX20g2RTJyeJFWDNC+ZG1a6iFVxKgsRms5E0WRSPhOQGbK+LuFlU6JBjQ1qyrYFZ3Obey1yrIRJWwDiUGQSBA=");
+//            musicPlayer.play();
 
 
             if (minecraftClient.player != null) {
