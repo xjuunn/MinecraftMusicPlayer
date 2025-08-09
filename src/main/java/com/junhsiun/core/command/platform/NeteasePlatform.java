@@ -3,6 +3,7 @@ package com.junhsiun.core.command.platform;
 import com.junhsiun.core.command.platform.beans.netease.*;
 import com.junhsiun.core.command.subcommands.vo.PlayListVO;
 import com.junhsiun.core.command.subcommands.vo.SearchVO;
+import com.junhsiun.core.command.subcommands.vo.UserVO;
 import com.junhsiun.core.utils.ModLogger;
 import com.junhsiun.core.utils.OkHttpUtil;
 
@@ -10,8 +11,9 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Objects;
 
-public class NeteasePlatform extends BasePlatform implements IPlayList {
+public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPlayList {
     @Override
     public String getName() {
         return "网易云音乐";
@@ -152,5 +154,28 @@ public class NeteasePlatform extends BasePlatform implements IPlayList {
             return null;
         }
 
+    }
+
+    @Override
+    public UserVO userPlayList(String id) {
+        ModLogger.info(getName() + " " + "查看用户歌单： " + id);
+        try {
+            UserPlayListBean userPlayListBean = OkHttpUtil.get("/user/playlist?uid=" + id, UserPlayListBean.class);
+            if (userPlayListBean == null || userPlayListBean.playlist == null || userPlayListBean.playlist.isEmpty()) {
+                return null;
+            }
+            UserVO userVO = new UserVO(Objects.toString(userPlayListBean.playlist.get(0).creator.userId),
+                    userPlayListBean.playlist.get(0).creator.nickname,
+                    userPlayListBean.playlist.get(0).creator.signature);
+            ArrayList<SearchVO> searchVOS = new ArrayList<>();
+            userPlayListBean.playlist.forEach(playlistDTO -> {
+                searchVOS.add(new SearchVO(playlistDTO.id, playlistDTO.name, playlistDTO.trackCount + "次播放"));
+            });
+            userVO.setPlaylist(searchVOS);
+            return userVO;
+        } catch (IOException e) {
+            ModLogger.info(e.toString());
+            return null;
+        }
     }
 }
