@@ -1,14 +1,18 @@
 package com.junhsiun;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.junhsiun.core.channel.MusicChannelReceiver;
+import com.junhsiun.core.command.subcommands.vo.SongVO;
 import com.junhsiun.core.musicPlayer.ModMusicPlayer;
 import com.junhsiun.core.utils.ModClientLogger;
+import javazoom.jl.decoder.JavaLayerException;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
+import java.io.IOException;
 import java.util.Objects;
 
 public class MusicPlayerClient implements ClientModInitializer {
@@ -17,18 +21,17 @@ public class MusicPlayerClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ModMusicPlayer musicPlayer = ModMusicPlayer.getInstance();
-        MusicChannelReceiver.onReceive((txt, minecraftClient, packetSender) -> {;
+        MusicChannelReceiver.onReceive((txt, minecraftClient, packetSender) -> {
             String[] cmd = txt.split(" ");
             if (Objects.equals(cmd[1], "play")) {
-                musicPlayer.close();
-                ModClientLogger.info("1播放音乐：" + cmd[2]);
-                musicPlayer.loadNetworkMusic(cmd[2]);
-                musicPlayer.play();
-            }
-
-            if (minecraftClient.player != null) {
-                minecraftClient.player.sendMessage(Text.literal(txt), false);
+                playSong(musicPlayer, cmd[2]);
             }
         });
+    }
+
+    public void playSong(ModMusicPlayer musicPlayer, String url) throws IOException, JavaLayerException {
+        musicPlayer.close();
+        musicPlayer.loadNetworkMusic(url);
+        musicPlayer.play();
     }
 }

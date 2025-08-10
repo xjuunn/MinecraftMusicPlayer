@@ -3,6 +3,7 @@ package com.junhsiun.core.command.platform;
 import com.junhsiun.core.command.platform.beans.netease.*;
 import com.junhsiun.core.command.subcommands.vo.PlayListVO;
 import com.junhsiun.core.command.subcommands.vo.SearchVO;
+import com.junhsiun.core.command.subcommands.vo.SongVO;
 import com.junhsiun.core.command.subcommands.vo.UserVO;
 import com.junhsiun.core.utils.ModLogger;
 import com.junhsiun.core.utils.OkHttpUtil;
@@ -27,6 +28,24 @@ public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPla
         if (url == null) url = getMusicUrl1(musicID);
         ModLogger.info("获取到了音乐链接：" + url);
         return url;
+    }
+
+    @Override
+    public SongVO getMusicInfo(String musicID) {
+        ModLogger.info(getName() + " 查询歌曲详情： " + musicID);
+        SongVO songVO = new SongVO();
+        try {
+            SongDetailBean songDetailBean = OkHttpUtil.get("/song/detail?ids=" + musicID, SongDetailBean.class);
+            if (songDetailBean == null || songDetailBean.songs.isEmpty()) {
+                return songVO;
+            }
+            songVO.setId(String.valueOf(songDetailBean.songs.get(0).id));
+            songVO.setName(songDetailBean.songs.get(0).name);
+            songVO.setSinger(songDetailBean.songs.get(0).ar.get(0).name);
+        } catch (IOException e) {
+            ModLogger.info("查询歌曲详情失败：" + e.toString());
+        }
+        return songVO;
     }
 
     // https://doc.vkeys.cn/api-doc/v2/%E9%9F%B3%E4%B9%90%E6%A8%A1%E5%9D%97/%E7%BD%91%E6%98%93%E4%BA%91%E9%9F%B3%E4%B9%90/1-netease.html
@@ -68,6 +87,7 @@ public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPla
             return null;
         }
     }
+
 
     @Override
     public ArrayList<SearchVO> searchSong(String keyword) {

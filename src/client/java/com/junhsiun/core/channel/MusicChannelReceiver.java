@@ -21,11 +21,7 @@ public class MusicChannelReceiver {
             minecraftClient.execute(() -> {
                 try {
                     callback.onReceive(txt, minecraftClient, packetSender);
-                } catch (FileNotFoundException e) {
-                    throw new RuntimeException(e);
-                } catch (JavaLayerException e) {
-                    throw new RuntimeException(e);
-                } catch (IOException e) {
+                } catch (JavaLayerException | IOException e) {
                     throw new RuntimeException(e);
                 }
             });
