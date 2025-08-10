@@ -40,6 +40,9 @@ public class MusicPlayerClient implements ClientModInitializer {
             if (Objects.equals(cmd[1], "play")) {
                 playSong(musicPlayer, cmd[2]);
             }
+            if (Objects.equals(cmd[1], "stop")) {
+                stopSong(musicPlayer);
+            }
         });
     }
 
