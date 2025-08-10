@@ -1,5 +1,7 @@
 package com.junhsiun.core.command.subcommands.vo;
 
+import java.util.Objects;
+
 public class SongVO {
     String id;
     String name;
@@ -7,6 +9,8 @@ public class SongVO {
     String url;
 
     public SongVO() {
+        this.name = "未知音乐";
+        this.singer = "未知歌手";
     }
 
     public SongVO(String id, String name, String singer, String url) {
@@ -29,7 +33,11 @@ public class SongVO {
     }
 
     public void setName(String name) {
-        this.name = name;
+        if (name == null || name.isEmpty() || name.equals("null")) {
+            this.name = "未知音乐";
+        } else {
+            this.name = name;
+        }
     }
 
     public String getSinger() {
@@ -37,7 +45,11 @@ public class SongVO {
     }
 
     public void setSinger(String singer) {
-        this.singer = singer;
+        if (Objects.equals(singer, "") || singer == null || name.equals("null")) {
+            this.singer = "未知歌手";
+        } else {
+            this.singer = singer;
+        }
     }
 
     public String getUrl() {

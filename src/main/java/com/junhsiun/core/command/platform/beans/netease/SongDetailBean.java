@@ -12,6 +12,8 @@ public class SongDetailBean {
     public List<PrivilegesDTO> privileges;
     @JsonProperty("code")
     public Integer code;
+    @JsonProperty("tns")
+    private List<String> tns;
 
     public static class SongsDTO {
         @JsonProperty("name")
@@ -112,6 +114,8 @@ public class SongDetailBean {
         public Integer cp;
         @JsonProperty("publishTime")
         public String publishTime;
+        @JsonProperty("tns")
+        private List<String> tns;
 
         public static class AlDTO {
             @JsonProperty("id")
@@ -139,6 +143,8 @@ public class SongDetailBean {
             public Integer vd;
             @JsonProperty("sr")
             public Integer sr;
+            @JsonProperty("tns")
+            private List<String> tns;
         }
 
         public static class ArDTO {
@@ -220,6 +226,8 @@ public class SongDetailBean {
         public Object ignoreCache;
         @JsonProperty("bd")
         public Object bd;
+        @JsonProperty("tns")
+        private List<String> tns;
 
         public static class FreeTrialPrivilegeDTO {
             @JsonProperty("resConsumable")
@@ -234,6 +242,8 @@ public class SongDetailBean {
             public Object playReason;
             @JsonProperty("freeLimitTagType")
             public Object freeLimitTagType;
+            @JsonProperty("tns")
+            private List<String> tns;
         }
 
         public static class ChargeInfoListDTO {
@@ -245,6 +255,8 @@ public class SongDetailBean {
             public Object chargeMessage;
             @JsonProperty("chargeType")
             public Integer chargeType;
+            @JsonProperty("tns")
+            private List<String> tns;
         }
     }
 }

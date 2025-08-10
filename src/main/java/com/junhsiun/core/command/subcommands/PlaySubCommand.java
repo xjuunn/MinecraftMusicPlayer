@@ -44,7 +44,6 @@ public class PlaySubCommand extends BaseSubCommand {
                         }
                         SongVO musicInfo = platform.getMusicInfo(musicId);
                         musicInfo.setUrl(musicUrl);
-                        ObjectMapper objectMapper = new ObjectMapper();
                         MusicChannel.broadcast(context.getSource().getServer(), playerId + " play " + musicUrl);
                         context.getSource().getServer().getPlayerManager().getPlayerList().forEach(player1 -> {
                             player1.sendMessage(Text.literal("").append(playerName)

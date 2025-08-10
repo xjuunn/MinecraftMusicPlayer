@@ -1,16 +1,14 @@
 package com.junhsiun;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.junhsiun.core.channel.MusicChannelReceiver;
-import com.junhsiun.core.command.subcommands.vo.SongVO;
 import com.junhsiun.core.musicPlayer.ModMusicPlayer;
-import com.junhsiun.core.utils.ModClientLogger;
+import com.junhsiun.core.utils.ModLogger;
 import javazoom.jl.decoder.JavaLayerException;
 import net.fabricmc.api.ClientModInitializer;
-import net.minecraft.text.Text;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 import java.io.IOException;
 import java.util.Objects;
@@ -20,6 +18,22 @@ public class MusicPlayerClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        initMusicEvent();
+        initJoinEvent();
+    }
+
+    private void initJoinEvent() {
+        ModMusicPlayer musicPlayer = ModMusicPlayer.getInstance();
+        ClientPlayConnectionEvents.DISCONNECT.register((clientPlayNetworkHandler, minecraftClient) -> {
+            stopSong(musicPlayer);
+        });
+        ClientLifecycleEvents.CLIENT_STOPPING.register(minecraftClient -> {
+            ModLogger.info("退出单人世界");
+            stopSong(musicPlayer);
+        });
+    }
+
+    private void initMusicEvent() {
         ModMusicPlayer musicPlayer = ModMusicPlayer.getInstance();
         MusicChannelReceiver.onReceive((txt, minecraftClient, packetSender) -> {
             String[] cmd = txt.split(" ");
@@ -33,5 +47,9 @@ public class MusicPlayerClient implements ClientModInitializer {
         musicPlayer.close();
         musicPlayer.loadNetworkMusic(url);
         musicPlayer.play();
+    }
+
+    public void stopSong(ModMusicPlayer musicPlayer) {
+        musicPlayer.close();
     }
 }
