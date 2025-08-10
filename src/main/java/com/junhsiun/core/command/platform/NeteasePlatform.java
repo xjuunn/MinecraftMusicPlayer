@@ -26,6 +26,10 @@ public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPla
         String url = getMusicNetease2(musicID);
         if (url == null) url = getMusicNetease1(musicID);
         if (url == null) url = getMusicUrl1(musicID);
+        if (url == null) url = getMusicUrl1(musicID);
+        if (url == null) url = getMusicUrl1(musicID);
+        if (url == null) url = getMusicUrl1(musicID);
+        if (url == null) url = getMusicUrl1(musicID);
         ModLogger.info("获取到了音乐链接：" + url);
         return url;
     }
@@ -35,7 +39,7 @@ public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPla
         ModLogger.info(getName() + " 查询歌曲详情： " + musicID);
         SongVO songVO = new SongVO();
         try {
-            SongDetailBean songDetailBean = OkHttpUtil.get("/song/detail?ids=" + musicID, SongDetailBean.class);
+            SongDetailBean songDetailBean = OkHttpUtil.get(getBaseUrl() + "/song/detail?ids=" + musicID, SongDetailBean.class);
             if (songDetailBean == null || songDetailBean.songs.isEmpty()) {
                 return songVO;
             }
@@ -52,7 +56,7 @@ public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPla
     // 速度慢 有时候接口出错
     private String getMusicUrl1(String musicId) {
         try {
-            VKeysGetUrlBean vKeysGetUrlBean = OkHttpUtil.get("https://api.vkeys.cn/v2/music/netease?id=" + musicId + "&quality=4", VKeysGetUrlBean.class, true);
+            VKeysGetUrlBean vKeysGetUrlBean = OkHttpUtil.get("https://api.vkeys.cn/v2/music/netease?id=" + musicId + "&quality=4", VKeysGetUrlBean.class);
             return vKeysGetUrlBean.data.url;
         } catch (IOException e) {
             ModLogger.info(e.toString());
@@ -63,7 +67,7 @@ public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPla
     // 网易云旧版音乐接口
     private String getMusicNetease1(String musicId) {
         try {
-            NeteaseGetUrlBean neteaseGetUrlBean = OkHttpUtil.get("/song/url?id=" + musicId, NeteaseGetUrlBean.class);
+            NeteaseGetUrlBean neteaseGetUrlBean = OkHttpUtil.get(getBaseUrl() + "/song/url?id=" + musicId, NeteaseGetUrlBean.class);
             return neteaseGetUrlBean.data.get(0).url;
         } catch (IOException e) {
             ModLogger.info(e.toString());
@@ -93,7 +97,7 @@ public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPla
     public ArrayList<SearchVO> searchSong(String keyword) {
         ModLogger.info(getName() + " " + "搜索音乐： " + keyword);
         try {
-            SearchBean searchBean = OkHttpUtil.get("/cloudsearch?limit=10&type=1&keywords=" + keyword, SearchBean.class);
+            SearchBean searchBean = OkHttpUtil.get(getBaseUrl() + "/cloudsearch?limit=10&type=1&keywords=" + keyword, SearchBean.class);
             ArrayList<SearchVO> searchVOS = new ArrayList<>();
             if (searchBean == null || searchBean.result == null || searchBean.result.songs == null || searchBean.result.songs.isEmpty()) {
                 return searchVOS;
@@ -113,7 +117,7 @@ public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPla
     public ArrayList<SearchVO> searchPlayList(String keyword) {
         ModLogger.info(getName() + " " + "搜索歌单： " + keyword);
         try {
-            SearchPlayListBean playListBean = OkHttpUtil.get("/cloudsearch?limit=10&type=1000&keywords=" + keyword, SearchPlayListBean.class);
+            SearchPlayListBean playListBean = OkHttpUtil.get(getBaseUrl() + "/cloudsearch?limit=10&type=1000&keywords=" + keyword, SearchPlayListBean.class);
             ArrayList<SearchVO> searchVOS = new ArrayList<>();
             if (playListBean == null || playListBean.result == null || playListBean.result.playlists == null || playListBean.result.playlists.isEmpty()) {
                 return searchVOS;
@@ -133,7 +137,7 @@ public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPla
     public ArrayList<SearchVO> searchUser(String keyword) {
         ModLogger.info(getName() + " " + "搜索用户： " + keyword);
         try {
-            SearchUserBean playListBean = OkHttpUtil.get("/cloudsearch?limit=10&type=1002&keywords=" + keyword, SearchUserBean.class);
+            SearchUserBean playListBean = OkHttpUtil.get(getBaseUrl() + "/cloudsearch?limit=10&type=1002&keywords=" + keyword, SearchUserBean.class);
             ArrayList<SearchVO> searchVOS = new ArrayList<>();
             if (playListBean == null || playListBean.result == null || playListBean.result.userprofiles == null || playListBean.result.userprofiles.isEmpty()) {
                 return searchVOS;
@@ -153,7 +157,7 @@ public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPla
     public PlayListVO playListInfo(String id) {
         ModLogger.info(getName() + " " + "查看歌单： " + id);
         try {
-            PlayListBean playListBean = OkHttpUtil.get("/playlist/detail?id=" + id + "&limit=10", PlayListBean.class);
+            PlayListBean playListBean = OkHttpUtil.get(getBaseUrl() + "/playlist/detail?id=" + id + "&limit=10", PlayListBean.class);
             PlayListVO playListVO = new PlayListVO();
             if (playListBean == null || playListBean.playlist == null) {
                 return playListVO;
@@ -164,7 +168,6 @@ public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPla
             playListVO.setUsername(playListBean.playlist.creator.nickname);
             ArrayList<SearchVO> searchVOS = new ArrayList<>();
             playListBean.playlist.tracks.forEach(tracksDTO -> {
-                ModLogger.info(new SearchVO(tracksDTO.id, tracksDTO.name, tracksDTO.al.name).toString());
                 searchVOS.add(new SearchVO(tracksDTO.id, tracksDTO.name, tracksDTO.al.name));
             });
             playListVO.setSongsList(searchVOS);
@@ -180,7 +183,7 @@ public class NeteasePlatform extends BasePlatform implements IPlayList, IUserPla
     public UserVO userPlayList(String id) {
         ModLogger.info(getName() + " " + "查看用户歌单： " + id);
         try {
-            UserPlayListBean userPlayListBean = OkHttpUtil.get("/user/playlist?uid=" + id, UserPlayListBean.class);
+            UserPlayListBean userPlayListBean = OkHttpUtil.get(getBaseUrl() + "/user/playlist?uid=" + id, UserPlayListBean.class);
             if (userPlayListBean == null || userPlayListBean.playlist == null || userPlayListBean.playlist.isEmpty()) {
                 return null;
             }

@@ -1,6 +1,7 @@
 package com.junhsiun;
 
 import com.junhsiun.core.command.MusicCommand;
+import com.junhsiun.core.config.ServerConfigManager;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,6 +12,7 @@ public class MusicPlayer implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        ServerConfigManager.loadConfig();
         initCommand();
     }
 

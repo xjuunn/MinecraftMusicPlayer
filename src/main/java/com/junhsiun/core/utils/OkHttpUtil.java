@@ -1,6 +1,7 @@
 package com.junhsiun.core.utils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.junhsiun.core.config.ServerConfigManager;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -11,20 +12,12 @@ import java.net.InetSocketAddress;
 import java.net.Proxy;
 
 public class OkHttpUtil {
-    public static OkHttpClient client = new OkHttpClient.Builder()
-            .proxy(new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", 7897)))
-            .build();
-    private static String Base_Url = "https://odlimemusicapi.vercel.app";
+    public static OkHttpClient client = new OkHttpClient.Builder().build();
 
     public static <T> T get(String url, Class<T> clazz) throws IOException {
-        return get(url, clazz, false);
-    }
-
-    public static <T> T get(String url, Class<T> clazz, Boolean ignoreBaseUrl) throws IOException {
-        String resultStr = getString((ignoreBaseUrl ? "" : Base_Url) + url);
+        String resultStr = getString(url);
         ObjectMapper mapper = new ObjectMapper();
         return mapper.readValue(resultStr, clazz);
-
     }
 
     public static String getString(String url) throws IOException {
@@ -43,7 +36,21 @@ public class OkHttpUtil {
     }
 
     public static void setProxy(String ip, Integer port) {
+        ServerConfigManager.getConfig().proxy = ip + ":" + port;
+        ServerConfigManager.saveConfig();
         client = new OkHttpClient.Builder().proxy(new Proxy(Proxy.Type.HTTP, new InetSocketAddress(ip, port))).build();
+    }
+
+    public static void setProxy(String proxy) {
+        if (proxy.isEmpty()) return;
+        try {
+            String ip = proxy.split(":")[0];
+            int port = Integer.parseInt(proxy.split(":")[1]);
+            setProxy(ip, port);
+        } catch (NumberFormatException e) {
+            ModLogger.info("OkHttp设置代理失败");
+        }
+
     }
 
     public static String getProxy() {
@@ -51,13 +58,5 @@ public class OkHttpUtil {
             return client.proxy().toString();
         }
         return "";
-    }
-
-    public static String getBase_Url() {
-        return Base_Url;
-    }
-
-    public static void setBase_Url(String base_Url) {
-        Base_Url = base_Url;
     }
 }

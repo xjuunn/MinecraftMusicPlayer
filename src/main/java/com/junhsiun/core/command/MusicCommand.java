@@ -35,6 +35,7 @@ public class MusicCommand {
             commandArrayList.add(new UISubCommand());
             commandArrayList.add(new ViewSubCommand());
             commandArrayList.add(new TestSubCommand());
+            commandArrayList.add(new ConfigSubCommand());
 //            commandArrayList.add(new HelpSubCommand());
             LiteralArgumentBuilder<ServerCommandSource> musicCmd = CommandManager.literal("music");
             commandArrayList.forEach(cmd -> {

@@ -1,19 +1,23 @@
 package com.junhsiun.core.command.platform;
 
 import com.junhsiun.core.command.subcommands.vo.SearchVO;
+import com.junhsiun.core.config.ServerConfig;
+import com.junhsiun.core.config.ServerConfigManager;
 
 import java.util.ArrayList;
 
 public abstract class BasePlatform implements IMusicPlatform {
-    private String BaseUrl;
-
 
     public String getBaseUrl() {
-        return BaseUrl;
+        return ServerConfigManager.getConfig().platformBaseUrl.get(getName());
     }
 
     public void setBaseUrl(String baseUrl) {
-        BaseUrl = baseUrl;
+        if (baseUrl != null && baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+        ServerConfigManager.getConfig().platformBaseUrl.put(getName(), baseUrl);
+        ServerConfigManager.saveConfig();
     }
 
     public abstract ArrayList<SearchVO> searchPlayList(String keyword);
