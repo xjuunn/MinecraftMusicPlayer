@@ -13,12 +13,21 @@ import java.net.URL;
 public class ModMusicPlayer {
     private Player player;
     private Thread thread;
+    private ModMusicPlayerStatus status;
 
     private ModMusicPlayer() {
     }
 
     public Player getPlayer() {
         return player;
+    }
+
+    public ModMusicPlayerStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(ModMusicPlayerStatus status) {
+        this.status = status;
     }
 
     private static class Holder {
@@ -40,12 +49,29 @@ public class ModMusicPlayer {
 
     }
 
-    public void play() throws JavaLayerException {
-        if (this.player == null) return;
+    public void leave() {
+        this.status = ModMusicPlayerStatus.Leave;
+        this.close();
+    }
 
+    public void join() {
+        this.status = ModMusicPlayerStatus.Standby;
+    }
+
+    public void muteOnce() {
+        this.status = ModMusicPlayerStatus.MuteOnce;
+    }
+
+    public void play() {
+        if (this.player == null) return;
+        if (this.status == ModMusicPlayerStatus.Leave) return;
+        this.status = ModMusicPlayerStatus.Playing;
         thread = new Thread(() -> {
             try {
                 this.player.play();
+                if (this.status == ModMusicPlayerStatus.Playing || this.status == ModMusicPlayerStatus.MuteOnce) {
+                    this.status = ModMusicPlayerStatus.Standby;
+                }
             } catch (JavaLayerException e) {
                 throw new RuntimeException(e);
             }

@@ -2,6 +2,7 @@ package com.junhsiun;
 
 import com.junhsiun.core.channel.MusicChannelReceiver;
 import com.junhsiun.core.musicPlayer.ModMusicPlayer;
+import com.junhsiun.core.musicPlayer.ModMusicPlayerStatus;
 import com.junhsiun.core.utils.ModLogger;
 import javazoom.jl.decoder.JavaLayerException;
 import net.fabricmc.api.ClientModInitializer;
@@ -43,6 +44,14 @@ public class MusicPlayerClient implements ClientModInitializer {
             if (Objects.equals(cmd[1], "stop")) {
                 stopSong(musicPlayer);
             }
+            if (Objects.equals(cmd[1], "leave")) {
+                leaveSong(musicPlayer);
+            }
+
+            if (Objects.equals(cmd[1], "join")) {
+                joinSong(musicPlayer);
+            }
+
         });
     }
 
@@ -55,4 +64,14 @@ public class MusicPlayerClient implements ClientModInitializer {
     public void stopSong(ModMusicPlayer musicPlayer) {
         musicPlayer.close();
     }
+
+    public void leaveSong(ModMusicPlayer musicPlayer) {
+        musicPlayer.setStatus(ModMusicPlayerStatus.Leave);
+        this.stopSong(musicPlayer);
+    }
+
+    public void joinSong(ModMusicPlayer musicPlayer) {
+        musicPlayer.setStatus(ModMusicPlayerStatus.Standby);
+    }
+
 }
