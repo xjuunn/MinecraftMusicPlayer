@@ -1,11 +1,10 @@
 package com.junhsiun.core.utils;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.junhsiun.core.config.ServerConfigManager;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
+import okhttp3.*;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -14,25 +13,54 @@ import java.net.Proxy;
 public class OkHttpUtil {
     public static OkHttpClient client = new OkHttpClient.Builder().build();
 
-    public static <T> T get(String url, Class<T> clazz) throws IOException {
-        String resultStr = getString(url);
-        ObjectMapper mapper = new ObjectMapper();
-        return mapper.readValue(resultStr, clazz);
+    public static <T> void get(String url, Class<T> clazz, HttpCallback<T> callback) {
+        getString(url, new HttpCallback<String>() {
+            @Override
+            public void onSuccess(String response) {
+                ObjectMapper mapper = new ObjectMapper();
+                try {
+                    callback.onSuccess(mapper.readValue(response, clazz));
+                } catch (JsonProcessingException e) {
+                    callback.onFailure(e);
+                }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                callback.onFailure(e);
+            }
+        });
     }
 
-    public static String getString(String url) throws IOException {
-        Request request = new Request.Builder().url(url)
-                .build();
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw new IOException("Unexpected code: " + response);
+    public static void getString(String url, HttpCallback<String> callback) {
+        Request request = new Request.Builder().url(url).build();
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NotNull Call call, @NotNull IOException e) {
+                ModLogger.error(e.toString());
             }
-            ResponseBody body = response.body();
-            if (body == null) {
-                return null;
+
+            @Override
+            public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
+                ResponseBody body = response.body();
+                if (!response.isSuccessful()) {
+                    ModLogger.error("错误的请求：" + url);
+                    callback.onFailure(new IOException("错误的请求：" + url));
+                    return;
+                }
+                if (body == null) {
+                    callback.onFailure(new IOException("未收到返回数据：" + url));
+                    return;
+                }
+                String string = body.string();
+                if (string.isEmpty()) {
+                    callback.onFailure(new IOException("未收到返回数据：" + url));
+                    return;
+                }
+                callback.onSuccess(string);
+
             }
-            return body.string();
-        }
+        });
     }
 
     public static void setProxy(String ip, Integer port) {

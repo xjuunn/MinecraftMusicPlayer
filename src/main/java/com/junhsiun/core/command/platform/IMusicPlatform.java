@@ -2,20 +2,20 @@ package com.junhsiun.core.command.platform;
 
 import com.junhsiun.core.command.subcommands.vo.SearchVO;
 import com.junhsiun.core.command.subcommands.vo.SongVO;
+import com.junhsiun.core.utils.HttpCallback;
 
 import java.util.ArrayList;
 
 public interface IMusicPlatform {
     String getName();
 
-    String getMusicUrl(String musicID);
+    public abstract void getMusicUrl(String musicID, HttpCallback<String> callback);
 
-    SongVO getMusicInfo(String musicID);
+    public abstract void getMusicInfo(String musicID, HttpCallback<SongVO> callback);
 
-    ArrayList<SearchVO> searchSong(String keyword);
+    public abstract void searchSong(String keyword, HttpCallback<ArrayList<SearchVO>> callback);
 
-    ArrayList<SearchVO> searchPlayList(String keyword);
+    public abstract void searchPlayList(String keyword, HttpCallback<ArrayList<SearchVO>> callback);
 
-    ArrayList<SearchVO> searchUser(String keyword);
+    public abstract void searchUser(String keyword, HttpCallback<ArrayList<SearchVO>> callback);
 }
-// set

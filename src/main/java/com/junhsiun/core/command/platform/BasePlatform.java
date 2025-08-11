@@ -1,8 +1,10 @@
 package com.junhsiun.core.command.platform;
 
 import com.junhsiun.core.command.subcommands.vo.SearchVO;
+import com.junhsiun.core.command.subcommands.vo.SongVO;
 import com.junhsiun.core.config.ServerConfig;
 import com.junhsiun.core.config.ServerConfigManager;
+import com.junhsiun.core.utils.HttpCallback;
 
 import java.util.ArrayList;
 
@@ -19,8 +21,4 @@ public abstract class BasePlatform implements IMusicPlatform {
         ServerConfigManager.getConfig().platformBaseUrl.put(getName(), baseUrl);
         ServerConfigManager.saveConfig();
     }
-
-    public abstract ArrayList<SearchVO> searchPlayList(String keyword);
-
-    public abstract ArrayList<SearchVO> searchUser(String keyword);
 }
