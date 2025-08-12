@@ -11,6 +11,7 @@ import net.minecraft.text.Text;
 public class ConfigSubCommand extends BaseSubCommand {
     @Override
     LiteralArgumentBuilder<ServerCommandSource> config(LiteralArgumentBuilder<ServerCommandSource> cmd) {
+        cmd.requires(serverCommandSource -> serverCommandSource.hasPermissionLevel(4));
         LiteralArgumentBuilder<ServerCommandSource> setCmd = CommandManager.literal("set");
         setProxyConfig(setCmd);
         cmd.then(setCmd);

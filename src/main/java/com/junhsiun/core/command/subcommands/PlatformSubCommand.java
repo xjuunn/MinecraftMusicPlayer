@@ -14,6 +14,7 @@ public class PlatformSubCommand extends BaseSubCommand {
 
     @Override
     LiteralArgumentBuilder<ServerCommandSource> config(LiteralArgumentBuilder<ServerCommandSource> cmd) {
+        cmd.requires(serverCommandSource -> serverCommandSource.hasPermissionLevel(4));
         MusicPlatformRegistry.all().forEach(platform -> {
             LiteralArgumentBuilder<ServerCommandSource> platformCmd = CommandManager.literal(platform.getName());
             setSubCommand(platformCmd, platform);
