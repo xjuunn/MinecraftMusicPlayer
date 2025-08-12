@@ -52,6 +52,10 @@ public class MusicPlayerClient implements ClientModInitializer {
                 joinSong(musicPlayer);
             }
 
+            if (Objects.equals(cmd[1], "muteOnce")) {
+                muteOnce(musicPlayer);
+            }
+
         });
     }
 
@@ -72,6 +76,10 @@ public class MusicPlayerClient implements ClientModInitializer {
 
     public void joinSong(ModMusicPlayer musicPlayer) {
         musicPlayer.setStatus(ModMusicPlayerStatus.Standby);
+    }
+
+    public void muteOnce(ModMusicPlayer musicPlayer) {
+        musicPlayer.setStatus(ModMusicPlayerStatus.MuteOnce);
     }
 
 }
