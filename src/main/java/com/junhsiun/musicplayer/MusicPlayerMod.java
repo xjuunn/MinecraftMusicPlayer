@@ -2,20 +2,26 @@ package com.junhsiun.musicplayer;
 
 import com.junhsiun.musicplayer.command.MusicCommands;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
+import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.platform.NeteaseApiClient;
 import com.junhsiun.musicplayer.service.JukeboxPlaybackService;
+import com.junhsiun.musicplayer.service.LootMusicDiscService;
 import com.junhsiun.musicplayer.service.MusicQueueService;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.JukeboxBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +31,7 @@ public final class MusicPlayerMod implements ModInitializer {
 
     private static final MusicQueueService MUSIC_QUEUE_SERVICE = new MusicQueueService();
     private static final JukeboxPlaybackService JUKEBOX_PLAYBACK_SERVICE = new JukeboxPlaybackService();
+    private static final LootMusicDiscService LOOT_MUSIC_DISC_SERVICE = new LootMusicDiscService();
     private static final NeteaseApiClient NETEASE_API_CLIENT = new NeteaseApiClient();
 
     @Override
@@ -37,11 +44,29 @@ public final class MusicPlayerMod implements ModInitializer {
         CommandRegistrationCallback.EVENT.register(MusicCommands::register);
         ServerTickEvents.END_SERVER_TICK.register(MUSIC_QUEUE_SERVICE::tick);
         ServerTickEvents.END_SERVER_TICK.register(JUKEBOX_PLAYBACK_SERVICE::tick);
+        ServerTickEvents.END_SERVER_TICK.register(LOOT_MUSIC_DISC_SERVICE::tick);
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+            BlockState state = world.getBlockState(hitResult.getBlockPos());
+            ItemStack heldStack = player.getItemInHand(hand);
+            if (state.getBlock() instanceof JukeboxBlock
+                    && !state.getValue(JukeboxBlock.HAS_RECORD)
+                    && MusicDiscHelper.isPendingDisc(heldStack)) {
+                return net.minecraft.world.InteractionResult.FAIL;
+            }
             if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
                 return net.minecraft.world.InteractionResult.PASS;
             }
-            return JUKEBOX_PLAYBACK_SERVICE.tryInsertCustomDisc(serverPlayer, world, hand, hitResult);
+            net.minecraft.world.InteractionResult result = JUKEBOX_PLAYBACK_SERVICE.tryInsertCustomDisc(serverPlayer, world, hand, hitResult);
+            if (result.consumesAction()) {
+                return result;
+            }
+            return LOOT_MUSIC_DISC_SERVICE.tryInjectOnOpen(serverPlayer, world, hitResult.getBlockPos());
+        });
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+            if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+                return net.minecraft.world.InteractionResult.PASS;
+            }
+            return LOOT_MUSIC_DISC_SERVICE.tryInjectOnOpen(serverPlayer, entity);
         });
         ServerPlayNetworking.registerGlobalReceiver(MusicPlaybackReportPayload.TYPE, (payload, context) ->
                 context.server().execute(() ->

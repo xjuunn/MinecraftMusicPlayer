@@ -48,6 +48,7 @@ public final class MusicCommands {
                 .then(voteNext())
                 .then(play())
                 .then(burn())
+                .then(random())
                 .then(search())
                 .then(view())
                 .then(next())
@@ -73,6 +74,7 @@ public final class MusicCommands {
         source.sendSuccess(() -> helpLine("/music view playlist page <页码> <歌单ID>", "查看歌单详情分页", "/music view playlist "), false);
         source.sendSuccess(() -> helpLine("/music view artist page <页码> <作者ID>", "查看作者详情分页", "/music view artist "), false);
         source.sendSuccess(() -> helpLine("/music view user page <页码> <用户ID>", "查看用户歌单分页", "/music view user "), false);
+        source.sendSuccess(() -> helpLine("/music random", "生成 10 首随机热门音乐", "/music random"), false);
         return 1;
     }
 
@@ -219,6 +221,20 @@ public final class MusicCommands {
                         })));
     }
 
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> random() {
+        return Commands.literal("random")
+                .executes(context -> generateRandomList(context.getSource()))
+                .then(Commands.literal("refresh").executes(context -> generateRandomList(context.getSource())));
+    }
+
+    private static int generateRandomList(CommandSourceStack source) {
+        loading(source, "正在从热门歌单中随机挑选音乐，请稍候...");
+        MinecraftServer server = source.getServer();
+        MusicPlayerMod.netease().randomHotTracks(10).whenComplete((tracks, throwable) ->
+                server.execute(() -> showRandomTracks(source, tracks, throwable)));
+        return 1;
+    }
+
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> search() {
         return Commands.literal("search")
                 .then(pagedSearch("song", "正在搜索歌曲，请稍候...", (source, keyword, page, literal) -> {
@@ -298,6 +314,7 @@ public final class MusicCommands {
                     Messages.info(context.getSource(), "IPv4 优先: " + yesNo(config.preferIpv4) + "，连接超时: " + config.connectTimeoutSeconds + "s，读取超时: " + config.readTimeoutSeconds + "s", false);
                     Messages.info(context.getSource(), "搜索上限: " + config.searchLimit + "，队列上限: " + config.maxQueueSize + "，歌单导入上限: " + config.playlistQueueLimit + "，预缓存数量: " + config.queueCacheSize, false);
                     Messages.info(context.getSource(), "投票切歌阈值: " + config.voteSkipPercent, false);
+                    Messages.info(context.getSource(), "战利品音乐唱片: " + yesNo(config.enableLootMusicDiscs) + "，生成概率: " + config.lootMusicDiscChance + "，每个容器数量: " + config.lootMusicDiscCount, false);
                     return 1;
                 }))
                 .then(Commands.literal("clearqueue").executes(context -> {
@@ -341,6 +358,9 @@ public final class MusicCommands {
                             MusicPlayerConfigManager.get().queueCacheSize = value;
                             MusicPlayerMod.queueService().refreshCacheSettings();
                         }))
+                        .then(boolSetting("enableLootMusicDiscs", value -> MusicPlayerConfigManager.get().enableLootMusicDiscs = value))
+                        .then(intSetting("lootMusicDiscCount", 0, 5, value -> MusicPlayerConfigManager.get().lootMusicDiscCount = value))
+                        .then(doubleSetting("lootMusicDiscChance", 0.0D, 1.0D, value -> MusicPlayerConfigManager.get().lootMusicDiscChance = value))
                         .then(doubleSetting("voteSkipPercent", 0.1D, 1.0D, value -> MusicPlayerConfigManager.get().voteSkipPercent = value)));
     }
 
@@ -487,6 +507,25 @@ public final class MusicCommands {
         sendSearchNavigation(source, literal, keyword, page, results.size());
     }
 
+    private static void showRandomTracks(CommandSourceStack source, List<TrackInfo> tracks, Throwable throwable) {
+        if (throwable != null) {
+            Messages.warning(source, "生成随机热门音乐列表失败: " + rootMessage(throwable));
+            return;
+        }
+        if (tracks == null || tracks.isEmpty()) {
+            Messages.warning(source, "这次没有抽到可播放的热门音乐。");
+            return;
+        }
+        source.sendSuccess(() -> sectionHeader("随机热门音乐", "每次随机生成 10 首，可直接点歌、刻录、查看作者"), false);
+        sendQuickBar(source,
+                Messages.clickableCommand("[换一批]", "重新生成 10 首随机热门音乐", "/music random", ChatFormatting.YELLOW),
+                Messages.clickableCommand("[当前播放]", "查看当前播放", "/music now", ChatFormatting.AQUA),
+                Messages.clickableCommand("[播放队列]", "查看当前待播队列", "/music queue", ChatFormatting.GRAY));
+        for (TrackInfo track : tracks) {
+            source.sendSuccess(() -> renderRandomTrack(source, track), false);
+        }
+    }
+
     private static void showPlaylist(CommandSourceStack source, String playlistId, int requestedPage, PlaylistInfo playlist, Throwable throwable) {
         if (throwable != null) {
             Messages.warning(source, "加载歌单失败: " + rootMessage(throwable));
@@ -569,6 +608,22 @@ public final class MusicCommands {
             source.sendSuccess(() -> renderEntry(track, trackActions(source, track.id(), "[点歌]", "点播这首歌曲", ChatFormatting.GREEN), "点播这首歌曲", ""), false);
         }
         sendNavigation(source, page.page(), page.totalPages(), "/music view " + literal + " page %d " + artistId, true);
+    }
+
+    private static MutableComponent renderRandomTrack(CommandSourceStack source, TrackInfo track) {
+        MutableComponent line = trackActions(source, track.id(), "[点歌]", "点播这首随机热门歌曲", ChatFormatting.GREEN);
+        line.append(Component.literal(" "));
+        line.append(clickableText(track.title(), "/music play song " + track.id(), "点播这首随机热门歌曲", ChatFormatting.AQUA));
+        line.append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
+        line.append(clickableText(track.artist(),
+                track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
+                "查看作者详情",
+                ChatFormatting.GRAY));
+        if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
+            line.append(Component.literal(" "));
+            line.append(Messages.clickableUrl("[下载]", "在浏览器中打开当前音乐直链", track.sourceUrls().getFirst(), ChatFormatting.BLUE));
+        }
+        return line;
     }
 
     private static MutableComponent renderCurrentTrack(CommandSourceStack source, TrackInfo track) {

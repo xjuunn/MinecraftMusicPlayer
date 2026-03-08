@@ -44,6 +44,9 @@ public final class JukeboxPlaybackService {
         }
 
         ItemStack heldStack = player.getItemInHand(hand);
+        if (MusicDiscHelper.isPendingDisc(heldStack)) {
+            return InteractionResult.FAIL;
+        }
         if (!MusicDiscHelper.isMusicPlayerDisc(heldStack)) {
             return InteractionResult.PASS;
         }
@@ -129,10 +132,12 @@ public final class JukeboxPlaybackService {
         DiscTrackData previous = current.discData();
         DiscTrackData resolved = resolveDiscData(original, track, throwable);
         current.setDiscData(resolved);
-        if (!resolved.coverUrl().equals(previous.coverUrl())
+        boolean urlsChanged = !resolved.urls().equals(previous.urls());
+        if (urlsChanged
+                || !resolved.coverUrl().equals(previous.coverUrl())
                 || !resolved.title().equals(previous.title())
                 || !resolved.artist().equals(previous.artist())) {
-            pushVisualUpdate(level, current);
+            pushRefresh(level, current, urlsChanged);
         }
     }
 
@@ -168,9 +173,13 @@ public final class JukeboxPlaybackService {
         }
         return MusicDiscHelper.read(jukebox.getTheItem())
                 .filter(data -> !data.urls().isEmpty())
-                .map(data -> data.trackId().equals(active.discData().trackId())
-                        && data.title().equals(active.discData().title())
-                        && data.artist().equals(active.discData().artist()))
+                .map(data -> {
+                    if (!active.sourceTrackId().isBlank() && !data.trackId().isBlank()) {
+                        return data.trackId().equals(active.sourceTrackId());
+                    }
+                    return data.title().equals(active.sourceTitle())
+                            && data.artist().equals(active.sourceArtist());
+                })
                 .orElse(false);
     }
 
@@ -233,19 +242,29 @@ public final class JukeboxPlaybackService {
         }
     }
 
-    private void pushVisualUpdate(ServerLevel level, ActiveJukebox active) {
+    private void pushRefresh(ServerLevel level, ActiveJukebox active, boolean urlsChanged) {
         for (UUID listener : active.listeners()) {
             ServerPlayer player = level.getServer().getPlayerList().getPlayer(listener);
             if (player == null || player.level() != level) {
                 continue;
             }
             if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
-                ServerPlayNetworking.send(player, JukeboxMusicPayload.update(
-                        active.key(),
-                        active.discData().title(),
-                        active.discData().artist(),
-                        active.discData().coverUrl()
-                ));
+                if (urlsChanged) {
+                    ServerPlayNetworking.send(player, JukeboxMusicPayload.refresh(
+                            active.key(),
+                            active.discData().urls(),
+                            active.discData().title(),
+                            active.discData().artist(),
+                            active.discData().coverUrl()
+                    ));
+                } else {
+                    ServerPlayNetworking.send(player, JukeboxMusicPayload.update(
+                            active.key(),
+                            active.discData().title(),
+                            active.discData().artist(),
+                            active.discData().coverUrl()
+                    ));
+                }
             }
         }
     }
@@ -254,6 +273,9 @@ public final class JukeboxPlaybackService {
         private final long key;
         private final ResourceKey<Level> dimension;
         private final BlockPos pos;
+        private final String sourceTrackId;
+        private final String sourceTitle;
+        private final String sourceArtist;
         private final Set<UUID> listeners = new HashSet<>();
         private volatile DiscTrackData discData;
 
@@ -261,6 +283,9 @@ public final class JukeboxPlaybackService {
             this.key = key;
             this.dimension = dimension;
             this.pos = pos;
+            this.sourceTrackId = discData.trackId() == null ? "" : discData.trackId();
+            this.sourceTitle = discData.title() == null ? "" : discData.title();
+            this.sourceArtist = discData.artist() == null ? "" : discData.artist();
             this.discData = discData;
         }
 
@@ -274,6 +299,18 @@ public final class JukeboxPlaybackService {
 
         private BlockPos pos() {
             return pos;
+        }
+
+        private String sourceTrackId() {
+            return sourceTrackId;
+        }
+
+        private String sourceTitle() {
+            return sourceTitle;
+        }
+
+        private String sourceArtist() {
+            return sourceArtist;
         }
 
         private DiscTrackData discData() {

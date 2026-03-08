@@ -20,4 +20,7 @@ public class MusicPlayerConfig {
     public int playlistQueueLimit = 20;
     public int queueCacheSize = 3;
     public double voteSkipPercent = 0.6D;
+    public boolean enableLootMusicDiscs = true;
+    public double lootMusicDiscChance = 0.3D;
+    public int lootMusicDiscCount = 1;
 }

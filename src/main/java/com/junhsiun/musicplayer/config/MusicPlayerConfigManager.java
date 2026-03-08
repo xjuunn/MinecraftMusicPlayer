@@ -75,6 +75,12 @@ public final class MusicPlayerConfigManager {
         if (config.queueCacheSize < 0) {
             config.queueCacheSize = 3;
         }
+        if (config.lootMusicDiscChance < 0D || config.lootMusicDiscChance > 1D) {
+            config.lootMusicDiscChance = 0.3D;
+        }
+        if (config.lootMusicDiscCount < 0) {
+            config.lootMusicDiscCount = 1;
+        }
     }
 
     private static void migrateLegacyConfigFile() {

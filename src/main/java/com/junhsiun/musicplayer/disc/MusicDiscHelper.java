@@ -7,6 +7,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -20,6 +21,8 @@ import java.util.Set;
 
 public final class MusicDiscHelper {
     private static final String ROOT_KEY = "musicplayer_disc";
+    private static final String PENDING_KEY = "musicplayer_pending_disc";
+    private static final String PENDING_TOKEN_KEY = "musicplayer_pending_token";
     private static final String TRACK_ID_KEY = "track_id";
     private static final String TITLE_KEY = "title";
     private static final String ARTIST_KEY = "artist";
@@ -60,6 +63,48 @@ public final class MusicDiscHelper {
 
     public static boolean isMusicPlayerDisc(ItemStack stack) {
         return read(stack).isPresent();
+    }
+
+    public static boolean isPendingDisc(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        if (customData == null || customData.isEmpty()) {
+            return false;
+        }
+        CompoundTag wrapper = customData.copyTag();
+        return wrapper.getBooleanOr(PENDING_KEY, false);
+    }
+
+    public static String getPendingToken(ItemStack stack) {
+        if (!isPendingDisc(stack)) {
+            return "";
+        }
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        if (customData == null || customData.isEmpty()) {
+            return "";
+        }
+        return customData.copyTag().getStringOr(PENDING_TOKEN_KEY, "");
+    }
+
+    public static ItemStack randomBaseDiscStack(RandomSource random) {
+        List<Item> discs = new ArrayList<>(SUPPORTED_DISCS);
+        Item item = discs.get(random.nextInt(discs.size()));
+        return new ItemStack(item);
+    }
+
+    public static ItemStack createPendingDisc(ItemStack baseDisc, String token) {
+        ItemStack pendingDisc = baseDisc.copyWithCount(1);
+        CompoundTag wrapper = new CompoundTag();
+        wrapper.putBoolean(PENDING_KEY, true);
+        wrapper.putString(PENDING_TOKEN_KEY, safe(token));
+        CustomData.set(DataComponents.CUSTOM_DATA, pendingDisc, wrapper);
+        pendingDisc.set(DataComponents.CUSTOM_NAME, Component.literal("随机音乐唱片生成中").withStyle(ChatFormatting.GRAY));
+        pendingDisc.set(DataComponents.LORE, new ItemLore(List.of(
+                Component.literal("正在生成，请稍候").withStyle(ChatFormatting.DARK_GRAY)
+        )));
+        return pendingDisc;
     }
 
     public static ItemStack burn(ItemStack baseDisc, TrackInfo track) {

@@ -18,17 +18,21 @@ import okhttp3.Response;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 public final class NeteaseApiClient {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int DETAIL_FETCH_BATCH_SIZE = 100;
+    private static final int HOT_PLAYLIST_FETCH_SIZE = 30;
     private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(4, runnable -> {
         Thread thread = new Thread(runnable, "musicplayer-http");
         thread.setDaemon(true);
@@ -140,6 +144,77 @@ public final class NeteaseApiClient {
                     tracks
             ));
         });
+    }
+
+    public CompletableFuture<List<TrackInfo>> randomHotTracks(int count) {
+        int safeCount = Math.max(1, count);
+        return CompletableFuture.supplyAsync(() -> {
+            Random random = new Random();
+            List<String> hotCategories = fetchHotPlaylistCategories();
+            String selectedCategory = hotCategories.isEmpty()
+                    ? "全部"
+                    : hotCategories.get(random.nextInt(hotCategories.size()));
+
+            List<SearchEntry> playlists = fetchTopPlaylists(selectedCategory, HOT_PLAYLIST_FETCH_SIZE, 0);
+            if (playlists.isEmpty() && !"全部".equals(selectedCategory)) {
+                playlists = fetchTopPlaylists("全部", HOT_PLAYLIST_FETCH_SIZE, 0);
+            }
+            if (playlists.isEmpty()) {
+                throw new IllegalStateException("无法获取热门歌单。");
+            }
+
+            Collections.shuffle(playlists, random);
+            LinkedHashSet<String> songIds = new LinkedHashSet<>();
+            int playlistProbeCount = Math.min(playlists.size(), 8);
+            for (int index = 0; index < playlistProbeCount && songIds.size() < safeCount * 4; index++) {
+                SearchEntry playlist = playlists.get(index);
+                List<SearchEntry> tracks = fetchAllPlaylistTracksSync(playlist.id());
+                if (tracks.isEmpty()) {
+                    continue;
+                }
+                Collections.shuffle(tracks, random);
+                int take = Math.min(tracks.size(), Math.max(12, safeCount));
+                for (int trackIndex = 0; trackIndex < take; trackIndex++) {
+                    String songId = tracks.get(trackIndex).id();
+                    if (songId != null && !songId.isBlank()) {
+                        songIds.add(songId);
+                    }
+                    if (songIds.size() >= safeCount * 4) {
+                        break;
+                    }
+                }
+            }
+
+            if (songIds.isEmpty()) {
+                throw new IllegalStateException("热门歌单中没有可用歌曲。");
+            }
+
+            List<String> selectedSongIds = new ArrayList<>(songIds);
+            Collections.shuffle(selectedSongIds, random);
+            if (selectedSongIds.size() > safeCount) {
+                selectedSongIds = new ArrayList<>(selectedSongIds.subList(0, safeCount));
+            }
+
+            List<CompletableFuture<TrackInfo>> futures = selectedSongIds.stream()
+                    .map(this::resolveSong)
+                    .collect(Collectors.toList());
+            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+
+            List<TrackInfo> tracks = new ArrayList<>();
+            for (CompletableFuture<TrackInfo> future : futures) {
+                try {
+                    TrackInfo track = future.join();
+                    if (track != null && track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
+                        tracks.add(track);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (tracks.isEmpty()) {
+                throw new IllegalStateException("随机热门歌曲解析失败。");
+            }
+            return tracks;
+        }, EXECUTOR);
     }
 
     private CompletableFuture<List<SearchEntry>> search(String keyword, int type, int page) {
@@ -286,39 +361,7 @@ public final class NeteaseApiClient {
     }
 
     private CompletableFuture<List<SearchEntry>> fetchAllPlaylistTracks(String playlistId) {
-        return CompletableFuture.supplyAsync(() -> {
-            List<SearchEntry> tracks = new ArrayList<>();
-            int offset = 0;
-
-            while (true) {
-                JsonNode root = executeJson(baseRequest(
-                        baseUrl() + "/playlist/track/all",
-                        new String[]{"id", playlistId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
-                        "application/json,text/plain,*/*"
-                ));
-                JsonNode songs = root.path("songs");
-                if (!songs.isArray() || songs.isEmpty()) {
-                    break;
-                }
-                for (JsonNode song : songs) {
-                    String songId = song.path("id").asText();
-                    String artistId = firstArtistId(song);
-                    tracks.add(new SearchEntry(
-                            songId,
-                            song.path("name").asText(),
-                            firstArtistName(song),
-                            playSongCommand(songId),
-                            artistId.isBlank() ? "" : viewArtistCommand(artistId)
-                    ));
-                }
-                if (songs.size() < DETAIL_FETCH_BATCH_SIZE) {
-                    break;
-                }
-                offset += songs.size();
-            }
-
-            return tracks;
-        }, EXECUTOR);
+        return CompletableFuture.supplyAsync(() -> fetchAllPlaylistTracksSync(playlistId), EXECUTOR);
     }
 
     private CompletableFuture<List<SearchEntry>> fetchAllArtistSongs(String artistId) {
@@ -354,6 +397,92 @@ public final class NeteaseApiClient {
 
             return tracks;
         }, EXECUTOR);
+    }
+
+    private List<String> fetchHotPlaylistCategories() {
+        JsonNode root = executeJson(baseRequest(
+                baseUrl() + "/playlist/hot",
+                new String[0],
+                "application/json,text/plain,*/*"
+        ));
+        JsonNode tags = root.path("tags");
+        List<String> categories = new ArrayList<>();
+        if (tags.isArray()) {
+            for (JsonNode tag : tags) {
+                String name = tag.path("name").asText("");
+                if (!name.isBlank()) {
+                    categories.add(name);
+                }
+            }
+        }
+        if (categories.stream().noneMatch("全部"::equals)) {
+            categories.add("全部");
+        }
+        return categories;
+    }
+
+    private List<SearchEntry> fetchTopPlaylists(String category, int limit, int offset) {
+        JsonNode root = executeJson(baseRequest(
+                baseUrl() + "/top/playlist",
+                new String[]{
+                        "order", "hot",
+                        "cat", category,
+                        "limit", Integer.toString(limit),
+                        "offset", Integer.toString(offset)
+                },
+                "application/json,text/plain,*/*"
+        ));
+        JsonNode playlists = root.path("playlists");
+        List<SearchEntry> entries = new ArrayList<>();
+        if (!playlists.isArray()) {
+            return entries;
+        }
+        for (JsonNode playlist : playlists) {
+            String playlistId = playlist.path("id").asText();
+            String ownerId = playlist.path("creator").path("userId").asText("");
+            entries.add(new SearchEntry(
+                    playlistId,
+                    playlist.path("name").asText(""),
+                    playlist.path("creator").path("nickname").asText(""),
+                    viewPlaylistCommand(playlistId),
+                    ownerId.isBlank() ? "" : viewUserCommand(ownerId)
+            ));
+        }
+        return entries;
+    }
+
+    private List<SearchEntry> fetchAllPlaylistTracksSync(String playlistId) {
+        List<SearchEntry> tracks = new ArrayList<>();
+        int offset = 0;
+
+        while (true) {
+            JsonNode root = executeJson(baseRequest(
+                    baseUrl() + "/playlist/track/all",
+                    new String[]{"id", playlistId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
+                    "application/json,text/plain,*/*"
+            ));
+            JsonNode songs = root.path("songs");
+            if (!songs.isArray() || songs.isEmpty()) {
+                break;
+            }
+            for (JsonNode song : songs) {
+                String songId = song.path("id").asText();
+                String artistId = firstArtistId(song);
+                tracks.add(new SearchEntry(
+                        songId,
+                        song.path("name").asText(),
+                        firstArtistName(song),
+                        playSongCommand(songId),
+                        artistId.isBlank() ? "" : viewArtistCommand(artistId)
+                ));
+            }
+            if (songs.size() < DETAIL_FETCH_BATCH_SIZE) {
+                break;
+            }
+            offset += songs.size();
+        }
+
+        return tracks;
     }
 
     private CompletableFuture<JsonNode> getJsonFromAbsoluteUrl(String absoluteUrl, String... queryPairs) {

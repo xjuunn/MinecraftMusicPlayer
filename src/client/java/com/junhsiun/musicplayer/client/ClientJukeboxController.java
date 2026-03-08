@@ -47,6 +47,7 @@ public final class ClientJukeboxController {
     public void handle(JukeboxMusicPayload payload) {
         switch (payload.action()) {
             case "play" -> play(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl());
+            case "refresh" -> refresh(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl());
             case "update" -> update(payload.jukeboxPos(), payload.title(), payload.subtitle(), payload.coverUrl());
             case "stop" -> stop(payload.jukeboxPos());
             default -> MusicPlayerMod.LOGGER.warn("Unknown jukebox action: {}", payload.action());
@@ -73,20 +74,61 @@ public final class ClientJukeboxController {
     }
 
     private void play(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl) {
-        stop(jukeboxPos);
-        PlaybackHandle handle = new PlaybackHandle();
+        PlaybackHandle handle = playbackHandles.computeIfAbsent(jukeboxPos, ignored -> new PlaybackHandle());
+        stopPlaybackOnly(handle);
+        handle.urls = urls == null ? List.of() : List.copyOf(urls);
+        handle.title = title == null ? "" : title;
+        handle.subtitle = subtitle == null ? "" : subtitle;
         handle.coverUrl = coverUrl == null ? "" : coverUrl;
         handle.startedAtMillis = System.currentTimeMillis();
         CoverArtTextureCache.getInstance().request(handle.coverUrl);
         Thread playbackThread = new Thread(() -> playWithFallback(jukeboxPos, handle, urls, title, subtitle), "musicplayer-jukebox-" + jukeboxPos);
         playbackThread.setDaemon(true);
         handle.thread = playbackThread;
-        playbackHandles.put(jukeboxPos, handle);
         playbackThread.start();
+    }
+
+    private void refresh(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl) {
+        PlaybackHandle handle = playbackHandles.get(jukeboxPos);
+        if (handle == null) {
+            play(jukeboxPos, urls, title, subtitle, coverUrl);
+            return;
+        }
+        if (urls != null && !urls.isEmpty()) {
+            handle.urls = List.copyOf(urls);
+        }
+        if (title != null && !title.isBlank()) {
+            handle.title = title;
+        }
+        if (subtitle != null && !subtitle.isBlank()) {
+            handle.subtitle = subtitle;
+        }
+        if (coverUrl != null && !coverUrl.isBlank() && !coverUrl.equals(handle.coverUrl)) {
+            handle.coverUrl = coverUrl;
+            CoverArtTextureCache.getInstance().request(coverUrl);
+        }
+        Thread thread = handle.thread;
+        if (thread == null || !thread.isAlive()) {
+            Thread playbackThread = new Thread(
+                    () -> playWithFallback(jukeboxPos, handle, handle.urls, handle.title, handle.subtitle),
+                    "musicplayer-jukebox-" + jukeboxPos
+            );
+            playbackThread.setDaemon(true);
+            handle.thread = playbackThread;
+            handle.startedAtMillis = System.currentTimeMillis();
+            playbackThread.start();
+        }
     }
 
     private void stop(long jukeboxPos) {
         PlaybackHandle handle = playbackHandles.remove(jukeboxPos);
+        if (handle == null) {
+            return;
+        }
+        stopPlaybackOnly(handle);
+    }
+
+    private void stopPlaybackOnly(PlaybackHandle handle) {
         if (handle == null) {
             return;
         }
@@ -114,28 +156,33 @@ public final class ClientJukeboxController {
     private void playWithFallback(long jukeboxPos, PlaybackHandle handle, List<String> urls, String title, String subtitle) {
         if (urls == null || urls.isEmpty()) {
             MusicPlayerMod.LOGGER.warn("Jukebox {} has no playable urls: {} - {}", jukeboxPos, title, subtitle);
-            playbackHandles.remove(jukeboxPos, handle);
+            handle.thread = null;
+            handle.player = null;
             return;
         }
 
         for (String url : urls) {
             if (Thread.currentThread().isInterrupted()) {
-                playbackHandles.remove(jukeboxPos, handle);
+                handle.thread = null;
+                handle.player = null;
                 return;
             }
             try {
                 playSingle(jukeboxPos, handle, url, title, subtitle);
-                playbackHandles.remove(jukeboxPos, handle);
+                handle.thread = null;
+                handle.player = null;
                 return;
             } catch (IOException | JavaLayerException exception) {
                 if (Thread.currentThread().isInterrupted() || exception instanceof InterruptedIOException) {
-                    playbackHandles.remove(jukeboxPos, handle);
+                    handle.thread = null;
+                    handle.player = null;
                     return;
                 }
                 logSourceFallback(url, exception);
             }
         }
-        playbackHandles.remove(jukeboxPos, handle);
+        handle.thread = null;
+        handle.player = null;
     }
 
     private void playSingle(long jukeboxPos, PlaybackHandle handle, String url, String title, String subtitle) throws IOException, JavaLayerException {
@@ -173,6 +220,9 @@ public final class ClientJukeboxController {
     private static final class PlaybackHandle {
         private volatile Player player;
         private volatile Thread thread;
+        private volatile List<String> urls = List.of();
+        private volatile String title = "";
+        private volatile String subtitle = "";
         private volatile String coverUrl = "";
         private volatile long startedAtMillis;
     }

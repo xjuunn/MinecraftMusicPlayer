@@ -52,6 +52,10 @@ public record JukeboxMusicPayload(String action, long jukeboxPos, List<String> u
         return new JukeboxMusicPayload("update", jukeboxPos, List.of(), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl);
     }
 
+    public static JukeboxMusicPayload refresh(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl) {
+        return new JukeboxMusicPayload("refresh", jukeboxPos, List.copyOf(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl);
+    }
+
     public static JukeboxMusicPayload stop(long jukeboxPos) {
         return new JukeboxMusicPayload("stop", jukeboxPos, List.of(), "", "", "");
     }

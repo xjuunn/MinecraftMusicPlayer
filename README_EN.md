@@ -1,66 +1,33 @@
-# Minecraft Music Player
+﻿# Minecraft Music Player
 
-Minecraft Music Player is a Fabric music mod for Minecraft `1.21.11`. It provides NetEase Cloud Music search, song requests, shared queue playback, playlist playback, and custom music disc support.
+Minecraft Music Player is a Fabric music mod for Minecraft `1.21.11`. It provides NetEase Cloud Music search, song requests, shared queue playback, playlist playback, custom music discs, and URL-based jukebox playback.
 
-The server handles commands, queue logic, search requests, sync, disc burning, and jukebox control. The client handles actual audio download and playback. This is a dual-side mod, not a pure server-side audio mod.
+The server handles commands, queue logic, search requests, sync, random loot disc injection, and jukebox control. The client handles actual audio download, playback, and jukebox cover rendering. This is a dual-side mod, not a pure server-side audio mod.
 
 ## Features
 
 - Search songs, artists, playlists, and users
 - View artist top songs, playlist details, and user playlists
-- Shared song requests, playlist playback, queue playback, and auto-advance
-- Vote skip, duplicate request deduplication, and move queued songs to next
-- Unified paging and navigation for search results, detail pages, and queue pages
-- Clickable chat UI for songs, artists, playlist owners, and detail entry points
-- Clickable download entry for the current track, opening the direct URL in the browser
-- Server-side queue prefetching to reduce delay when switching tracks
+- Unified paging and clickable navigation for all major list pages
+- Clickable actions for request, burn, detail view, and download
+- Shared song requests, queue playback, auto-advance, and vote skip
+- Duplicate request deduplication and move-queued-track-to-next support
+- Server-side queue prefetching to reduce delay between tracks
 - Burn songs into vanilla music discs and play URL-based music from jukeboxes
-
-## Music Discs
-
-### Supported workflow
-
-- Use `/music burn song <song_id>` to burn the held disc into a custom music disc
-- Burned discs store:
-  - song ID
-  - song title
-  - artist name
-  - artist ID
-  - duration
-  - available source URLs
-- The disc display name becomes `Title - Artist`
-- Hovering the disc shows extended metadata
-- Inserting the burned disc into a jukebox automatically plays the stored URL music
-- Playback stops automatically when the disc is ejected, replaced, the jukebox is broken, the chunk unloads, or the player leaves audible range
-
-### Supported disc bases
-
-Any vanilla `Music Disc` item can be used as a burnable base disc.
-
-### Burn entry points
-
-When the player is holding a burnable disc in the main hand, a `[Burn]` action is shown automatically in these views:
-
-- `/music now`
-- `/music search song ...`
-- `/music view playlist ...`
-- `/music view artist ...`
-- `/music view author ...`
-- `/music queue`
-
-Clicking it runs `/music burn song <song_id>` directly.
+- `/music random` generates 10 random hot songs each time
+- All loot-table-backed containers can spawn random hot music discs based on admin settings
 
 ## How It Works
 
-- With the mod installed on the server, the server handles queue logic, command processing, search requests, jukebox playback sync, and config management
-- With the mod installed on the client, the client plays the actual audio stream and custom jukebox audio
+- The server handles command execution, search requests, playback queue, loot disc generation, and jukebox synchronization
+- The client handles actual audio playback and jukebox cover rendering
 - If only the server installs the mod, commands and queue logic work, but clients cannot hear music
 - Players who want to hear music must install the mod on the client
 
 Recommended setup:
 
 1. Install `Minecraft Music Player` on the server
-2. Install `Minecraft Music Player` on all clients that should hear music
+2. Install `Minecraft Music Player` on clients that should hear music
 3. Make sure the server or clients can access a working music API endpoint
 
 ## Requirements
@@ -89,7 +56,81 @@ Default configuration uses:
 https://mycelis.dpdns.org/
 ```
 
-Admins can override it by command and can restore the default value later.
+Admins can override it by command and restore the default later.
+
+## Music Discs
+
+### Burn flow
+
+1. Hold any vanilla music disc in the main hand
+2. Run `/music burn song <song_id>`
+3. Or click `[Burn]` in supported list pages
+4. Receive a custom music disc storing the track metadata and URLs
+
+### Disc metadata
+
+A burned disc stores:
+
+- song ID
+- song title
+- artist name
+- artist ID
+- cover URL
+- duration
+- available source URLs
+
+### Jukebox playback
+
+- Inserting a burned disc into a jukebox automatically plays the stored URL music
+- Playback is spatialized around the jukebox instead of acting like a global background track
+- The four sides of the jukebox render a rotating disc-style cover effect
+- Playback stops when the disc is ejected, replaced, the jukebox is broken, the chunk unloads, or the player leaves audible range
+- Pending placeholder discs cannot be inserted into jukeboxes and will do nothing if used on one
+
+### Burn entry points
+
+When the player holds a burnable disc in the main hand, a `[Burn]` action is shown automatically in these views:
+
+- `/music now`
+- `/music queue`
+- `/music random`
+- `/music search song ...`
+- `/music view playlist ...`
+- `/music view artist ...`
+- `/music view author ...`
+
+## Random Hot Music
+
+Use:
+
+```text
+/music random
+```
+
+Behavior:
+
+- Generates 10 random hot songs each time
+- The source is hot playlists selected from hot playlist categories
+- Each refresh produces a different list
+- Every entry supports:
+  - request song
+  - burn to disc
+  - view artist details
+  - open the direct download URL
+
+## Loot Container Random Music Discs
+
+The mod can inject random hot music discs into all loot-table-backed containers when they are opened for the first time.
+
+Behavior:
+
+- Applies to both block containers and entity containers backed by loot tables
+- Each container is decided only once
+- On first open, a temporary "generating" placeholder disc is inserted first and the real disc is resolved asynchronously in the background
+- If the player takes the placeholder disc out early, it will still resolve later inside the player's inventory or the currently open container
+- The original vanilla disc item type is preserved after resolution, so the color and appearance do not change
+- Generated discs come from random hot songs selected from hot playlists
+- Admins can configure whether this is enabled, the generation chance, and how many discs may be generated per container
 
 ## Player Commands
 
@@ -106,6 +147,8 @@ Admins can override it by command and can restore the default value later.
 | `/music play song <song_id>` | Request a single song |
 | `/music play playlist <playlist_id>` | Switch into playlist playback mode |
 | `/music burn song <song_id>` | Burn the held disc into a music disc |
+| `/music random` | Generate 10 random hot songs |
+| `/music random refresh` | Generate another random hot song list |
 | `/music search song <keyword>` | Search songs |
 | `/music search song page <page> <keyword>` | View a specific page of song search results |
 | `/music search artist <keyword>` | Search artists |
@@ -145,10 +188,13 @@ Admins can override it by command and can restore the default value later.
 | `/music admin set proxy none` | Clear proxy |
 | `/music admin set connectTimeoutSeconds <3-60>` | Set connect timeout |
 | `/music admin set readTimeoutSeconds <3-120>` | Set read timeout |
-| `/music admin set searchLimit <3-20>` | Set page size for search results |
+| `/music admin set searchLimit <3-20>` | Set list page size |
 | `/music admin set maxQueueSize <1-200>` | Set queue size limit |
 | `/music admin set playlistQueueLimit <1-100>` | Set maximum imported songs per playlist |
 | `/music admin set queueCacheSize <0-20>` | Set server-side queue prefetch size |
+| `/music admin set enableLootMusicDiscs <true\|false>` | Enable random music discs in loot containers |
+| `/music admin set lootMusicDiscChance <0.0-1.0>` | Set the generation chance for random loot music discs |
+| `/music admin set lootMusicDiscCount <0-5>` | Set how many random music discs a loot container may generate |
 | `/music admin set voteSkipPercent <0.1-1.0>` | Set vote skip ratio |
 
 ## Configuration
@@ -179,32 +225,12 @@ Default config example:
   "maxQueueSize": 40,
   "playlistQueueLimit": 20,
   "queueCacheSize": 3,
+  "enableLootMusicDiscs": true,
+  "lootMusicDiscChance": 0.3,
+  "lootMusicDiscCount": 1,
   "voteSkipPercent": 0.6
 }
 ```
-
-## Queue Prefetch
-
-- The server automatically pre-resolves the next queued tracks
-- Default prefetch size is `3`
-- Track switching prefers cached resolution results
-- You can tune it with `/music admin set queueCacheSize <0-20>`
-- Set it to `0` to disable queue prefetching
-
-## Source Fallback Strategy
-
-To improve playback availability, the mod tries multiple playback sources in order:
-
-1. Third-party sources that are more suitable for full VIP song playback
-2. Playable mp3 URLs returned by the NetEase-related API
-3. NetEase outer-link fallback URLs as the final fallback
-
-It also filters obvious preview-only links such as:
-
-- `musicrep-ts`
-- `jd-musicrep-ts`
-
-This reduces the issue where some VIP tracks only play for 30 seconds.
 
 ## Build
 
@@ -219,8 +245,6 @@ minecraft-music-player-2.0.3-fabricmc1.21.11.jar
 ```
 
 ## Release
-
-The repository supports GitHub Actions based releases.
 
 ### Release by tag
 
@@ -238,5 +262,4 @@ Run the `release` workflow from the GitHub `Actions` page and provide the tag to
 - The project uses Mojang official mappings
 - Interaction is based on chat messages and clickable components, without a custom GUI
 - The current client player prefers directly playable mp3 sources
-- Chinese documentation is available in [README.md](README.md)
 

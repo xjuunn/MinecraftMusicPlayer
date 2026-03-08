@@ -42,10 +42,6 @@ public final class JukeboxCoverRenderer {
         long now = System.currentTimeMillis();
 
         for (ClientJukeboxController.JukeboxVisualState state : ClientJukeboxController.getInstance().getVisualStates()) {
-            if (state.coverUrl() == null || state.coverUrl().isBlank()) {
-                continue;
-            }
-
             double distanceSqr = minecraft.player.distanceToSqr(
                     state.pos().getX() + 0.5D,
                     state.pos().getY() + 0.5D,
@@ -55,10 +51,12 @@ public final class JukeboxCoverRenderer {
                 continue;
             }
 
-            Identifier coverTexture = CoverArtTextureCache.getInstance().getTextureId(state.coverUrl());
-            if (coverTexture == null) {
-                CoverArtTextureCache.getInstance().request(state.coverUrl());
-                continue;
+            Identifier coverTexture = null;
+            if (state.coverUrl() != null && !state.coverUrl().isBlank()) {
+                coverTexture = CoverArtTextureCache.getInstance().getTextureId(state.coverUrl());
+                if (coverTexture == null) {
+                    CoverArtTextureCache.getInstance().request(state.coverUrl());
+                }
             }
 
             renderForJukebox(poseStack, camera, state.pos(), coverTexture, now, state.startedAtMillis());
@@ -105,7 +103,9 @@ public final class JukeboxCoverRenderer {
         }
 
         drawQuad(RenderTypes.entityCutoutNoCull(BLACK_DISC_TEXTURE), poseStack, outerHalfSize, light, 255, 255, 255, 255, 0.0F);
-        drawQuad(RenderTypes.entityCutoutNoCull(coverTexture), poseStack, innerHalfSize, light, 255, 255, 255, 255, 0.003F);
+        if (coverTexture != null) {
+            drawQuad(RenderTypes.entityCutoutNoCull(coverTexture), poseStack, innerHalfSize, light, 255, 255, 255, 255, 0.003F);
+        }
         poseStack.popPose();
     }
 

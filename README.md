@@ -1,66 +1,33 @@
-# Minecraft Music Player
+﻿# Minecraft Music Player
 
-Minecraft Music Player 是面向 Minecraft `1.21.11` 的 Fabric 音乐模组，提供基于网易云音乐的搜索、点歌、共享播放队列、歌单播放，以及自定义音乐唱片功能。
+Minecraft Music Player 是一个面向 Minecraft `1.21.11` 的 Fabric 音乐模组，提供网易云音乐搜索、点歌、播放队列、歌单播放、自定义音乐唱片，以及唱片机 URL 音乐播放功能。
 
-服务端负责命令、队列、搜索、同步、唱片刻录和唱片机控制；客户端负责实际音频拉取与播放。因此这是一个双端协作模组，而不是纯服务端音频模组。
+服务端负责命令、队列、搜索、同步、战利品箱随机唱片注入和唱片机控制；客户端负责实际音频下载、播放和唱片机封面渲染。因此这是一个双端协作模组，而不是纯服务端音频模组。
 
 ## 功能概览
 
 - 搜索歌曲、作者、歌单和用户
 - 查看作者热门歌曲、歌单详情和用户歌单
-- 玩家点歌、歌单播放、共享播放队列、自动下一首
-- 玩家投票切歌、重复点歌去重、待播歌曲提升为下一首
-- 搜索结果、详情页、队列页统一分页和导航
-- 聊天栏交互统一为可点击操作，歌曲、作者、创建者、详情入口都可直接点击
-- 当前播放支持可点击下载，自动在浏览器中打开音频直链
-- 服务端支持队列预缓存，减少切歌时的等待时间
-- 支持将歌曲刻录进原版唱片，并在唱片机中播放 URL 音乐
-
-## 音乐唱片
-
-### 支持的能力
-
-- 使用 `/music burn song <歌曲ID>` 将当前主手唱片刻录为自定义音乐唱片
-- 刻录后的唱片会保存：
-  - 歌曲 ID
-  - 歌曲名
-  - 作者名
-  - 作者 ID
-  - 时长
-  - 可用音源 URL 列表
-- 唱片名称会显示为 `歌曲名 - 作者`
-- 鼠标悬浮到唱片上时，会显示更多元数据
-- 将刻录后的唱片放入唱片机后，会自动播放其中保存的 URL 音乐
-- 当唱片被弹出、替换、唱片机被破坏、区块卸载或玩家离开可听范围时，会自动停止对应播放
-
-### 支持的原版唱片底材
-
-所有原版 `Music Disc` 均可作为刻录底材使用。
-
-### 刻录入口
-
-当主手持有可刻录唱片时，下列位置会自动显示 `[刻录]` 按钮：
-
-- `/music now`
-- `/music search song ...`
-- `/music view playlist ...`
-- `/music view artist ...`
-- `/music view author ...`
-- `/music queue`
-
-点击后会直接执行对应的 `/music burn song <歌曲ID>`。
+- 所有主要列表支持分页与可点击导航
+- 所有高频条目支持点击查看详情、点歌、刻录或下载
+- 共享点歌、待播队列、自动下一首、投票切歌
+- 重复点歌自动去重，待播歌曲支持提升为下一首
+- 服务端队列预缓存，减少切歌解析等待
+- 将歌曲刻录进原版唱片，并放入唱片机播放 URL 音乐
+- `/music random` 每次生成 10 首随机热门音乐，可直接点歌和刻录
+- 所有带战利品表的容器都可按配置随机生成热门音乐唱片
 
 ## 工作方式
 
-- 服务端安装本模组后，负责队列逻辑、命令处理、搜索请求、唱片机播放同步和配置管理
-- 客户端安装本模组后，负责实际播放音乐和唱片机中的自定义音频
+- 服务端安装本模组后，负责命令处理、搜索请求、播放队列、战利品箱随机唱片和唱片机同步
+- 客户端安装本模组后，负责实际播放音频和渲染唱片机封面
 - 只有服务端安装时，命令和队列逻辑可以工作，但客户端听不到声音
 - 需要听歌的玩家必须安装客户端模组
 
 推荐部署方式：
 
 1. 服务器安装 `Minecraft Music Player`
-2. 需要听歌的客户端也安装 `Minecraft Music Player`
+2. 所有需要听歌的客户端也安装 `Minecraft Music Player`
 3. 服务器或客户端网络可以访问可用的音乐 API
 
 ## 依赖要求
@@ -91,21 +58,95 @@ https://mycelis.dpdns.org/
 
 管理员可以通过命令修改地址，也可以恢复到默认值。
 
+## 音乐唱片
+
+### 刻录流程
+
+1. 主手持有任意原版唱片
+2. 使用 `/music burn song <歌曲ID>`
+3. 或在支持的列表页面中点击 `[刻录]`
+4. 获得带有歌曲 URL 和元数据的自定义音乐唱片
+
+### 唱片保存的数据
+
+- 歌曲 ID
+- 歌曲名
+- 作者名
+- 作者 ID
+- 封面 URL
+- 时长
+- 可用音源 URL 列表
+
+### 唱片机播放
+
+- 将刻录后的唱片放入唱片机后自动播放其中的 URL 音乐
+- 播放会跟随唱片机位置同步，而不是全局背景音乐
+- 四个侧面会渲染旋转中的唱片封面效果
+- 唱片被弹出、替换、唱片机被破坏、区块卸载或玩家离开可听范围后会停止播放
+- “正在生成”的占位唱片不能放入唱片机，使用时不会有任何反应
+
+### 支持的刻录入口
+
+当主手持有可刻录唱片时，这些界面会自动出现 `[刻录]`：
+
+- `/music now`
+- `/music queue`
+- `/music random`
+- `/music search song ...`
+- `/music view playlist ...`
+- `/music view artist ...`
+- `/music view author ...`
+
+## 随机热门音乐
+
+使用：
+
+```text
+/music random
+```
+
+行为说明：
+
+- 每次生成 10 首随机热门音乐
+- 来源是热门歌单分类下的热门歌单，再从歌单中随机抽歌
+- 每次生成的列表都不同
+- 列表中的每一首歌都支持：
+  - 点歌
+  - 刻录
+  - 查看作者详情
+  - 下载当前直链
+
+## 战利品箱随机音乐唱片
+
+本模组支持在所有带战利品表的容器第一次被打开时，按配置随机注入热门音乐唱片。
+
+行为说明：
+
+- 对所有带 loot table 的方块容器和实体容器生效
+- 每个容器只会决策一次，不会重复生成
+- 首次打开时会先放入“随机音乐唱片生成中”的占位唱片，后台异步生成真正的音乐唱片
+- 如果玩家先把占位唱片拿走，生成完成后会自动在玩家背包或当前打开的容器里替换成真正的音乐唱片
+- 生成完成后会保留原始唱片底盘类型，不会改变颜色和外观
+- 生成的唱片内容来自热门歌单中的随机热门歌曲
+- 可由管理员配置是否启用、生成概率和每个容器的数量
+
 ## 玩家命令
 
 | 命令 | 说明 |
 | --- | --- |
 | `/music` | 显示帮助 |
-| `/music now` | 查看当前播放，并提供可点击下载入口 |
-| `/music queue [page]` | 查看当前队列 |
-| `/music queue next <歌曲ID>` | 将队列中的歌曲提到下一首 |
+| `/music now` | 查看当前播放，并提供下载入口 |
+| `/music queue [page]` | 查看当前待播队列 |
+| `/music queue next <歌曲ID>` | 将队列中的歌曲提升为下一首 |
 | `/music join` | 加入当前播放 |
 | `/music leave` | 退出当前播放 |
 | `/music mute once` | 仅停止接收当前歌曲 |
 | `/music vote next` | 投票切到下一首 |
 | `/music play song <歌曲ID>` | 直接点播单曲 |
 | `/music play playlist <歌单ID>` | 切换到歌单播放模式 |
-| `/music burn song <歌曲ID>` | 将主手唱片刻录为对应音乐唱片 |
+| `/music burn song <歌曲ID>` | 将主手唱片刻录为音乐唱片 |
+| `/music random` | 生成 10 首随机热门音乐 |
+| `/music random refresh` | 重新生成随机热门音乐列表 |
 | `/music search song <关键词>` | 搜索歌曲 |
 | `/music search song page <页码> <关键词>` | 查看歌曲搜索指定页 |
 | `/music search artist <关键词>` | 搜索作者 |
@@ -138,17 +179,20 @@ https://mycelis.dpdns.org/
 | `/music admin set allowPlaylistRequest <true\|false>` | 是否允许玩家导入歌单 |
 | `/music admin set autoAdvance <true\|false>` | 是否自动播放下一首 |
 | `/music admin set announceQueueChanges <true\|false>` | 是否广播队列变化 |
-| `/music admin set showLoadingHints <true\|false>` | 是否显示搜索和解析提示 |
+| `/music admin set showLoadingHints <true\|false>` | 是否显示加载提示 |
 | `/music admin set useSystemProxy <true\|false>` | 是否启用系统代理自动发现 |
 | `/music admin set preferIpv4 <true\|false>` | 是否优先使用 IPv4 |
 | `/music admin set proxy <host:port>` | 设置 HTTP 代理 |
 | `/music admin set proxy none` | 清除代理 |
 | `/music admin set connectTimeoutSeconds <3-60>` | 设置连接超时秒数 |
 | `/music admin set readTimeoutSeconds <3-120>` | 设置读取超时秒数 |
-| `/music admin set searchLimit <3-20>` | 设置每页搜索结果数量 |
+| `/music admin set searchLimit <3-20>` | 设置列表分页大小 |
 | `/music admin set maxQueueSize <1-200>` | 设置队列上限 |
 | `/music admin set playlistQueueLimit <1-100>` | 设置单次导入歌单的最大歌曲数 |
 | `/music admin set queueCacheSize <0-20>` | 设置服务端队列预缓存数量 |
+| `/music admin set enableLootMusicDiscs <true\|false>` | 是否允许战利品箱生成随机音乐唱片 |
+| `/music admin set lootMusicDiscChance <0.0-1.0>` | 设置战利品箱生成随机音乐唱片的概率 |
+| `/music admin set lootMusicDiscCount <0-5>` | 设置每个战利品箱最多生成的随机音乐唱片数量 |
 | `/music admin set voteSkipPercent <0.1-1.0>` | 设置投票切歌所需比例 |
 
 ## 配置文件
@@ -179,32 +223,12 @@ config/minecraft-music-player.json
   "maxQueueSize": 40,
   "playlistQueueLimit": 20,
   "queueCacheSize": 3,
+  "enableLootMusicDiscs": true,
+  "lootMusicDiscChance": 0.3,
+  "lootMusicDiscCount": 1,
   "voteSkipPercent": 0.6
 }
 ```
-
-## 队列预缓存
-
-- 服务端会自动预解析待播队列前几首歌
-- 默认预缓存 `3` 首
-- 切歌时会优先复用缓存结果
-- 可通过 `/music admin set queueCacheSize <0-20>` 调整
-- 设置为 `0` 时关闭队列预缓存
-
-## 音源与回退策略
-
-为了提高可用性，模组会按顺序尝试多个播放源：
-
-1. 优先尝试更适合完整播放 VIP 歌曲的第三方可用音源
-2. 再尝试网易云 API 返回的可用 mp3 地址
-3. 最后回退到网易云外链兜底
-
-同时会过滤明显的试听链路，例如：
-
-- `musicrep-ts`
-- `jd-musicrep-ts`
-
-这可以减少部分 VIP 曲目只能播放 30 秒的问题。
 
 ## 构建
 
@@ -219,8 +243,6 @@ minecraft-music-player-2.0.3-fabricmc1.21.11.jar
 ```
 
 ## 发布
-
-仓库支持通过 GitHub Actions 进行版本发布。
 
 ### 使用 tag 发布
 
