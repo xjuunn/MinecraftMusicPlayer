@@ -17,7 +17,6 @@ import net.minecraft.world.phys.Vec3;
 
 public final class JukeboxCoverRenderer {
     private static final Identifier BLACK_DISC_TEXTURE = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "dynamic/jukebox_black_disc");
-    private static final int SEGMENTS = 20;
     private static boolean blackTextureRegistered;
 
     private JukeboxCoverRenderer() {
@@ -61,34 +60,34 @@ public final class JukeboxCoverRenderer {
 
     private static void renderForJukebox(PoseStack poseStack, MultiBufferSource consumers, Vec3 camera, BlockPos pos, Identifier coverTexture, long now, long startedAtMillis) {
         float elapsedSeconds = Math.max(0L, now - startedAtMillis) / 1000.0F;
-        float rotation = elapsedSeconds * 72.0F;
-        float slowRotation = elapsedSeconds * 24.0F;
-        float bob = (float) Math.sin(elapsedSeconds * 2.2F) * 0.025F;
+        float spin = elapsedSeconds * 72.0F;
+        float sideSpin = elapsedSeconds * 24.0F;
+        float bob = (float) Math.sin(elapsedSeconds * 2.2F) * 0.02F;
         int light = LightTexture.FULL_BRIGHT;
 
         double baseX = pos.getX() + 0.5D - camera.x;
         double baseY = pos.getY() + 0.5D - camera.y;
         double baseZ = pos.getZ() + 0.5D - camera.z;
 
-        renderDisc(poseStack, consumers, coverTexture, baseX, baseY + 0.62D + bob, baseZ, 0.0F, -90.0F, rotation, 0.26F, 0.20F, light);
-        renderDisc(poseStack, consumers, coverTexture, baseX, baseY, baseZ + 0.502D, 0.0F, 0.0F, slowRotation, 0.18F, 0.14F, light);
-        renderDisc(poseStack, consumers, coverTexture, baseX, baseY, baseZ - 0.502D, 180.0F, 0.0F, -slowRotation, 0.18F, 0.14F, light);
-        renderDisc(poseStack, consumers, coverTexture, baseX + 0.502D, baseY, baseZ, -90.0F, 0.0F, slowRotation, 0.18F, 0.14F, light);
-        renderDisc(poseStack, consumers, coverTexture, baseX - 0.502D, baseY, baseZ, 90.0F, 0.0F, -slowRotation, 0.18F, 0.14F, light);
+        renderDiscQuad(poseStack, consumers, baseX, baseY + 0.62D + bob, baseZ, 0.0F, -90.0F, spin, 0.30F, 0.22F, coverTexture, light);
+        renderDiscQuad(poseStack, consumers, baseX, baseY, baseZ + 0.505D, 0.0F, 0.0F, sideSpin, 0.22F, 0.16F, coverTexture, light);
+        renderDiscQuad(poseStack, consumers, baseX, baseY, baseZ - 0.505D, 180.0F, 0.0F, -sideSpin, 0.22F, 0.16F, coverTexture, light);
+        renderDiscQuad(poseStack, consumers, baseX + 0.505D, baseY, baseZ, -90.0F, 0.0F, sideSpin, 0.22F, 0.16F, coverTexture, light);
+        renderDiscQuad(poseStack, consumers, baseX - 0.505D, baseY, baseZ, 90.0F, 0.0F, -sideSpin, 0.22F, 0.16F, coverTexture, light);
     }
 
-    private static void renderDisc(
+    private static void renderDiscQuad(
             PoseStack poseStack,
             MultiBufferSource consumers,
-            Identifier coverTexture,
             double x,
             double y,
             double z,
             float yRotationDegrees,
             float xRotationDegrees,
             float spinDegrees,
-            float outerRadius,
-            float coverRadius,
+            float outerHalfSize,
+            float innerHalfSize,
+            Identifier coverTexture,
             int light
     ) {
         poseStack.pushPose();
@@ -103,29 +102,32 @@ public final class JukeboxCoverRenderer {
             poseStack.mulPose(Axis.ZP.rotationDegrees(spinDegrees));
         }
 
-        drawDisc(consumers.getBuffer(RenderTypes.entityTranslucent(BLACK_DISC_TEXTURE)), poseStack, outerRadius, light, 255, 255, 255, 235);
-        drawDisc(consumers.getBuffer(RenderTypes.entityTranslucent(coverTexture)), poseStack, coverRadius, light, 255, 255, 255, 255);
+        VertexConsumer black = consumers.getBuffer(RenderTypes.entityCutoutNoCull(BLACK_DISC_TEXTURE));
+        VertexConsumer cover = consumers.getBuffer(RenderTypes.entityCutoutNoCull(coverTexture));
+        drawQuad(black, poseStack, outerHalfSize, light, 255, 255, 255, 255, -0.001F);
+        drawQuad(cover, poseStack, innerHalfSize, light, 255, 255, 255, 255, 0.0F);
         poseStack.popPose();
     }
 
-    private static void drawDisc(VertexConsumer consumer, PoseStack poseStack, float radius, int light, int red, int green, int blue, int alpha) {
-        for (int index = 0; index < SEGMENTS; index++) {
-            float angleStart = (float) (Math.PI * 2.0D * index / SEGMENTS);
-            float angleEnd = (float) (Math.PI * 2.0D * (index + 1) / SEGMENTS);
-            addSliceVertex(consumer, poseStack, 0.0F, 0.0F, 0.0F, radius, light, red, green, blue, alpha);
-            addSliceVertex(consumer, poseStack, (float) Math.cos(angleStart) * radius, (float) Math.sin(angleStart) * radius, 0.0F, radius, light, red, green, blue, alpha);
-            addSliceVertex(consumer, poseStack, (float) Math.cos(angleEnd) * radius, (float) Math.sin(angleEnd) * radius, 0.0F, radius, light, red, green, blue, alpha);
-            addSliceVertex(consumer, poseStack, 0.0F, 0.0F, 0.0F, radius, light, red, green, blue, alpha);
-        }
-    }
-
-    private static void addSliceVertex(VertexConsumer consumer, PoseStack poseStack, float x, float y, float z, float radius, int light, int red, int green, int blue, int alpha) {
-        float normalizedRadius = Math.max(0.0001F, radius);
-        float u = 0.5F + (x / (normalizedRadius * 2.0F));
-        float v = 0.5F + (y / (normalizedRadius * 2.0F));
-        consumer.addVertex(poseStack.last().pose(), x, y, z)
+    private static void drawQuad(VertexConsumer consumer, PoseStack poseStack, float halfSize, int light, int red, int green, int blue, int alpha, float depthOffset) {
+        consumer.addVertex(poseStack.last().pose(), -halfSize, -halfSize, depthOffset)
                 .setColor(red, green, blue, alpha)
-                .setUv(u, v)
+                .setUv(0.0F, 1.0F)
+                .setLight(light)
+                .setNormal(poseStack.last(), 0.0F, 0.0F, 1.0F);
+        consumer.addVertex(poseStack.last().pose(), halfSize, -halfSize, depthOffset)
+                .setColor(red, green, blue, alpha)
+                .setUv(1.0F, 1.0F)
+                .setLight(light)
+                .setNormal(poseStack.last(), 0.0F, 0.0F, 1.0F);
+        consumer.addVertex(poseStack.last().pose(), halfSize, halfSize, depthOffset)
+                .setColor(red, green, blue, alpha)
+                .setUv(1.0F, 0.0F)
+                .setLight(light)
+                .setNormal(poseStack.last(), 0.0F, 0.0F, 1.0F);
+        consumer.addVertex(poseStack.last().pose(), -halfSize, halfSize, depthOffset)
+                .setColor(red, green, blue, alpha)
+                .setUv(0.0F, 0.0F)
                 .setLight(light)
                 .setNormal(poseStack.last(), 0.0F, 0.0F, 1.0F);
     }
@@ -135,11 +137,35 @@ public final class JukeboxCoverRenderer {
             return;
         }
         Minecraft minecraft = Minecraft.getInstance();
-        NativeImage image = new NativeImage(1, 1, false);
-        image.setPixelABGR(0, 0, 0xFF000000);
+        NativeImage image = new NativeImage(64, 64, true);
+        float center = 31.5F;
+        float radius = 30.0F;
+        float holeRadius = 4.0F;
+        float feather = 1.5F;
+        for (int y = 0; y < 64; y++) {
+            for (int x = 0; x < 64; x++) {
+                float dx = x - center;
+                float dy = y - center;
+                float distance = (float) Math.sqrt(dx * dx + dy * dy);
+                if (distance > radius + feather || distance < holeRadius) {
+                    image.setPixel(x, y, 0x00000000);
+                    continue;
+                }
+                float alphaFactor = clamp((radius - distance) / feather);
+                int alpha = Math.max(180, Math.round(alphaFactor * 255.0F));
+                image.setPixel(x, y, (alpha << 24));
+            }
+        }
         DynamicTexture texture = new DynamicTexture(() -> "musicplayer_black_disc", image);
         texture.upload();
         minecraft.getTextureManager().register(BLACK_DISC_TEXTURE, texture);
         blackTextureRegistered = true;
+    }
+
+    private static float clamp(float value) {
+        if (value < 0.0F) {
+            return 0.0F;
+        }
+        return Math.min(1.0F, value);
     }
 }

@@ -84,7 +84,7 @@ public final class CoverArtTextureCache {
             }
 
             try (NativeImage image = NativeImage.read(new ByteArrayInputStream(bytes))) {
-                DynamicTexture texture = new DynamicTexture(() -> "musicplayer_cover", image);
+                DynamicTexture texture = new DynamicTexture(() -> "musicplayer_cover", toCircularTexture(image));
                 Identifier textureId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "cover/" + Integer.toHexString(coverUrl.hashCode()));
                 Minecraft.getInstance().execute(() -> registerTexture(coverUrl, textureId, texture));
             }
@@ -109,6 +109,44 @@ public final class CoverArtTextureCache {
                 client.getTextureManager().release(eldest.textureId());
             }
         }
+    }
+
+    private static NativeImage toCircularTexture(NativeImage source) {
+        int size = Math.max(1, Math.min(source.getWidth(), source.getHeight()));
+        int offsetX = Math.max(0, (source.getWidth() - size) / 2);
+        int offsetY = Math.max(0, (source.getHeight() - size) / 2);
+        float center = (size - 1) / 2.0F;
+        float radius = size / 2.0F;
+        float feather = Math.max(1.5F, size * 0.03F);
+
+        NativeImage result = new NativeImage(size, size, true);
+        for (int y = 0; y < size; y++) {
+            for (int x = 0; x < size; x++) {
+                int color = source.getPixel(offsetX + x, offsetY + y);
+                float dx = x - center;
+                float dy = y - center;
+                float distance = (float) Math.sqrt(dx * dx + dy * dy);
+                float alphaFactor = clamp((radius - distance) / feather);
+                if (alphaFactor <= 0.0F) {
+                    result.setPixel(x, y, 0x00000000);
+                    continue;
+                }
+                int alpha = (color >>> 24) & 0xFF;
+                int red = (color >>> 16) & 0xFF;
+                int green = (color >>> 8) & 0xFF;
+                int blue = color & 0xFF;
+                int maskedAlpha = Math.min(255, Math.max(0, Math.round(alpha * alphaFactor)));
+                result.setPixel(x, y, (maskedAlpha << 24) | (red << 16) | (green << 8) | blue);
+            }
+        }
+        return result;
+    }
+
+    private static float clamp(float value) {
+        if (value < 0.0F) {
+            return 0.0F;
+        }
+        return Math.min(1.0F, value);
     }
 
     private record CacheEntry(Identifier textureId, boolean loading) {
