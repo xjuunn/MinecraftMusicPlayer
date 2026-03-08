@@ -28,6 +28,7 @@ public final class MusicPlayerConfigManager {
             }
             if (Files.exists(CONFIG_PATH)) {
                 config = MAPPER.readValue(CONFIG_PATH.toFile(), MusicPlayerConfig.class);
+                migrateLegacyDefaults();
             } else {
                 save();
             }
@@ -47,5 +48,13 @@ public final class MusicPlayerConfigManager {
 
     public static MusicPlayerConfig get() {
         return config;
+    }
+
+    private static void migrateLegacyDefaults() {
+        if (config.neteaseBaseUrl == null || config.neteaseBaseUrl.isBlank()
+                || "http://127.0.0.1:3000".equalsIgnoreCase(config.neteaseBaseUrl.trim())) {
+            config.neteaseBaseUrl = MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL;
+            save();
+        }
     }
 }
