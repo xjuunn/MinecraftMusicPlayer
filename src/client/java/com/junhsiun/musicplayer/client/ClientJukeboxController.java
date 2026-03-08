@@ -47,6 +47,7 @@ public final class ClientJukeboxController {
     public void handle(JukeboxMusicPayload payload) {
         switch (payload.action()) {
             case "play" -> play(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl());
+            case "update" -> update(payload.jukeboxPos(), payload.title(), payload.subtitle(), payload.coverUrl());
             case "stop" -> stop(payload.jukeboxPos());
             default -> MusicPlayerMod.LOGGER.warn("Unknown jukebox action: {}", payload.action());
         }
@@ -96,6 +97,17 @@ public final class ClientJukeboxController {
         if (handle.thread != null) {
             handle.thread.interrupt();
             handle.thread = null;
+        }
+    }
+
+    private void update(long jukeboxPos, String title, String subtitle, String coverUrl) {
+        PlaybackHandle handle = playbackHandles.get(jukeboxPos);
+        if (handle == null) {
+            return;
+        }
+        if (coverUrl != null && !coverUrl.isBlank() && !coverUrl.equals(handle.coverUrl)) {
+            handle.coverUrl = coverUrl;
+            CoverArtTextureCache.getInstance().request(coverUrl);
         }
     }
 

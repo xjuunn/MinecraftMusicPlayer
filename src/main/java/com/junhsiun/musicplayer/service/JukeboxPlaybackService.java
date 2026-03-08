@@ -103,7 +103,7 @@ public final class JukeboxPlaybackService {
         ActiveJukebox active = startPlaybackResolved(level, pos, discData);
         if (discData.trackId() != null && !discData.trackId().isBlank()) {
             MusicPlayerMod.netease().resolveSong(discData.trackId()).whenComplete((track, throwable) ->
-                    level.getServer().execute(() -> refreshPlaybackData(pos, active, discData, track, throwable))
+                    level.getServer().execute(() -> refreshPlaybackData(level, pos, active, discData, track, throwable))
             );
         }
     }
@@ -121,12 +121,19 @@ public final class JukeboxPlaybackService {
         return active;
     }
 
-    private void refreshPlaybackData(BlockPos pos, ActiveJukebox expectedActive, DiscTrackData original, TrackInfo track, Throwable throwable) {
+    private void refreshPlaybackData(ServerLevel level, BlockPos pos, ActiveJukebox expectedActive, DiscTrackData original, TrackInfo track, Throwable throwable) {
         ActiveJukebox current = activeJukeboxes.get(pos.asLong());
         if (current == null || current != expectedActive) {
             return;
         }
-        current.setDiscData(resolveDiscData(original, track, throwable));
+        DiscTrackData previous = current.discData();
+        DiscTrackData resolved = resolveDiscData(original, track, throwable);
+        current.setDiscData(resolved);
+        if (!resolved.coverUrl().equals(previous.coverUrl())
+                || !resolved.title().equals(previous.title())
+                || !resolved.artist().equals(previous.artist())) {
+            pushVisualUpdate(level, current);
+        }
     }
 
     private DiscTrackData resolveDiscData(DiscTrackData original, TrackInfo track, Throwable throwable) {
@@ -223,6 +230,23 @@ public final class JukeboxPlaybackService {
     private void sendStop(ServerPlayer player, long key) {
         if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
             ServerPlayNetworking.send(player, JukeboxMusicPayload.stop(key));
+        }
+    }
+
+    private void pushVisualUpdate(ServerLevel level, ActiveJukebox active) {
+        for (UUID listener : active.listeners()) {
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(listener);
+            if (player == null || player.level() != level) {
+                continue;
+            }
+            if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
+                ServerPlayNetworking.send(player, JukeboxMusicPayload.update(
+                        active.key(),
+                        active.discData().title(),
+                        active.discData().artist(),
+                        active.discData().coverUrl()
+                ));
+            }
         }
     }
 
