@@ -10,8 +10,11 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
+import java.net.ProxySelector;
+import java.net.URI;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 
 public final class HttpClientFactory {
     private HttpClientFactory() {
@@ -26,17 +29,19 @@ public final class HttpClientFactory {
                 .followRedirects(true)
                 .followSslRedirects(true);
 
-        if (config.proxy != null && !config.proxy.isBlank()) {
-            String[] parts = config.proxy.trim().split(":");
-            if (parts.length == 2) {
-                try {
-                    int port = Integer.parseInt(parts[1]);
-                    builder.proxy(new Proxy(Proxy.Type.HTTP, new InetSocketAddress(parts[0], port)));
-                } catch (NumberFormatException exception) {
-                    MusicPlayerMod.LOGGER.warn("无效的代理端口: {}", config.proxy);
-                }
-            } else {
-                MusicPlayerMod.LOGGER.warn("无效的代理格式，应为 host:port，当前值: {}", config.proxy);
+        Proxy resolvedProxy = resolveManualProxy(config.proxy);
+        if (resolvedProxy != null) {
+            builder.proxy(resolvedProxy);
+        } else {
+            if (config.useSystemProxy) {
+                System.setProperty("java.net.useSystemProxies", "true");
+            }
+
+            Proxy environmentProxy = resolveEnvironmentProxy();
+            if (environmentProxy != null) {
+                builder.proxy(environmentProxy);
+            } else if (config.useSystemProxy) {
+                builder.proxySelector(ProxySelector.getDefault());
             }
         }
 
@@ -52,5 +57,58 @@ public final class HttpClientFactory {
         }
 
         return builder.build();
+    }
+
+    private static Proxy resolveManualProxy(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        Proxy proxy = parseProxy(value.trim());
+        if (proxy == null) {
+            MusicPlayerMod.LOGGER.warn("无效的代理格式，应为 host:port 或 http://host:port，当前值: {}", value);
+        }
+        return proxy;
+    }
+
+    private static Proxy resolveEnvironmentProxy() {
+        for (String key : List.of("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")) {
+            String value = System.getenv(key);
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+
+            Proxy proxy = parseProxy(value.trim());
+            if (proxy != null) {
+                return proxy;
+            }
+        }
+        return null;
+    }
+
+    private static Proxy parseProxy(String value) {
+        try {
+            if (value.contains("://")) {
+                URI uri = URI.create(value);
+                if (uri.getHost() == null || uri.getPort() <= 0) {
+                    return null;
+                }
+                Proxy.Type type = uri.getScheme() != null
+                        && uri.getScheme().toLowerCase(Locale.ROOT).startsWith("socks")
+                        ? Proxy.Type.SOCKS
+                        : Proxy.Type.HTTP;
+                return new Proxy(type, new InetSocketAddress(uri.getHost(), uri.getPort()));
+            }
+
+            String[] parts = value.split(":");
+            if (parts.length != 2) {
+                return null;
+            }
+
+            int port = Integer.parseInt(parts[1]);
+            return new Proxy(Proxy.Type.HTTP, new InetSocketAddress(parts[0], port));
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 }

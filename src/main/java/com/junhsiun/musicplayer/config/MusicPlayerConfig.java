@@ -5,6 +5,7 @@ public class MusicPlayerConfig {
 
     public String neteaseBaseUrl = DEFAULT_NETEASE_BASE_URL;
     public String proxy = "";
+    public boolean useSystemProxy = true;
     public boolean preferIpv4 = true;
     public boolean allowCustomServer = true;
     public boolean allowSongRequest = true;
