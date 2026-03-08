@@ -9,6 +9,7 @@ The server handles commands, queue state, search, synchronization, and configura
 - Search songs, artists, playlists, and users
 - View artist top songs, playlist details, and user playlists
 - Let players request songs, import playlists, and inspect the current queue
+- Playlist playback mode can switch to a playlist and play it sequentially from the first track to the last
 - The now-playing view includes a clickable direct track URL that opens in the browser
 - Paginated search results with clickable `Previous Page` and `Next Page` buttons
 - Queue pages and detail views expose clickable song, artist, playlist owner, and user entries where applicable
@@ -76,7 +77,7 @@ Admins can change the endpoint by command or reset it back to the default value.
 | `/music mute once` | Stop receiving only the current track |
 | `/music vote next` | Vote to skip to the next track |
 | `/music play song <songId>` | Request a single song by ID |
-| `/music play playlist <playlistId>` | Import a playlist into the queue |
+| `/music play playlist <playlistId>` | Switch to playlist playback mode and start from the first track |
 | `/music search song <keyword>` | Search songs |
 | `/music search song page <page> <keyword>` | Open a specific page of song search results |
 | `/music search artist <keyword>` | Search artists |
@@ -108,6 +109,13 @@ Most result pages also include quick action links such as:
 
 When the API does not expose a reliable total count, the mod keeps fetching batches and uses “returned item count is smaller than page size” as the stop condition.
 The same rule is applied to searches and list-style detail views.
+
+On the playlist detail page, the top action is `Play Playlist`:
+
+- it clears the pending queue
+- switches playback to that playlist mode immediately
+- starts from the first track and continues in order
+- reports how many tracks were not loaded if configuration limits were hit
 
 ## Admin Commands
 

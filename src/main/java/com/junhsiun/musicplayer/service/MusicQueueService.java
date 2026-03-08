@@ -182,30 +182,52 @@ public final class MusicQueueService {
                     source.sendFailure(Component.literal("这个歌单没有可播放的歌曲。"));
                     return;
                 }
-                int added = 0;
                 int playlistLimit = MusicPlayerConfigManager.get().playlistQueueLimit;
                 int queueLimit = MusicPlayerConfigManager.get().maxQueueSize;
-                for (SearchEntry entry : playlist.tracks()) {
-                    if (added >= playlistLimit || queue.size() >= queueLimit) {
-                        break;
-                    }
-                    if (isTrackActiveOrQueued(entry.id())) {
-                        continue;
-                    }
-                    queue.addLast(new QueuedTrack(entry.id(), entry.title(), entry.subtitle(), entry.subtitleCommand(), requester.getUUID(), requester.getGameProfile().name()));
-                    added++;
-                }
                 int total = playlist.tracks().size();
-                if (added == 0) {
-                    source.sendSuccess(() -> Component.literal("\u6b4c\u5355\u4e2d\u7684\u53ef\u7528\u6b4c\u66f2\u5df2\u5728\u64ad\u653e\u6216\u961f\u5217\u4e2d\uff0c\u6ca1\u6709\u91cd\u590d\u52a0\u5165\u3002").withStyle(ChatFormatting.YELLOW), false);
+                int playableCount = Math.min(total, Math.min(playlistLimit, queueLimit + 1));
+                if (playableCount <= 0) {
+                    source.sendFailure(Component.literal("当前配置不允许载入这个歌单。"));
                     return;
                 }
-                int finalAdded = added;
-                source.sendSuccess(() -> Component.literal("\u5df2\u5c06\u6b4c\u5355\u300a" + playlist.title() + "\u300b\u52a0\u5165\u961f\u5217\uff0c\u65b0\u589e " + finalAdded + "/" + total + " \u9996\uff1b\u672a\u52a0\u5165\u7684\u6b4c\u66f2\u901a\u5e38\u56e0\u4e3a\u91cd\u590d\u6216\u8fbe\u5230\u4e0a\u9650\u3002")
-                        .withStyle(ChatFormatting.GREEN), false);
-                if (currentPlayback == null) {
-                    advance(server, null);
+
+                List<SearchEntry> selectedTracks = new ArrayList<>(playlist.tracks().subList(0, playableCount));
+                SearchEntry firstTrack = selectedTracks.getFirst();
+
+                stop(server, "");
+                queue.clear();
+                for (int index = 1; index < selectedTracks.size(); index++) {
+                    SearchEntry entry = selectedTracks.get(index);
+                    queue.addLast(new QueuedTrack(
+                            entry.id(),
+                            entry.title(),
+                            entry.subtitle(),
+                            entry.subtitleCommand(),
+                            requester.getUUID(),
+                            requester.getGameProfile().name()
+                    ));
                 }
+
+                int omittedCount = total - playableCount;
+                MusicPlayerMod.netease().resolveSong(firstTrack.id()).whenComplete((track, trackThrowable) -> server.execute(() -> {
+                    if (trackThrowable != null) {
+                        source.sendFailure(Component.literal("歌单首曲加载失败: " + rootMessage(trackThrowable)));
+                        if (queue.isEmpty()) {
+                            stop(server, "歌单播放模式启动失败。");
+                        } else {
+                            advance(server, "歌单首曲加载失败，已自动跳到下一首。");
+                        }
+                        return;
+                    }
+
+                    startTrack(server, track);
+                    source.sendSuccess(() -> Component.literal("已切换到歌单播放模式：《" + playlist.title() + "》，将从第一首开始顺序播放。")
+                            .withStyle(ChatFormatting.GREEN), false);
+                    if (omittedCount > 0) {
+                        source.sendSuccess(() -> Component.literal("受配置上限影响，未载入 " + omittedCount + " 首歌曲。")
+                                .withStyle(ChatFormatting.YELLOW), false);
+                    }
+                }));
             });
             return null;
         }));

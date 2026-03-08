@@ -60,7 +60,7 @@ public final class MusicCommands {
         source.sendSuccess(() -> Component.literal("/music now").withStyle(ChatFormatting.GRAY), false);
         source.sendSuccess(() -> Component.literal("/music queue [page]").withStyle(ChatFormatting.GRAY), false);
         source.sendSuccess(() -> Component.literal("/music play song <歌曲ID>").withStyle(ChatFormatting.GRAY), false);
-        source.sendSuccess(() -> Component.literal("/music play playlist <歌单ID>").withStyle(ChatFormatting.GRAY), false);
+        source.sendSuccess(() -> Component.literal("/music play playlist <歌单ID>  切换到歌单播放模式").withStyle(ChatFormatting.GRAY), false);
         source.sendSuccess(() -> Component.literal("/music search song page <页码> <关键词>").withStyle(ChatFormatting.GRAY), false);
         source.sendSuccess(() -> Component.literal("/music view playlist page <页码> <歌单ID>").withStyle(ChatFormatting.GRAY), false);
         source.sendSuccess(() -> Component.literal("/music view artist page <页码> <作者ID>").withStyle(ChatFormatting.GRAY), false);
@@ -170,7 +170,7 @@ public final class MusicCommands {
                         .then(Commands.argument("playlist_id", StringArgumentType.string()).executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
                             String playlistId = StringArgumentType.getString(context, "playlist_id");
-                            loading(context.getSource(), "正在加载歌单，请稍候...");
+                            loading(context.getSource(), "正在加载歌单并切换到歌单播放模式，请稍候...");
                             MusicPlayerMod.queueService().requestPlaylist(context.getSource().getServer(), context.getSource(), player, playlistId);
                             return 1;
                         })));
@@ -454,7 +454,7 @@ public final class MusicCommands {
                 .append(Component.literal(" · 创建者: ").withStyle(ChatFormatting.GRAY))
                 .append(clickableText(playlist.ownerName(), "/music view user " + playlist.ownerId(), "查看创建者信息", ChatFormatting.YELLOW))
                 .append(Component.literal(" "))
-                .append(Messages.clickableCommand("[加入队列]", "将歌单加入播放队列", "/music play playlist " + playlist.id(), ChatFormatting.GREEN)), false);
+                .append(Messages.clickableCommand("[播放歌单]", "切换到歌单播放模式，并从第一首开始顺序播放", "/music play playlist " + playlist.id(), ChatFormatting.GREEN)), false);
         sendQuickBar(source,
                 Messages.clickableCommand("[创建者详情]", "查看创建者信息", "/music view user " + playlist.ownerId(), ChatFormatting.YELLOW),
                 Messages.clickableCommand("[当前播放]", "查看当前播放", "/music now", ChatFormatting.AQUA),
