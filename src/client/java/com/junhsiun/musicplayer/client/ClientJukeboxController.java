@@ -23,8 +23,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.DataLine;
 import javax.sound.sampled.FloatControl;
 import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.Line;
 import javax.sound.sampled.SourceDataLine;
 
 public final class ClientJukeboxController {
@@ -157,23 +159,13 @@ public final class ClientJukeboxController {
 
         @Override
         protected void openImpl() throws JavaLayerException {
-            audioFormat = new AudioFormat(getDecoder().getOutputFrequency(), 16, getDecoder().getOutputChannels(), true, false);
-            try {
-                sourceLine = AudioSystem.getSourceDataLine(audioFormat);
-                sourceLine.open(audioFormat);
-                if (sourceLine.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
-                    gainControl = (FloatControl) sourceLine.getControl(FloatControl.Type.MASTER_GAIN);
-                }
-                sourceLine.start();
-            } catch (LineUnavailableException exception) {
-                throw new JavaLayerException("Unable to open jukebox audio line", exception);
-            }
+            // Delay opening until the first decoded frame is available.
         }
 
         @Override
         protected void writeImpl(short[] samples, int offs, int len) throws JavaLayerException {
             if (sourceLine == null) {
-                return;
+                createSource();
             }
             updateVolume();
             byte[] buffer = getByteArray(len * 2);
@@ -184,6 +176,41 @@ public final class ClientJukeboxController {
                 buffer[index++] = (byte) (sample >>> 8);
             }
             sourceLine.write(buffer, 0, index);
+        }
+
+        private void createSource() throws JavaLayerException {
+            audioFormat = getAudioFormat();
+            DataLine.Info lineInfo = new DataLine.Info(SourceDataLine.class, audioFormat);
+            Throwable failure = null;
+            try {
+                Line line = AudioSystem.getLine(lineInfo);
+                if (line instanceof SourceDataLine dataLine) {
+                    sourceLine = dataLine;
+                    sourceLine.open(audioFormat);
+                    if (sourceLine.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+                        gainControl = (FloatControl) sourceLine.getControl(FloatControl.Type.MASTER_GAIN);
+                    }
+                    sourceLine.start();
+                }
+            } catch (LineUnavailableException | RuntimeException | LinkageError exception) {
+                failure = exception;
+            }
+            if (sourceLine == null) {
+                throw new JavaLayerException("Unable to open jukebox audio line", failure);
+            }
+        }
+
+        private AudioFormat getAudioFormat() {
+            if (audioFormat == null) {
+                audioFormat = new AudioFormat(
+                        getDecoder().getOutputFrequency(),
+                        16,
+                        getDecoder().getOutputChannels(),
+                        true,
+                        false
+                );
+            }
+            return audioFormat;
         }
 
         @Override
