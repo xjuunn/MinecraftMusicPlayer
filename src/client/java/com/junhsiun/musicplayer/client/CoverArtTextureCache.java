@@ -11,6 +11,8 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -83,14 +85,14 @@ public final class CoverArtTextureCache {
                 bytes = body.bytes();
             }
 
-            try (NativeImage image = NativeImage.read(new ByteArrayInputStream(bytes))) {
+            try (NativeImage image = readImage(bytes)) {
                 DynamicTexture texture = new DynamicTexture(() -> "musicplayer_cover", toCircularTexture(image));
                 Identifier textureId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "cover/" + Integer.toHexString(coverUrl.hashCode()));
                 Minecraft.getInstance().execute(() -> registerTexture(coverUrl, textureId, texture));
             }
         } catch (Exception exception) {
             synchronized (this) {
-                entries.remove(coverUrl);
+                entries.put(coverUrl, CacheEntry.failure());
             }
             MusicPlayerMod.LOGGER.warn("Failed to download cover art: {}", coverUrl, exception);
         }
@@ -108,6 +110,25 @@ public final class CoverArtTextureCache {
             if (eldest != null && eldest.textureId() != null) {
                 client.getTextureManager().release(eldest.textureId());
             }
+        }
+    }
+
+    private static NativeImage readImage(byte[] bytes) throws IOException {
+        try {
+            return NativeImage.read(new ByteArrayInputStream(bytes));
+        } catch (IOException ignored) {
+            BufferedImage bufferedImage = ImageIO.read(new ByteArrayInputStream(bytes));
+            if (bufferedImage == null) {
+                throw ignored;
+            }
+            NativeImage image = new NativeImage(bufferedImage.getWidth(), bufferedImage.getHeight(), true);
+            for (int y = 0; y < bufferedImage.getHeight(); y++) {
+                for (int x = 0; x < bufferedImage.getWidth(); x++) {
+                    int argb = bufferedImage.getRGB(x, y);
+                    image.setPixel(x, y, argb);
+                }
+            }
+            return image;
         }
     }
 
@@ -149,13 +170,17 @@ public final class CoverArtTextureCache {
         return Math.min(1.0F, value);
     }
 
-    private record CacheEntry(Identifier textureId, boolean loading) {
+    private record CacheEntry(Identifier textureId, boolean loading, boolean failed) {
         public static CacheEntry pending() {
-            return new CacheEntry(null, true);
+            return new CacheEntry(null, true, false);
         }
 
         public static CacheEntry ready(Identifier textureId) {
-            return new CacheEntry(textureId, false);
+            return new CacheEntry(textureId, false, false);
+        }
+
+        public static CacheEntry failure() {
+            return new CacheEntry(null, false, true);
         }
     }
 }
