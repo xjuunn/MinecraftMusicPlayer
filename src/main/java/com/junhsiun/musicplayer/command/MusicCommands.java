@@ -86,7 +86,7 @@ public final class MusicCommands {
             sendQuickBar(context.getSource(),
                     Messages.clickableCommand("[播放队列]", "查看当前待播队列", "/music queue", ChatFormatting.YELLOW),
                     Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.GRAY));
-            context.getSource().sendSuccess(() -> renderCurrentTrack(track), false);
+            context.getSource().sendSuccess(() -> renderCurrentTrack(context.getSource(), track), false);
             return 1;
         });
     }
@@ -119,7 +119,7 @@ public final class MusicCommands {
         if (currentTrack == null) {
             source.sendSuccess(() -> Component.literal("当前没有歌曲在播放。").withStyle(ChatFormatting.GRAY), false);
         } else {
-            source.sendSuccess(() -> renderCurrentTrack(currentTrack), false);
+            source.sendSuccess(() -> renderCurrentTrack(source, currentTrack), false);
         }
         if (totalEntries == 0) {
             source.sendSuccess(() -> Component.literal("队列为空。").withStyle(ChatFormatting.GRAY), false);
@@ -133,7 +133,7 @@ public final class MusicCommands {
             MutableComponent line = Component.literal(order + ". ").withStyle(ChatFormatting.DARK_GRAY)
                     .append(Messages.clickableCommand("[下一首]", "将这首歌调整为下一首播放", "/music queue next " + entry.id(), ChatFormatting.GREEN))
                     .append(Component.literal(" "))
-                    .append(renderEntry(entry, Messages.clickableCommand("[点歌]", "点击重新点播这首歌曲", "/music play song " + entry.id(), ChatFormatting.YELLOW), "点击重新点播这首歌曲", "点击查看作者详情"));
+                    .append(renderEntry(entry, trackActions(source, entry.id(), "[点歌]", "点击重新点播这首歌曲", ChatFormatting.YELLOW), "点击重新点播这首歌曲", "点击查看作者详情"));
             source.sendSuccess(() -> line, false);
         }
         sendNavigation(source, page.page(), page.totalPages(), "/music queue %d", true);
@@ -422,7 +422,7 @@ public final class MusicCommands {
                 Messages.clickableCommand("[当前播放]", "查看当前播放", "/music now", ChatFormatting.AQUA),
                 Messages.clickableCommand("[播放队列]", "查看当前待播队列", "/music queue", ChatFormatting.GRAY));
         for (SearchEntry entry : results) {
-            source.sendSuccess(() -> renderEntry(entry, Messages.clickableCommand("[点歌]", "点击点歌", "/music play song " + entry.id(), ChatFormatting.GREEN), "点击点歌", "点击查看作者详情"), false);
+            source.sendSuccess(() -> renderEntry(entry, trackActions(source, entry.id(), "[点歌]", "点击点歌", ChatFormatting.GREEN), "点击点歌", "点击查看作者详情"), false);
         }
         sendSearchNavigation(source, literal, keyword, page, results.size());
     }
@@ -508,7 +508,7 @@ public final class MusicCommands {
                 Messages.clickableCommand("[播放队列]", "查看当前待播队列", "/music queue", ChatFormatting.GRAY));
         PageWindow page = pageWindow(playlist.tracks().size(), requestedPage, pageSize());
         for (SearchEntry track : slicePage(playlist.tracks(), page)) {
-            source.sendSuccess(() -> renderEntry(track, Messages.clickableCommand("[点歌]", "点播这首歌曲", "/music play song " + track.id(), ChatFormatting.GREEN), "点播这首歌曲", "点击查看作者详情"), false);
+            source.sendSuccess(() -> renderEntry(track, trackActions(source, track.id(), "[点歌]", "点播这首歌曲", ChatFormatting.GREEN), "点播这首歌曲", "点击查看作者详情"), false);
         }
         sendNavigation(source, page.page(), page.totalPages(), "/music view playlist page %d " + playlistId, true);
     }
@@ -566,21 +566,46 @@ public final class MusicCommands {
         }
         PageWindow page = pageWindow(artist.topSongs().size(), requestedPage, pageSize());
         for (SearchEntry track : slicePage(artist.topSongs(), page)) {
-            source.sendSuccess(() -> renderEntry(track, Messages.clickableCommand("[点歌]", "点播这首歌曲", "/music play song " + track.id(), ChatFormatting.GREEN), "点播这首歌曲", ""), false);
+            source.sendSuccess(() -> renderEntry(track, trackActions(source, track.id(), "[点歌]", "点播这首歌曲", ChatFormatting.GREEN), "点播这首歌曲", ""), false);
         }
         sendNavigation(source, page.page(), page.totalPages(), "/music view " + literal + " page %d " + artistId, true);
     }
 
-    private static MutableComponent renderCurrentTrack(TrackInfo track) {
+    private static MutableComponent renderCurrentTrack(CommandSourceStack source, TrackInfo track) {
         MutableComponent line = Component.literal("当前播放: ").withStyle(ChatFormatting.GOLD)
                 .append(clickableText(track.title(), "/music play song " + track.id(), "点击重新点播这首歌曲", ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
                 .append(clickableText(track.artist(), track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(), "点击查看作者详情", ChatFormatting.GRAY));
+        MutableComponent burnAction = buildBurnAction(source, track.id());
+        if (burnAction != null) {
+            line.append(Component.literal(" "));
+            line.append(burnAction);
+        }
         if (!track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
             line.append(Messages.clickableUrl("[打开直链]", "点击在浏览器中打开当前歌曲直链", track.sourceUrls().getFirst(), ChatFormatting.GREEN));
         }
         return line;
+    }
+
+    private static MutableComponent trackActions(CommandSourceStack source, String songId, String primaryLabel, String primaryHover, ChatFormatting primaryColor) {
+        MutableComponent actions = Messages.clickableCommand(primaryLabel, primaryHover, "/music play song " + songId, primaryColor);
+        MutableComponent burnAction = buildBurnAction(source, songId);
+        if (burnAction != null) {
+            actions.append(Component.literal(" "));
+            actions.append(burnAction);
+        }
+        return actions;
+    }
+
+    private static MutableComponent buildBurnAction(CommandSourceStack source, String songId) {
+        if (!(source.getEntity() instanceof ServerPlayer player)) {
+            return null;
+        }
+        if (!MusicDiscHelper.isBurnableDisc(player.getItemInHand(InteractionHand.MAIN_HAND))) {
+            return null;
+        }
+        return Messages.clickableCommand("[刻录]", "将这首歌刻录到主手唱片", "/music burn song " + songId, ChatFormatting.LIGHT_PURPLE);
     }
 
     private static MutableComponent renderEntry(SearchEntry entry, MutableComponent action, String titleHover, String subtitleHover) {
