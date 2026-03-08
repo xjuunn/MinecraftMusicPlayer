@@ -2,12 +2,16 @@ package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
+import com.junhsiun.musicplayer.util.HttpClientFactory;
 import javazoom.jl.decoder.JavaLayerException;
 import javazoom.jl.player.Player;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
-import java.net.URL;
+import java.io.InputStream;
 import java.util.List;
 
 public final class ClientMusicController {
@@ -79,17 +83,34 @@ public final class ClientMusicController {
     }
 
     private void playSingle(String url, String title, String subtitle) throws IOException, JavaLayerException {
-        try (BufferedInputStream inputStream = new BufferedInputStream(new URL(url).openStream())) {
-            Player currentPlayer = new Player(inputStream);
-            synchronized (this) {
-                if (Thread.currentThread().isInterrupted()) {
-                    currentPlayer.close();
-                    return;
-                }
-                player = currentPlayer;
+        OkHttpClient client = HttpClientFactory.create();
+        Request request = new Request.Builder()
+                .url(url)
+                .header("User-Agent", "MinecraftMusicPlayer/2.0")
+                .get()
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("HTTP " + response.code());
             }
-            MusicPlayerMod.LOGGER.info("开始播放: {} - {}", title, subtitle);
-            currentPlayer.play();
+            InputStream bodyStream = response.body() == null ? null : response.body().byteStream();
+            if (bodyStream == null) {
+                throw new IOException("空响应体");
+            }
+
+            try (BufferedInputStream inputStream = new BufferedInputStream(bodyStream)) {
+                Player currentPlayer = new Player(inputStream);
+                synchronized (this) {
+                    if (Thread.currentThread().isInterrupted()) {
+                        currentPlayer.close();
+                        return;
+                    }
+                    player = currentPlayer;
+                }
+                MusicPlayerMod.LOGGER.info("开始播放: {} - {}", title, subtitle);
+                currentPlayer.play();
+            }
         } finally {
             synchronized (this) {
                 player = null;
