@@ -19,6 +19,7 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -119,7 +120,7 @@ public final class ClientJukeboxController {
                     playbackHandles.remove(jukeboxPos, handle);
                     return;
                 }
-                MusicPlayerMod.LOGGER.warn("Jukebox source failed, trying next source: {}", url, exception);
+                logSourceFallback(url, exception);
             }
         }
         playbackHandles.remove(jukeboxPos, handle);
@@ -165,6 +166,19 @@ public final class ClientJukeboxController {
     }
 
     public record JukeboxVisualState(BlockPos pos, String coverUrl, long startedAtMillis) {
+    }
+
+    private void logSourceFallback(String url, Exception exception) {
+        String message = exception.getMessage();
+        if (message != null && (message.contains("HTTP 403") || message.contains("HTTP 404"))) {
+            MusicPlayerMod.LOGGER.info("Jukebox source rejected, trying next source: {}", url);
+            return;
+        }
+        if (exception instanceof SocketTimeoutException) {
+            MusicPlayerMod.LOGGER.info("Jukebox source timed out, trying next source: {}", url);
+            return;
+        }
+        MusicPlayerMod.LOGGER.warn("Jukebox source failed, trying next source: {}", url, exception);
     }
 
     private static final class SpatialAudioDevice extends AudioDeviceBase {

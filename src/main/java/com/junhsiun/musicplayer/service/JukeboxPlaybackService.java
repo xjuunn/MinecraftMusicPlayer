@@ -2,6 +2,8 @@ package com.junhsiun.musicplayer.service;
 
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper.DiscTrackData;
+import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
@@ -98,6 +100,19 @@ public final class JukeboxPlaybackService {
     }
 
     private void startPlayback(ServerLevel level, BlockPos pos, DiscTrackData discData) {
+        if (discData.trackId() != null && !discData.trackId().isBlank()) {
+            MusicPlayerMod.netease().resolveSong(discData.trackId()).whenComplete((track, throwable) ->
+                    level.getServer().execute(() -> {
+                        DiscTrackData resolved = resolveDiscData(discData, track, throwable);
+                        startPlaybackResolved(level, pos, resolved);
+                    })
+            );
+            return;
+        }
+        startPlaybackResolved(level, pos, discData);
+    }
+
+    private void startPlaybackResolved(ServerLevel level, BlockPos pos, DiscTrackData discData) {
         long key = pos.asLong();
         ActiveJukebox existing = activeJukeboxes.remove(key);
         if (existing != null) {
@@ -113,6 +128,24 @@ public final class JukeboxPlaybackService {
         );
         activeJukeboxes.put(key, active);
         syncListeners(level, active);
+    }
+
+    private DiscTrackData resolveDiscData(DiscTrackData original, TrackInfo track, Throwable throwable) {
+        if (throwable != null || track == null || track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
+            if (throwable != null) {
+                MusicPlayerMod.LOGGER.warn("刷新唱片机音乐源失败，继续使用刻录时保存的音源: {}", original.trackId(), throwable);
+            }
+            return original;
+        }
+        return new DiscTrackData(
+                original.trackId(),
+                track.title().isBlank() ? original.title() : track.title(),
+                track.artist().isBlank() ? original.artist() : track.artist(),
+                track.artistId().isBlank() ? original.artistId() : track.artistId(),
+                track.coverUrl().isBlank() ? original.coverUrl() : track.coverUrl(),
+                track.sourceUrls(),
+                track.durationMillis() > 0L ? track.durationMillis() : original.durationMillis()
+        );
     }
 
     private boolean isStillValid(ServerLevel level, ActiveJukebox active) {
