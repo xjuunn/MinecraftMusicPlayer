@@ -443,7 +443,12 @@ public final class MusicQueueService {
     private Component renderNowPlayingBroadcast(TrackInfo track) {
         MutableComponent line = Component.literal("正在播放: ").withStyle(ChatFormatting.GOLD)
                 .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
-                .append(Component.literal(" - " + track.artist()).withStyle(ChatFormatting.GRAY));
+                .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
+        if (track.artistId() != null && !track.artistId().isBlank()) {
+            line.append(Messages.clickableCommand(track.artist(), "点击查看作者详情", "/music view artist " + track.artistId(), ChatFormatting.GRAY));
+        } else {
+            line.append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY));
+        }
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
             line.append(Messages.clickableUrl("[下载]", "点击在浏览器中打开当前歌曲直链", track.sourceUrls().getFirst(), ChatFormatting.GREEN));
