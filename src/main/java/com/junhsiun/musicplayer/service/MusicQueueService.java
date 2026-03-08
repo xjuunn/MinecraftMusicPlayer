@@ -168,11 +168,11 @@ public final class MusicQueueService {
                 }
                 int total = playlist.tracks().size();
                 if (added == 0) {
-                    source.sendSuccess(() -> Component.literal("歌单中的可用歌曲已在播放或队列中，没有重复加入。").withStyle(ChatFormatting.YELLOW), false);
+                    source.sendSuccess(() -> Component.literal("\u6b4c\u5355\u4e2d\u7684\u53ef\u7528\u6b4c\u66f2\u5df2\u5728\u64ad\u653e\u6216\u961f\u5217\u4e2d\uff0c\u6ca1\u6709\u91cd\u590d\u52a0\u5165\u3002").withStyle(ChatFormatting.YELLOW), false);
                     return;
                 }
                 int finalAdded = added;
-                source.sendSuccess(() -> Component.literal("已将歌单《" + playlist.title() + "》加入队列，新增 " + finalAdded + "/" + total + " 首。")
+                source.sendSuccess(() -> Component.literal("\u5df2\u5c06\u6b4c\u5355\u300a" + playlist.title() + "\u300b\u52a0\u5165\u961f\u5217\uff0c\u65b0\u589e " + finalAdded + "/" + total + " \u9996\uff1b\u672a\u52a0\u5165\u7684\u6b4c\u66f2\u901a\u5e38\u56e0\u4e3a\u91cd\u590d\u6216\u8fbe\u5230\u4e0a\u9650\u3002")
                         .withStyle(ChatFormatting.GREEN), false);
                 if (currentPlayback == null) {
                     advance(server, null);
