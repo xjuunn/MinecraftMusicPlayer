@@ -11,6 +11,7 @@ The server handles commands, queue state, search, synchronization, and configura
 - Let players request songs, import playlists, and inspect the current queue
 - The now-playing view includes a clickable direct track URL that opens in the browser
 - Paginated search results with clickable `Previous Page` and `Next Page` buttons
+- Queue pages and detail views expose clickable song, artist, playlist owner, and user entries where applicable
 - Automatic progression to the next track
 - Vote skip support
 - Multi-source playback fallback when a source fails

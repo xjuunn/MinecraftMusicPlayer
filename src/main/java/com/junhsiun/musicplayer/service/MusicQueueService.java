@@ -37,6 +37,29 @@ public final class MusicQueueService {
     public boolean isPlaying() { return currentPlayback != null; }
     public int queuedCount() { return queue.size(); }
     public TrackInfo currentTrack() { return currentPlayback == null ? null : currentPlayback.track(); }
+    public List<SearchEntry> queuedEntries(int page, int pageSize) {
+        if (queue.isEmpty()) {
+            return List.of();
+        }
+        List<QueuedTrack> all = queue.stream().toList();
+        int safePageSize = Math.max(1, pageSize);
+        int totalPages = Math.max(1, (int) Math.ceil(all.size() / (double) safePageSize));
+        int safePage = Math.max(1, Math.min(page, totalPages));
+        int start = (safePage - 1) * safePageSize;
+        int end = Math.min(all.size(), start + safePageSize);
+        List<SearchEntry> entries = new ArrayList<>(end - start);
+        for (int index = start; index < end; index++) {
+            QueuedTrack queuedTrack = all.get(index);
+            entries.add(new SearchEntry(
+                    queuedTrack.songId(),
+                    queuedTrack.title(),
+                    queuedTrack.artist(),
+                    "/music play song " + queuedTrack.songId(),
+                    queuedTrack.artistCommand()
+            ));
+        }
+        return entries;
+    }
 
     public void tick(MinecraftServer server) {
         if (currentPlayback == null) return;
@@ -82,7 +105,7 @@ public final class MusicQueueService {
                 int added = 0; int playlistLimit = MusicPlayerConfigManager.get().playlistQueueLimit; int queueLimit = MusicPlayerConfigManager.get().maxQueueSize;
                 for (SearchEntry entry : playlist.tracks()) {
                     if (added >= playlistLimit || queue.size() >= queueLimit) break;
-                    queue.addLast(new QueuedTrack(entry.id(), entry.title(), entry.subtitle(), requester.getUUID(), requester.getGameProfile().name()));
+                    queue.addLast(new QueuedTrack(entry.id(), entry.title(), entry.subtitle(), entry.subtitleCommand(), requester.getUUID(), requester.getGameProfile().name()));
                     added++;
                 }
                 int total = playlist.tracks().size(); int finalAdded = added;
@@ -140,7 +163,14 @@ public final class MusicQueueService {
             source.sendSuccess(() -> Component.literal("已开始播放《" + track.title() + "》。").withStyle(ChatFormatting.GREEN), false);
             return;
         }
-        queue.addLast(new QueuedTrack(track.id(), track.title(), track.artist(), requester.getUUID(), requester.getGameProfile().name()));
+        queue.addLast(new QueuedTrack(
+                track.id(),
+                track.title(),
+                track.artist(),
+                track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
+                requester.getUUID(),
+                requester.getGameProfile().name()
+        ));
         source.sendSuccess(() -> Component.literal("已加入队列: " + track.title()).withStyle(ChatFormatting.GREEN), false);
         if (MusicPlayerConfigManager.get().announceQueueChanges) broadcast(server, Component.literal(requester.getGameProfile().name() + " 点歌: ").withStyle(ChatFormatting.GOLD).append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA)).append(Component.literal(" - " + track.artist()).withStyle(ChatFormatting.GRAY)));
     }
@@ -170,5 +200,5 @@ public final class MusicQueueService {
     private void enqueueRequest(Supplier<CompletableFuture<Void>> supplier) { synchronized (requestPipelineLock) { requestPipeline = requestPipeline.handle((ignored, throwable) -> null).thenCompose(ignored -> supplier.get().exceptionally(throwable -> null)); } }
     private static String rootMessage(Throwable throwable) { Throwable current = throwable; while (current.getCause() != null) current = current.getCause(); return current.getMessage() == null ? current.toString() : current.getMessage(); }
     private record CurrentPlayback(TrackInfo track, long startedAt, long expectedEndAt) {}
-    private record QueuedTrack(String songId, String title, String artist, UUID requesterId, String requesterName) {}
+    private record QueuedTrack(String songId, String title, String artist, String artistCommand, UUID requesterId, String requesterName) {}
 }

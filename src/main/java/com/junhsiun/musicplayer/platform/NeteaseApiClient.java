@@ -36,7 +36,7 @@ public final class NeteaseApiClient {
 
     public CompletableFuture<TrackInfo> resolveSong(String id) {
         return songDetail(id).thenCompose(detail ->
-                songUrls(id).thenApply(urls -> new TrackInfo(detail.id(), detail.title(), detail.artist(), urls, detail.durationMillis()))
+                songUrls(id).thenApply(urls -> new TrackInfo(detail.id(), detail.title(), detail.artist(), detail.artistId(), urls, detail.durationMillis()))
         );
     }
 
@@ -225,6 +225,7 @@ public final class NeteaseApiClient {
                     song.path("id").asText(),
                     song.path("name").asText(),
                     firstArtistName(song),
+                    firstArtistId(song),
                     List.of(),
                     song.path("dt").asLong(0L)
             );
