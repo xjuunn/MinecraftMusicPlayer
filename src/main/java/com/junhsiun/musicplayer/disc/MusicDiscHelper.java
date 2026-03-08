@@ -131,19 +131,18 @@ public final class MusicDiscHelper {
     private static ItemLore buildLore(TrackInfo track, int sourceCount) {
         List<Component> lines = new ArrayList<>();
         lines.add(Component.literal("Minecraft Music Player").withStyle(ChatFormatting.GOLD));
-        lines.add(Component.literal("歌曲: " + track.title()).withStyle(ChatFormatting.WHITE));
-        lines.add(Component.literal("作者: " + track.artist()).withStyle(ChatFormatting.GRAY));
+        lines.add(Component.literal("姝屾洸: " + track.title()).withStyle(ChatFormatting.WHITE));
+        lines.add(Component.literal("浣滆€? " + track.artist()).withStyle(ChatFormatting.GRAY));
         if (track.artistId() != null && !track.artistId().isBlank()) {
-            lines.add(Component.literal("作者 ID: " + track.artistId()).withStyle(ChatFormatting.DARK_GRAY));
+            lines.add(Component.literal("浣滆€?ID: " + track.artistId()).withStyle(ChatFormatting.DARK_GRAY));
         }
         if (track.id() != null && !track.id().isBlank()) {
-            lines.add(Component.literal("歌曲 ID: " + track.id()).withStyle(ChatFormatting.DARK_GRAY));
+            lines.add(Component.literal("姝屾洸 ID: " + track.id()).withStyle(ChatFormatting.DARK_GRAY));
         }
         if (track.durationMillis() > 0L) {
-            lines.add(Component.literal("时长: " + formatDuration(track.durationMillis())).withStyle(ChatFormatting.DARK_AQUA));
+            lines.add(Component.literal("鏃堕暱: " + formatDuration(track.durationMillis())).withStyle(ChatFormatting.DARK_AQUA));
         }
-        lines.add(Component.literal("音源数量: " + sourceCount).withStyle(ChatFormatting.DARK_AQUA));
-        lines.add(Component.literal("放入唱片机即可播放").withStyle(ChatFormatting.GREEN));
+        lines.add(Component.literal("闊虫簮鏁伴噺: " + sourceCount).withStyle(ChatFormatting.DARK_AQUA));
         return new ItemLore(lines);
     }
 

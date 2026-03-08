@@ -1,4 +1,4 @@
-﻿# Minecraft Music Player
+# Minecraft Music Player
 
 Minecraft Music Player is a Fabric music mod for Minecraft `1.21.11`. It provides NetEase Cloud Music search, song requests, shared queue playback, playlist playback, and custom music disc support.
 
@@ -215,7 +215,7 @@ This reduces the issue where some VIP tracks only play for 30 seconds.
 Build artifact example:
 
 ```text
-minecraft-music-player-2.0.2-fabricmc1.21.11.jar
+minecraft-music-player-2.0.3-fabricmc1.21.11.jar
 ```
 
 ## Release
@@ -225,8 +225,8 @@ The repository supports GitHub Actions based releases.
 ### Release by tag
 
 ```bash
-git tag v2.0.2
-git push origin v2.0.2
+git tag v2.0.3
+git push origin v2.0.3
 ```
 
 ### Manual release
@@ -239,3 +239,4 @@ Run the `release` workflow from the GitHub `Actions` page and provide the tag to
 - Interaction is based on chat messages and clickable components, without a custom GUI
 - The current client player prefers directly playable mp3 sources
 - Chinese documentation is available in [README.md](README.md)
+

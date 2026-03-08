@@ -1,4 +1,4 @@
-﻿# Minecraft Music Player
+# Minecraft Music Player
 
 Minecraft Music Player 是面向 Minecraft `1.21.11` 的 Fabric 音乐模组，提供基于网易云音乐的搜索、点歌、共享播放队列、歌单播放，以及自定义音乐唱片功能。
 
@@ -215,7 +215,7 @@ config/minecraft-music-player.json
 构建产物示例：
 
 ```text
-minecraft-music-player-2.0.2-fabricmc1.21.11.jar
+minecraft-music-player-2.0.3-fabricmc1.21.11.jar
 ```
 
 ## 发布
@@ -225,8 +225,8 @@ minecraft-music-player-2.0.2-fabricmc1.21.11.jar
 ### 使用 tag 发布
 
 ```bash
-git tag v2.0.2
-git push origin v2.0.2
+git tag v2.0.3
+git push origin v2.0.3
 ```
 
 ### 手动发布
@@ -239,3 +239,4 @@ git push origin v2.0.2
 - 交互基于聊天栏文本和点击操作，不依赖自定义界面
 - 客户端播放器当前优先使用可直接播放的 mp3 音源
 - 英文文档见 [README_EN.md](README_EN.md)
+
