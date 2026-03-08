@@ -8,6 +8,7 @@ import javazoom.jl.player.Player;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.net.URL;
+import java.util.List;
 
 public final class ClientMusicController {
     private static final ClientMusicController INSTANCE = new ClientMusicController();
@@ -24,7 +25,7 @@ public final class ClientMusicController {
 
     public void handle(MusicControlPayload payload) {
         switch (payload.action()) {
-            case "play" -> play(payload.url(), payload.title(), payload.subtitle());
+            case "play" -> play(payload.urls(), payload.title(), payload.subtitle());
             case "stop" -> stop(payload.message());
             default -> MusicPlayerMod.LOGGER.warn("未知的音乐控制动作: {}", payload.action());
         }
@@ -44,23 +45,58 @@ public final class ClientMusicController {
         }
     }
 
-    private synchronized void play(String url, String title, String subtitle) {
+    private synchronized void play(List<String> urls, String title, String subtitle) {
         stop(null);
-        playbackThread = new Thread(() -> {
-            try (BufferedInputStream inputStream = new BufferedInputStream(new URL(url).openStream())) {
-                player = new Player(inputStream);
-                MusicPlayerMod.LOGGER.info("开始播放: {} - {}", title, subtitle);
-                player.play();
+        playbackThread = new Thread(() -> playWithFallback(urls, title, subtitle), "musicplayer-client-playback");
+        playbackThread.setDaemon(true);
+        playbackThread.start();
+    }
+
+    private void playWithFallback(List<String> urls, String title, String subtitle) {
+        if (urls == null || urls.isEmpty()) {
+            MusicPlayerMod.LOGGER.error("没有可用的播放源: {} - {}", title, subtitle);
+            return;
+        }
+
+        Exception lastException = null;
+        for (int index = 0; index < urls.size(); index++) {
+            if (Thread.currentThread().isInterrupted()) {
+                return;
+            }
+
+            String url = urls.get(index);
+            try {
+                MusicPlayerMod.LOGGER.info("开始尝试播放源 {}/{}: {} - {}", index + 1, urls.size(), title, url);
+                playSingle(url, title, subtitle);
+                return;
             } catch (IOException | JavaLayerException exception) {
-                MusicPlayerMod.LOGGER.error("播放歌曲失败。", exception);
-            } finally {
-                synchronized (ClientMusicController.this) {
-                    player = null;
+                lastException = exception;
+                MusicPlayerMod.LOGGER.warn("播放源失败，尝试下一个源: {}", url, exception);
+            }
+        }
+
+        MusicPlayerMod.LOGGER.error("所有播放源都不可用: {} - {}", title, subtitle, lastException);
+    }
+
+    private void playSingle(String url, String title, String subtitle) throws IOException, JavaLayerException {
+        try (BufferedInputStream inputStream = new BufferedInputStream(new URL(url).openStream())) {
+            Player currentPlayer = new Player(inputStream);
+            synchronized (this) {
+                if (Thread.currentThread().isInterrupted()) {
+                    currentPlayer.close();
+                    return;
+                }
+                player = currentPlayer;
+            }
+            MusicPlayerMod.LOGGER.info("开始播放: {} - {}", title, subtitle);
+            currentPlayer.play();
+        } finally {
+            synchronized (this) {
+                player = null;
+                if (Thread.currentThread() == playbackThread) {
                     playbackThread = null;
                 }
             }
-        }, "musicplayer-client-playback");
-        playbackThread.setDaemon(true);
-        playbackThread.start();
+        }
     }
 }

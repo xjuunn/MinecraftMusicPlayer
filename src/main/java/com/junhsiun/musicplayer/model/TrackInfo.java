@@ -1,4 +1,6 @@
 package com.junhsiun.musicplayer.model;
 
-public record TrackInfo(String id, String title, String artist, String sourceUrl, long durationMillis) {
+import java.util.List;
+
+public record TrackInfo(String id, String title, String artist, List<String> sourceUrls, long durationMillis) {
 }

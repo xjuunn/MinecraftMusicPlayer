@@ -17,8 +17,10 @@ import okhttp3.Response;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -35,7 +37,7 @@ public final class NeteaseApiClient {
 
     public CompletableFuture<TrackInfo> resolveSong(String id) {
         return songDetail(id).thenCompose(detail ->
-                songUrl(id).thenApply(url -> new TrackInfo(detail.id(), detail.title(), detail.artist(), url, detail.durationMillis()))
+                songUrls(id).thenApply(urls -> new TrackInfo(detail.id(), detail.title(), detail.artist(), urls, detail.durationMillis()))
         );
     }
 
@@ -164,32 +166,54 @@ public final class NeteaseApiClient {
                     song.path("id").asText(),
                     song.path("name").asText(),
                     firstArtist(song),
-                    "",
+                    List.of(),
                     song.path("dt").asLong(0L)
             );
         });
     }
 
-    private CompletableFuture<String> songUrl(String id) {
-        return getJson("/song/url/v1", "id", id, "level", "standard")
+    private CompletableFuture<List<String>> songUrls(String id) {
+        CompletableFuture<String> directUrl = CompletableFuture.completedFuture("https://music.163.com/song/media/outer/url?id=" + id + ".mp3");
+        CompletableFuture<String> standardUrl = getJson("/song/url/v1", "id", id, "level", "standard")
                 .thenApply(root -> firstUrl(root.path("data")))
-                .thenCompose(url -> {
-                    if (url != null && !url.isBlank() && !"null".equals(url)) {
-                        return CompletableFuture.completedFuture(url);
+                .exceptionally(throwable -> null);
+        CompletableFuture<String> higherUrl = getJson("/song/url/v1", "id", id, "level", "higher")
+                .thenApply(root -> firstUrl(root.path("data")))
+                .exceptionally(throwable -> null);
+        CompletableFuture<String> exhighUrl = getJson("/song/url/v1", "id", id, "level", "exhigh")
+                .thenApply(root -> firstUrl(root.path("data")))
+                .exceptionally(throwable -> null);
+        CompletableFuture<String> legacyUrl = getJson("/song/url", "id", id)
+                .thenApply(root -> firstUrl(root.path("data")))
+                .exceptionally(throwable -> null);
+        CompletableFuture<String> vkeysUrl = getJsonFromAbsoluteUrl("https://api.vkeys.cn/v2/music/netease", "id", id, "quality", "4")
+                .thenApply(root -> root.path("data").path("url").asText(null))
+                .exceptionally(throwable -> null);
+
+        return CompletableFuture.allOf(directUrl, standardUrl, higherUrl, exhighUrl, legacyUrl, vkeysUrl)
+                .thenApply(ignored -> {
+                    Set<String> urls = new LinkedHashSet<>();
+                    addCandidate(urls, directUrl.join());
+                    addCandidate(urls, standardUrl.join());
+                    addCandidate(urls, higherUrl.join());
+                    addCandidate(urls, exhighUrl.join());
+                    addCandidate(urls, legacyUrl.join());
+                    addCandidate(urls, vkeysUrl.join());
+
+                    if (urls.isEmpty()) {
+                        throw new IllegalStateException("无法获取任何可用的歌曲播放源，请检查网易云 API 服务。");
                     }
-                    return getJson("/song/url", "id", id).thenApply(root -> firstUrl(root.path("data")));
-                })
-                .thenApply(url -> {
-                    if (url == null || url.isBlank() || "null".equals(url)) {
-                        throw new IllegalStateException("无法获取歌曲播放地址，请检查网易云 API 服务。");
-                    }
-                    return url;
+                    return List.copyOf(urls);
                 });
     }
 
     private CompletableFuture<JsonNode> getJson(String path, String... queryPairs) {
+        return getJsonFromAbsoluteUrl(baseUrl() + path, queryPairs);
+    }
+
+    private CompletableFuture<JsonNode> getJsonFromAbsoluteUrl(String absoluteUrl, String... queryPairs) {
         return CompletableFuture.supplyAsync(() -> {
-            HttpUrl.Builder builder = Objects.requireNonNull(HttpUrl.parse(baseUrl() + path)).newBuilder();
+            HttpUrl.Builder builder = Objects.requireNonNull(HttpUrl.parse(absoluteUrl)).newBuilder();
             for (int index = 0; index + 1 < queryPairs.length; index += 2) {
                 builder.addQueryParameter(queryPairs[index], queryPairs[index + 1]);
             }
@@ -210,6 +234,13 @@ public final class NeteaseApiClient {
     private static String baseUrl() {
         String raw = MusicPlayerConfigManager.get().neteaseBaseUrl;
         return raw.endsWith("/") ? raw.substring(0, raw.length() - 1) : raw;
+    }
+
+    private static void addCandidate(Set<String> urls, String url) {
+        if (url == null || url.isBlank() || "null".equalsIgnoreCase(url)) {
+            return;
+        }
+        urls.add(url);
     }
 
     private static String firstArtist(JsonNode songNode) {

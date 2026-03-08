@@ -9,7 +9,7 @@ The server manages commands, queue state, search, and synchronization. Clients h
 - Search songs, artists, playlists, and users from NetEase Cloud Music
 - View artist top songs, playlist details, and user playlists
 - Let players request songs and import playlists into the shared queue
-- Automatic queue progression
+- Automatic queue progression`r`n- Multiple playback sources with automatic fallback when one source fails
 - Vote skip for the next song
 - Admin controls for reload, stop, skip, clear queue, and configuration
 - Default NetEase API endpoint with optional custom endpoint support

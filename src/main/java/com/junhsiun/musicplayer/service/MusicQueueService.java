@@ -253,7 +253,7 @@ public final class MusicQueueService {
 
     private void sendPlay(ServerPlayer player, TrackInfo track) {
         if (ServerPlayNetworking.canSend(player, MusicControlPayload.TYPE)) {
-            ServerPlayNetworking.send(player, MusicControlPayload.play(track.sourceUrl(), track.title(), track.artist()));
+            ServerPlayNetworking.send(player, MusicControlPayload.play(track.sourceUrls(), track.title(), track.artist()));
         }
     }
 
