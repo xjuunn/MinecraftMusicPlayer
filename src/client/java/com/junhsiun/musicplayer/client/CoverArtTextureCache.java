@@ -86,9 +86,9 @@ public final class CoverArtTextureCache {
             }
 
             try (NativeImage image = readImage(bytes)) {
-                DynamicTexture texture = new DynamicTexture(() -> "musicplayer_cover", toCircularTexture(image));
+                NativeImage processedImage = toCircularTexture(image);
                 Identifier textureId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "cover/" + Integer.toHexString(coverUrl.hashCode()));
-                Minecraft.getInstance().execute(() -> registerTexture(coverUrl, textureId, texture));
+                Minecraft.getInstance().execute(() -> registerTexture(coverUrl, textureId, processedImage));
             }
         } catch (Exception exception) {
             synchronized (this) {
@@ -98,18 +98,25 @@ public final class CoverArtTextureCache {
         }
     }
 
-    private synchronized void registerTexture(String coverUrl, Identifier textureId, DynamicTexture texture) {
+    private synchronized void registerTexture(String coverUrl, Identifier textureId, NativeImage image) {
         Minecraft client = Minecraft.getInstance();
-        texture.upload();
-        client.getTextureManager().register(textureId, texture);
-        entries.put(coverUrl, CacheEntry.ready(textureId));
+        try {
+            DynamicTexture texture = new DynamicTexture(() -> "musicplayer_cover", image);
+            texture.upload();
+            client.getTextureManager().register(textureId, texture);
+            entries.put(coverUrl, CacheEntry.ready(textureId));
 
-        while (entries.size() > MAX_CACHE_SIZE) {
-            String eldestKey = entries.keySet().iterator().next();
-            CacheEntry eldest = entries.remove(eldestKey);
-            if (eldest != null && eldest.textureId() != null) {
-                client.getTextureManager().release(eldest.textureId());
+            while (entries.size() > MAX_CACHE_SIZE) {
+                String eldestKey = entries.keySet().iterator().next();
+                CacheEntry eldest = entries.remove(eldestKey);
+                if (eldest != null && eldest.textureId() != null) {
+                    client.getTextureManager().release(eldest.textureId());
+                }
             }
+        } catch (Exception exception) {
+            entries.put(coverUrl, CacheEntry.failure());
+            image.close();
+            MusicPlayerMod.LOGGER.warn("Failed to register cover art texture: {}", coverUrl, exception);
         }
     }
 
