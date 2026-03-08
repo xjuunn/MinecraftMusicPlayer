@@ -28,6 +28,7 @@ import java.util.concurrent.Executors;
 
 public final class NeteaseApiClient {
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final int DETAIL_FETCH_BATCH_SIZE = 100;
     private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(4, runnable -> {
         Thread thread = new Thread(runnable, "musicplayer-http");
         thread.setDaemon(true);
@@ -73,79 +74,71 @@ public final class NeteaseApiClient {
     }
 
     public CompletableFuture<PlaylistInfo> playlistDetail(String id) {
-        return getJson("/playlist/detail", "id", id).thenApply(root -> {
+        return getJson("/playlist/detail", "id", id).thenCompose(root -> {
             JsonNode playlist = root.path("playlist");
-            List<SearchEntry> tracks = new ArrayList<>();
-            JsonNode trackNodes = playlist.path("tracks");
-            for (JsonNode track : trackNodes) {
-                String artistId = firstArtistId(track);
-                tracks.add(new SearchEntry(
-                        track.path("id").asText(),
-                        track.path("name").asText(),
-                        firstArtistName(track),
-                        playSongCommand(track.path("id").asText()),
-                        artistId.isBlank() ? "" : viewArtistCommand(artistId)
-                ));
-            }
-            return new PlaylistInfo(
+            return fetchAllPlaylistTracks(id).thenApply(tracks -> new PlaylistInfo(
                     playlist.path("id").asText(),
                     playlist.path("name").asText(),
                     playlist.path("creator").path("userId").asText(),
                     playlist.path("creator").path("nickname").asText(),
                     tracks
-            );
+            ));
         });
     }
 
     public CompletableFuture<UserPlaylistView> userPlaylists(String userId) {
-        return getJson("/user/playlist", "uid", userId).thenApply(root -> {
-            JsonNode playlists = root.path("playlist");
-            if (!playlists.isArray() || playlists.isEmpty()) {
-                return new UserPlaylistView(userId, "", "", List.of());
+        return CompletableFuture.supplyAsync(() -> {
+            List<SearchEntry> entries = new ArrayList<>();
+            String resolvedUserId = userId;
+            String nickname = "";
+            String signature = "";
+            int offset = 0;
+
+            while (true) {
+                JsonNode root = executeJson(baseRequest(
+                        baseUrl() + "/user/playlist",
+                        new String[]{"uid", userId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
+                        "application/json,text/plain,*/*"
+                ));
+                JsonNode playlists = root.path("playlist");
+                if (!playlists.isArray() || playlists.isEmpty()) {
+                    break;
+                }
+                for (JsonNode playlist : playlists) {
+                    JsonNode creator = playlist.path("creator");
+                    if (nickname.isBlank()) {
+                        resolvedUserId = creator.path("userId").asText(userId);
+                        nickname = creator.path("nickname").asText("");
+                        signature = creator.path("signature").asText("");
+                    }
+                    String playlistId = playlist.path("id").asText();
+                    entries.add(new SearchEntry(
+                            playlistId,
+                            playlist.path("name").asText(),
+                            "共 " + playlist.path("trackCount").asInt() + " 首",
+                            viewPlaylistCommand(playlistId),
+                            ""
+                    ));
+                }
+                if (playlists.size() < DETAIL_FETCH_BATCH_SIZE) {
+                    break;
+                }
+                offset += playlists.size();
             }
 
-            JsonNode creator = playlists.get(0).path("creator");
-            List<SearchEntry> entries = new ArrayList<>();
-            for (JsonNode playlist : playlists) {
-                String playlistId = playlist.path("id").asText();
-                entries.add(new SearchEntry(
-                        playlistId,
-                        playlist.path("name").asText(),
-                        "共 " + playlist.path("trackCount").asInt() + " 首",
-                        viewPlaylistCommand(playlistId),
-                        ""
-                ));
-            }
-            return new UserPlaylistView(
-                    creator.path("userId").asText(),
-                    creator.path("nickname").asText(),
-                    creator.path("signature").asText(""),
-                    entries
-            );
-        });
+            return new UserPlaylistView(resolvedUserId, nickname, signature, entries);
+        }, EXECUTOR);
     }
 
     public CompletableFuture<ArtistInfo> artistDetail(String artistId) {
-        return getJson("/artists", "id", artistId).thenApply(root -> {
+        return getJson("/artists", "id", artistId).thenCompose(root -> {
             JsonNode artist = root.path("artist");
-            JsonNode hotSongs = root.path("hotSongs");
-            List<SearchEntry> tracks = new ArrayList<>();
-            for (JsonNode song : hotSongs) {
-                String songId = song.path("id").asText();
-                tracks.add(new SearchEntry(
-                        songId,
-                        song.path("name").asText(),
-                        song.path("al").path("name").asText(""),
-                        playSongCommand(songId),
-                        ""
-                ));
-            }
-            return new ArtistInfo(
+            return fetchAllArtistSongs(artistId).thenApply(tracks -> new ArtistInfo(
                     artist.path("id").asText(),
                     artist.path("name").asText(),
                     artist.path("briefDesc").asText(""),
                     tracks
-            );
+            ));
         });
     }
 
@@ -289,6 +282,77 @@ public final class NeteaseApiClient {
 
     private CompletableFuture<JsonNode> getJson(String path, String... queryPairs) {
         return getJsonFromAbsoluteUrl(baseUrl() + path, queryPairs);
+    }
+
+    private CompletableFuture<List<SearchEntry>> fetchAllPlaylistTracks(String playlistId) {
+        return CompletableFuture.supplyAsync(() -> {
+            List<SearchEntry> tracks = new ArrayList<>();
+            int offset = 0;
+
+            while (true) {
+                JsonNode root = executeJson(baseRequest(
+                        baseUrl() + "/playlist/track/all",
+                        new String[]{"id", playlistId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
+                        "application/json,text/plain,*/*"
+                ));
+                JsonNode songs = root.path("songs");
+                if (!songs.isArray() || songs.isEmpty()) {
+                    break;
+                }
+                for (JsonNode song : songs) {
+                    String songId = song.path("id").asText();
+                    String artistId = firstArtistId(song);
+                    tracks.add(new SearchEntry(
+                            songId,
+                            song.path("name").asText(),
+                            firstArtistName(song),
+                            playSongCommand(songId),
+                            artistId.isBlank() ? "" : viewArtistCommand(artistId)
+                    ));
+                }
+                if (songs.size() < DETAIL_FETCH_BATCH_SIZE) {
+                    break;
+                }
+                offset += songs.size();
+            }
+
+            return tracks;
+        }, EXECUTOR);
+    }
+
+    private CompletableFuture<List<SearchEntry>> fetchAllArtistSongs(String artistId) {
+        return CompletableFuture.supplyAsync(() -> {
+            List<SearchEntry> tracks = new ArrayList<>();
+            int offset = 0;
+
+            while (true) {
+                JsonNode root = executeJson(baseRequest(
+                        baseUrl() + "/artist/songs",
+                        new String[]{"id", artistId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
+                        "application/json,text/plain,*/*"
+                ));
+                JsonNode songs = root.path("songs");
+                if (!songs.isArray() || songs.isEmpty()) {
+                    break;
+                }
+                for (JsonNode song : songs) {
+                    String songId = song.path("id").asText();
+                    tracks.add(new SearchEntry(
+                            songId,
+                            song.path("name").asText(),
+                            song.path("al").path("name").asText(""),
+                            playSongCommand(songId),
+                            ""
+                    ));
+                }
+                if (songs.size() < DETAIL_FETCH_BATCH_SIZE) {
+                    break;
+                }
+                offset += songs.size();
+            }
+
+            return tracks;
+        }, EXECUTOR);
     }
 
     private CompletableFuture<JsonNode> getJsonFromAbsoluteUrl(String absoluteUrl, String... queryPairs) {

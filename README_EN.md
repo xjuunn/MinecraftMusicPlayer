@@ -13,6 +13,7 @@ The server handles commands, queue state, search, synchronization, and configura
 - Paginated search results with clickable `Previous Page` and `Next Page` buttons
 - Queue pages and detail views expose clickable song, artist, playlist owner, and user entries where applicable
 - Search pages, detail pages, and queue pages include quick action links for faster navigation between now playing, queue, and related views
+- Playlist details, user playlists, and artist views fetch data in batches so full result sets can be shown instead of only the first few items
 - Automatic progression to the next track
 - Vote skip support
 - Smart duplicate request suppression so rapid repeated clicks do not spam the queue with the same track
@@ -104,6 +105,9 @@ Most result pages also include quick action links such as:
 - `Repeat Search`
 - `Owner Details`
 - `Refresh Artist`
+
+When the API does not expose a reliable total count, the mod keeps fetching batches and uses “returned item count is smaller than page size” as the stop condition.
+The same rule is applied to searches and list-style detail views.
 
 ## Admin Commands
 
