@@ -3,6 +3,7 @@ package com.junhsiun.musicplayer.command;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
+import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.model.ArtistInfo;
 import com.junhsiun.musicplayer.model.PlaylistInfo;
 import com.junhsiun.musicplayer.model.SearchEntry;
@@ -18,11 +19,13 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -44,6 +47,7 @@ public final class MusicCommands {
                 .then(muteOnce())
                 .then(voteNext())
                 .then(play())
+                .then(burn())
                 .then(search())
                 .then(view())
                 .then(next())
@@ -188,6 +192,29 @@ public final class MusicCommands {
                             String playlistId = StringArgumentType.getString(context, "playlist_id");
                             loading(context.getSource(), "正在加载歌单并切换到歌单播放模式，请稍候...");
                             MusicPlayerMod.queueService().requestPlaylist(context.getSource().getServer(), context.getSource(), player, playlistId);
+                            return 1;
+                        })));
+    }
+
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> burn() {
+        return Commands.literal("burn")
+                .then(Commands.literal("song")
+                        .then(Commands.argument("song_id", StringArgumentType.string()).executes(context -> {
+                            ServerPlayer player = context.getSource().getPlayerOrException();
+                            if (!MusicDiscHelper.isBurnableDisc(player.getItemInHand(InteractionHand.MAIN_HAND))) {
+                                Messages.warning(context.getSource(), "请先在主手持有一张可刻录的唱片。");
+                                return 0;
+                            }
+                            String songId = StringArgumentType.getString(context, "song_id");
+                            loading(context.getSource(), "正在刻录音乐唱片，请稍候...");
+                            MinecraftServer server = context.getSource().getServer();
+                            MusicPlayerMod.netease().resolveSong(songId).whenComplete((track, throwable) -> server.execute(() -> {
+                                if (throwable != null) {
+                                    Messages.warning(context.getSource(), "刻录失败: " + rootMessage(throwable));
+                                    return;
+                                }
+                                burnHeldDisc(context.getSource(), player, track);
+                            }));
                             return 1;
                         })));
     }
@@ -590,6 +617,29 @@ public final class MusicCommands {
             nav.append(Messages.clickableCommand("[下一页 ›]", "查看下一页", String.format(commandPattern, page + 1), ChatFormatting.YELLOW));
         }
         source.sendSuccess(() -> nav, false);
+    }
+
+    private static void burnHeldDisc(CommandSourceStack source, ServerPlayer player, TrackInfo track) {
+        ItemStack mainHand = player.getItemInHand(InteractionHand.MAIN_HAND);
+        if (!MusicDiscHelper.isBurnableDisc(mainHand)) {
+            Messages.warning(source, "主手中的唱片已变化，请重新手持唱片后再刻录。");
+            return;
+        }
+
+        ItemStack burnedDisc = MusicDiscHelper.burn(mainHand.copyWithCount(1), track);
+        if (mainHand.getCount() == 1) {
+            player.setItemInHand(InteractionHand.MAIN_HAND, burnedDisc);
+        } else {
+            mainHand.shrink(1);
+            if (!player.getInventory().add(burnedDisc)) {
+                player.drop(burnedDisc, false, true);
+            }
+        }
+
+        source.sendSuccess(() -> Component.literal("已刻录音乐唱片: ").withStyle(ChatFormatting.GREEN)
+                .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
+                .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
+                .append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY)), false);
     }
 
     @SafeVarargs
