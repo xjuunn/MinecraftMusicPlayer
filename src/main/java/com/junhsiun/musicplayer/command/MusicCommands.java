@@ -58,7 +58,19 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> now() {
         return Commands.literal("now").executes(context -> {
-            context.getSource().sendSuccess(MusicPlayerMod.queueService()::describeNowPlaying, false);
+            var track = MusicPlayerMod.queueService().currentTrack();
+            if (track == null) {
+                context.getSource().sendSuccess(MusicPlayerMod.queueService()::describeNowPlaying, false);
+                return 1;
+            }
+            MutableComponent line = Component.literal("当前播放: ").withStyle(ChatFormatting.GOLD)
+                    .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
+                    .append(Component.literal(" - " + track.artist()).withStyle(ChatFormatting.GRAY));
+            if (!track.sourceUrls().isEmpty()) {
+                line.append(Component.literal(" "));
+                line.append(Messages.clickableUrl("[打开直链]", "点击在浏览器中打开当前歌曲直链", track.sourceUrls().getFirst(), ChatFormatting.GREEN));
+            }
+            context.getSource().sendSuccess(() -> line, false);
             return 1;
         });
     }

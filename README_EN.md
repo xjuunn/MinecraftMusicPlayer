@@ -9,6 +9,7 @@ The server handles commands, queue state, search, synchronization, and configura
 - Search songs, artists, playlists, and users
 - View artist top songs, playlist details, and user playlists
 - Let players request songs, import playlists, and inspect the current queue
+- The now-playing view includes a clickable direct track URL that opens in the browser
 - Paginated search results with clickable `Previous Page` and `Next Page` buttons
 - Automatic progression to the next track
 - Vote skip support
@@ -64,7 +65,7 @@ Admins can change the endpoint by command or reset it back to the default value.
 | Command | Description |
 | --- | --- |
 | `/music` | Show help |
-| `/music now` | Show the current track |
+| `/music now` | Show the current track and a clickable direct track URL |
 | `/music queue` | Show the current queue |
 | `/music join` | Join the current playback |
 | `/music leave` | Leave the current playback |

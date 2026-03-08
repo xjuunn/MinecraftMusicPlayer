@@ -8,6 +8,8 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 
+import java.net.URI;
+
 public final class Messages {
     private Messages() {
     }
@@ -40,6 +42,14 @@ public final class Messages {
         return Component.literal(label).setStyle(
                 Style.EMPTY.withColor(color)
                         .withClickEvent(new ClickEvent.RunCommand(command))
+                        .withHoverEvent(new HoverEvent.ShowText(Component.literal(hover)))
+        );
+    }
+
+    public static MutableComponent clickableUrl(String label, String hover, String url, ChatFormatting color) {
+        return Component.literal(label).setStyle(
+                Style.EMPTY.withColor(color)
+                        .withClickEvent(new ClickEvent.OpenUrl(URI.create(url)))
                         .withHoverEvent(new HoverEvent.ShowText(Component.literal(hover)))
         );
     }
