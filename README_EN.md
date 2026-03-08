@@ -14,6 +14,7 @@ The server handles commands, queue state, search, synchronization, and configura
 - The chat broadcast sent when a song starts also includes a clickable `Download` action
 - Paginated search results with clickable `Previous Page` and `Next Page` buttons
 - Queue pages and detail views expose clickable song, artist, playlist owner, and user entries where applicable
+- Queue entries provide a `Next` action that moves the selected song to the top of the queue for immediate next playback
 - Search pages, detail pages, and queue pages include quick action links for faster navigation between now playing, queue, and related views
 - Playlist details, user playlists, and artist views fetch data in batches so full result sets can be shown instead of only the first few items
 - Automatic progression to the next track
@@ -74,6 +75,7 @@ Admins can change the endpoint by command or reset it back to the default value.
 | `/music` | Show help |
 | `/music now` | Show the current track and a clickable direct track URL |
 | `/music queue` | Show the current queue |
+| `/music queue next <songId>` | Move a queued song to the front so it plays next |
 | `/music join` | Join the current playback |
 | `/music leave` | Leave the current playback |
 | `/music mute once` | Stop receiving only the current track |

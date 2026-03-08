@@ -86,6 +86,16 @@ public final class MusicCommands {
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> queue() {
         return Commands.literal("queue")
                 .executes(context -> showQueue(context.getSource(), 1))
+                .then(Commands.literal("next")
+                        .then(Commands.argument("song_id", StringArgumentType.string()).executes(context -> {
+                            String songId = StringArgumentType.getString(context, "song_id");
+                            if (!MusicPlayerMod.queueService().moveQueuedTrackToFront(songId)) {
+                                Messages.warning(context.getSource(), "未找到这首待播歌曲，无法调整到下一首。");
+                                return 0;
+                            }
+                            Messages.success(context.getSource(), "已将这首歌调整为下一首播放。", false);
+                            return 1;
+                        })))
                 .then(Commands.argument("page", IntegerArgumentType.integer(1))
                         .executes(context -> showQueue(context.getSource(), IntegerArgumentType.getInteger(context, "page"))));
     }
@@ -113,7 +123,9 @@ public final class MusicCommands {
             SearchEntry entry = entries.get(index);
             int order = (page.page() - 1) * page.pageSize() + index + 1;
             MutableComponent line = Component.literal(order + ". ").withStyle(ChatFormatting.DARK_GRAY)
-                    .append(renderEntry(entry, Messages.clickableCommand("[点歌]", "点击重新点播这首歌曲", "/music play song " + entry.id(), ChatFormatting.GREEN), "点击重新点播这首歌曲", "点击查看作者详情"));
+                    .append(Messages.clickableCommand("[下一首]", "将这首歌调整为下一首播放", "/music queue next " + entry.id(), ChatFormatting.GREEN))
+                    .append(Component.literal(" "))
+                    .append(renderEntry(entry, Messages.clickableCommand("[点歌]", "点击重新点播这首歌曲", "/music play song " + entry.id(), ChatFormatting.YELLOW), "点击重新点播这首歌曲", "点击查看作者详情"));
             source.sendSuccess(() -> line, false);
         }
         sendNavigation(source, page.page(), page.totalPages(), "/music queue %d", true);

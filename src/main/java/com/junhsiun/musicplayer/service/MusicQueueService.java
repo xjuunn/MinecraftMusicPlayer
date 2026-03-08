@@ -282,6 +282,26 @@ public final class MusicQueueService {
         source.sendSuccess(() -> Component.literal("播放队列已清空。"), false);
     }
 
+    public boolean moveQueuedTrackToFront(String songId) {
+        if (songId == null || songId.isBlank() || queue.isEmpty()) {
+            return false;
+        }
+        QueuedTrack target = null;
+        for (QueuedTrack queuedTrack : queue) {
+            if (songId.equals(queuedTrack.songId())) {
+                target = queuedTrack;
+                break;
+            }
+        }
+        if (target == null) {
+            return false;
+        }
+        queue.remove(target);
+        queue.addFirst(target);
+        refreshTrackCache();
+        return true;
+    }
+
     public List<Component> describeQueue() {
         return describeQueue(1, 10);
     }
