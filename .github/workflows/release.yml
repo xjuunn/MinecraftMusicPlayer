@@ -1,0 +1,92 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release, for example v2.0.0'
+        required: true
+        type: string
+      release_name:
+        description: 'Release title, leave empty to use tag'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark release as prerelease'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'microsoft'
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+            NAME="${{ inputs.release_name }}"
+            if [ -z "$NAME" ]; then
+              NAME="$TAG"
+            fi
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "name=$NAME" >> "$GITHUB_OUTPUT"
+            echo "prerelease=${{ inputs.prerelease }}" >> "$GITHUB_OUTPUT"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "name=$TAG" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create tag when manually triggered
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          if git rev-parse "refs/tags/${{ steps.meta.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag already exists locally"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag "${{ steps.meta.outputs.tag }}"
+            git push origin "${{ steps.meta.outputs.tag }}"
+          fi
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Clean build
+        run: ./gradlew clean build
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            build/libs/*-fabricmc*.jar
+            !build/libs/*-sources.jar
