@@ -26,6 +26,7 @@ The server handles commands, queue state, search, synchronization, and configura
 - Admin configuration for API endpoint, proxy, IPv4 preference, timeouts, queue size, and search size
 - Lightweight loading hints during search, parsing, and remote fetches
 - Clickable chat actions for song requests, paging, and detail views
+- The chat UI uses a consistent structure for headers, quick actions, list rows, and pagination
 
 ## How It Works
 
