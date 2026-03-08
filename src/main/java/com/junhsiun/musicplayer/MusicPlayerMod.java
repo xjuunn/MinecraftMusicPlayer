@@ -2,12 +2,15 @@ package com.junhsiun.musicplayer;
 
 import com.junhsiun.musicplayer.command.MusicCommands;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
+import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.platform.NeteaseApiClient;
+import com.junhsiun.musicplayer.service.JukeboxPlaybackService;
 import com.junhsiun.musicplayer.service.MusicQueueService;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -21,23 +24,35 @@ public final class MusicPlayerMod implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     private static final MusicQueueService MUSIC_QUEUE_SERVICE = new MusicQueueService();
+    private static final JukeboxPlaybackService JUKEBOX_PLAYBACK_SERVICE = new JukeboxPlaybackService();
     private static final NeteaseApiClient NETEASE_API_CLIENT = new NeteaseApiClient();
 
     @Override
     public void onInitialize() {
         MusicPlayerConfigManager.load();
         PayloadTypeRegistry.playS2C().register(MusicControlPayload.TYPE, MusicControlPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(JukeboxMusicPayload.TYPE, JukeboxMusicPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
 
         CommandRegistrationCallback.EVENT.register(MusicCommands::register);
         ServerTickEvents.END_SERVER_TICK.register(MUSIC_QUEUE_SERVICE::tick);
+        ServerTickEvents.END_SERVER_TICK.register(JUKEBOX_PLAYBACK_SERVICE::tick);
+        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+            if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+                return net.minecraft.world.InteractionResult.PASS;
+            }
+            return JUKEBOX_PLAYBACK_SERVICE.tryInsertCustomDisc(serverPlayer, world, hand, hitResult);
+        });
         ServerPlayNetworking.registerGlobalReceiver(MusicPlaybackReportPayload.TYPE, (payload, context) ->
                 context.server().execute(() ->
                         MUSIC_QUEUE_SERVICE.handlePlaybackReport(context.server(), context.player(), payload))
         );
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> MUSIC_QUEUE_SERVICE.handleJoin(handler.player));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> MUSIC_QUEUE_SERVICE.handleDisconnect(handler.player));
-        ServerLifecycleEvents.SERVER_STOPPING.register(MUSIC_QUEUE_SERVICE::shutdown);
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            MUSIC_QUEUE_SERVICE.shutdown(server);
+            JUKEBOX_PLAYBACK_SERVICE.shutdown(server);
+        });
     }
 
     public static MusicQueueService queueService() {
@@ -46,5 +61,9 @@ public final class MusicPlayerMod implements ModInitializer {
 
     public static NeteaseApiClient netease() {
         return NETEASE_API_CLIENT;
+    }
+
+    public static JukeboxPlaybackService jukeboxService() {
+        return JUKEBOX_PLAYBACK_SERVICE;
     }
 }
