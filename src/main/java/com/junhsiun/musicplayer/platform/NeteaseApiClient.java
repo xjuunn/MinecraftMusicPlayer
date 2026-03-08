@@ -172,7 +172,6 @@ public final class NeteaseApiClient {
     }
 
     private CompletableFuture<List<String>> songUrls(String id) {
-        CompletableFuture<String> directUrl = CompletableFuture.completedFuture("https://music.163.com/song/media/outer/url?id=" + id + ".mp3");
         CompletableFuture<String> standardUrl = getJson("/song/url/v1", "id", id, "level", "standard")
                 .thenApply(root -> firstUrl(root.path("data")))
                 .exceptionally(throwable -> null);
@@ -188,16 +187,17 @@ public final class NeteaseApiClient {
         CompletableFuture<String> vkeysUrl = getJsonFromAbsoluteUrl("https://api.vkeys.cn/v2/music/netease", "id", id, "quality", "4")
                 .thenApply(root -> root.path("data").path("url").asText(null))
                 .exceptionally(throwable -> null);
+        CompletableFuture<String> directUrl = CompletableFuture.completedFuture("https://music.163.com/song/media/outer/url?id=" + id + ".mp3");
 
-        return CompletableFuture.allOf(directUrl, standardUrl, higherUrl, exhighUrl, legacyUrl, vkeysUrl)
+        return CompletableFuture.allOf(standardUrl, higherUrl, exhighUrl, legacyUrl, vkeysUrl, directUrl)
                 .thenApply(ignored -> {
                     Set<String> urls = new LinkedHashSet<>();
-                    addCandidate(urls, directUrl.join());
                     addCandidate(urls, standardUrl.join());
                     addCandidate(urls, higherUrl.join());
                     addCandidate(urls, exhighUrl.join());
                     addCandidate(urls, legacyUrl.join());
                     addCandidate(urls, vkeysUrl.join());
+                    addCandidate(urls, directUrl.join());
 
                     if (urls.isEmpty()) {
                         throw new IllegalStateException("无法获取任何可用的歌曲播放源，请检查网易云 API 服务。");

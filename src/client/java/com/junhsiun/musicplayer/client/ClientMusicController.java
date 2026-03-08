@@ -8,10 +8,11 @@ import javazoom.jl.player.Player;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
 
 public final class ClientMusicController {
@@ -94,12 +95,16 @@ public final class ClientMusicController {
             if (!response.isSuccessful()) {
                 throw new IOException("HTTP " + response.code());
             }
-            InputStream bodyStream = response.body() == null ? null : response.body().byteStream();
-            if (bodyStream == null) {
+            ResponseBody body = response.body();
+            if (body == null) {
                 throw new IOException("空响应体");
             }
+            byte[] audioBytes = body.bytes();
+            if (audioBytes.length == 0) {
+                throw new IOException("音频数据为空");
+            }
 
-            try (BufferedInputStream inputStream = new BufferedInputStream(bodyStream)) {
+            try (BufferedInputStream inputStream = new BufferedInputStream(new ByteArrayInputStream(audioBytes))) {
                 Player currentPlayer = new Player(inputStream);
                 synchronized (this) {
                     if (Thread.currentThread().isInterrupted()) {
