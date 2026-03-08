@@ -7,6 +7,7 @@ import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
+import com.junhsiun.musicplayer.util.Messages;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -372,9 +373,7 @@ public final class MusicQueueService {
                 .filter(player -> !optedOutPlayers.contains(player.getUUID()))
                 .sorted(Comparator.comparing(player -> player.getGameProfile().name()))
                 .forEach(player -> sendPlay(player, track));
-        broadcast(server, Component.literal("正在播放: ").withStyle(ChatFormatting.GOLD)
-                .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
-                .append(Component.literal(" - " + track.artist()).withStyle(ChatFormatting.GRAY)));
+        broadcast(server, renderNowPlayingBroadcast(track));
     }
 
     private int activeListeners(MinecraftServer server) {
@@ -405,6 +404,17 @@ public final class MusicQueueService {
 
     private void broadcast(MinecraftServer server, Component message) {
         server.getPlayerList().broadcastSystemMessage(message, false);
+    }
+
+    private Component renderNowPlayingBroadcast(TrackInfo track) {
+        MutableComponent line = Component.literal("正在播放: ").withStyle(ChatFormatting.GOLD)
+                .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
+                .append(Component.literal(" - " + track.artist()).withStyle(ChatFormatting.GRAY));
+        if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
+            line.append(Component.literal(" "));
+            line.append(Messages.clickableUrl("[下载]", "点击在浏览器中打开当前歌曲直链", track.sourceUrls().getFirst(), ChatFormatting.GREEN));
+        }
+        return line;
     }
 
     private void enqueueRequest(Supplier<CompletableFuture<Void>> supplier) {

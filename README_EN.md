@@ -11,6 +11,7 @@ The server handles commands, queue state, search, synchronization, and configura
 - Let players request songs, import playlists, and inspect the current queue
 - Playlist playback mode can switch to a playlist and play it sequentially from the first track to the last
 - The now-playing view includes a clickable direct track URL that opens in the browser
+- The chat broadcast sent when a song starts also includes a clickable `Download` action
 - Paginated search results with clickable `Previous Page` and `Next Page` buttons
 - Queue pages and detail views expose clickable song, artist, playlist owner, and user entries where applicable
 - Search pages, detail pages, and queue pages include quick action links for faster navigation between now playing, queue, and related views
