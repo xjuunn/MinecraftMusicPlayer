@@ -36,7 +36,7 @@ Recommended setup:
 - Fabric Loader `0.18.4` or newer
 - Fabric API `0.141.3+1.21.11` or compatible
 - Java `21`
-- A working [NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi) instance, defaulting to `http://127.0.0.1:3000`
+- A working [NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi) instance, defaulting to `https://odlimemusicapi.vercel.app/`
 
 ## Player Commands
 

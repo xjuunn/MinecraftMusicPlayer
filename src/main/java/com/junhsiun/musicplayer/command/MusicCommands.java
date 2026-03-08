@@ -241,11 +241,11 @@ public final class MusicCommands {
                         .then(Commands.literal("baseUrl").then(Commands.argument("value", StringArgumentType.greedyString()).executes(context -> {
                             MusicPlayerConfig config = MusicPlayerConfigManager.get();
                             String value = StringArgumentType.getString(context, "value").trim();
-                            if (!config.allowCustomServer && !"default".equalsIgnoreCase(value) && !"http://127.0.0.1:3000".equalsIgnoreCase(value)) {
+                            if (!config.allowCustomServer && !"default".equalsIgnoreCase(value) && !com.junhsiun.musicplayer.config.MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL.equalsIgnoreCase(value)) {
                                 Messages.warning(context.getSource(), "管理员已禁用自定义网易云服务地址。");
                                 return 0;
                             }
-                            config.neteaseBaseUrl = "default".equalsIgnoreCase(value) ? "http://127.0.0.1:3000" : value;
+                            config.neteaseBaseUrl = "default".equalsIgnoreCase(value) ? com.junhsiun.musicplayer.config.MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL : value;
                             MusicPlayerConfigManager.save();
                             Messages.success(context.getSource(), "网易云服务地址已更新为: " + config.neteaseBaseUrl, false);
                             return 1;

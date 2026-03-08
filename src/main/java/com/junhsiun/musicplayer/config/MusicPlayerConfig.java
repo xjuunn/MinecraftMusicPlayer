@@ -1,7 +1,9 @@
 package com.junhsiun.musicplayer.config;
 
 public class MusicPlayerConfig {
-    public String neteaseBaseUrl = "http://127.0.0.1:3000";
+    public static final String DEFAULT_NETEASE_BASE_URL = "https://odlimemusicapi.vercel.app";
+
+    public String neteaseBaseUrl = DEFAULT_NETEASE_BASE_URL;
     public boolean allowCustomServer = true;
     public boolean allowSongRequest = true;
     public boolean allowPlaylistRequest = true;
