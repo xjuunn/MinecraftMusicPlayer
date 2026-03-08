@@ -37,7 +37,7 @@ public final class NeteaseApiClient {
 
     public CompletableFuture<TrackInfo> resolveSong(String id) {
         return songDetail(id).thenCompose(detail ->
-                songUrls(id).thenApply(urls -> new TrackInfo(detail.id(), detail.title(), detail.artist(), detail.artistId(), urls, detail.durationMillis()))
+                songUrls(id).thenApply(urls -> new TrackInfo(detail.id(), detail.title(), detail.artist(), detail.artistId(), detail.coverUrl(), urls, detail.durationMillis()))
         );
     }
 
@@ -219,6 +219,7 @@ public final class NeteaseApiClient {
                     song.path("name").asText(),
                     firstArtistName(song),
                     firstArtistId(song),
+                    songCoverUrl(song),
                     List.of(),
                     song.path("dt").asLong(0L)
             );
@@ -462,6 +463,18 @@ public final class NeteaseApiClient {
             return data.get(0).path("url").asText(null);
         }
         return null;
+    }
+
+    private static String songCoverUrl(JsonNode songNode) {
+        String albumCover = songNode.path("al").path("picUrl").asText("");
+        if (!albumCover.isBlank()) {
+            return albumCover;
+        }
+        String albumCoverAlt = songNode.path("album").path("picUrl").asText("");
+        if (!albumCoverAlt.isBlank()) {
+            return albumCoverAlt;
+        }
+        return "";
     }
 
     private static String playSongCommand(String songId) {

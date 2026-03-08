@@ -182,7 +182,8 @@ public final class JukeboxPlaybackService {
                     active.key(),
                     active.discData().urls(),
                     active.discData().title(),
-                    active.discData().artist()
+                    active.discData().artist(),
+                    active.discData().coverUrl()
             ));
         }
     }

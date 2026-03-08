@@ -24,6 +24,7 @@ public final class MusicDiscHelper {
     private static final String TITLE_KEY = "title";
     private static final String ARTIST_KEY = "artist";
     private static final String ARTIST_ID_KEY = "artist_id";
+    private static final String COVER_URL_KEY = "cover_url";
     private static final String DURATION_KEY = "duration";
     private static final String URLS_KEY = "urls";
     private static final Set<Item> SUPPORTED_DISCS = Set.of(
@@ -68,6 +69,7 @@ public final class MusicDiscHelper {
         root.putString(TITLE_KEY, safe(track.title()));
         root.putString(ARTIST_KEY, safe(track.artist()));
         root.putString(ARTIST_ID_KEY, safe(track.artistId()));
+        root.putString(COVER_URL_KEY, safe(track.coverUrl()));
         root.putLong(DURATION_KEY, Math.max(0L, track.durationMillis()));
         ListTag urls = new ListTag();
         for (String url : track.sourceUrls()) {
@@ -118,6 +120,7 @@ public final class MusicDiscHelper {
                 title,
                 artist,
                 root.getStringOr(ARTIST_ID_KEY, ""),
+                root.getStringOr(COVER_URL_KEY, ""),
                 urls,
                 root.getLongOr(DURATION_KEY, 0L)
         ));
@@ -162,6 +165,7 @@ public final class MusicDiscHelper {
             String title,
             String artist,
             String artistId,
+            String coverUrl,
             List<String> urls,
             long durationMillis
     ) {

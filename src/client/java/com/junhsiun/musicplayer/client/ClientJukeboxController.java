@@ -44,7 +44,7 @@ public final class ClientJukeboxController {
 
     public void handle(JukeboxMusicPayload payload) {
         switch (payload.action()) {
-            case "play" -> play(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle());
+            case "play" -> play(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl());
             case "stop" -> stop(payload.jukeboxPos());
             default -> MusicPlayerMod.LOGGER.warn("Unknown jukebox action: {}", payload.action());
         }
@@ -57,9 +57,10 @@ public final class ClientJukeboxController {
         }
     }
 
-    private void play(long jukeboxPos, List<String> urls, String title, String subtitle) {
+    private void play(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl) {
         stop(jukeboxPos);
         PlaybackHandle handle = new PlaybackHandle();
+        handle.coverUrl = coverUrl == null ? "" : coverUrl;
         Thread playbackThread = new Thread(() -> playWithFallback(jukeboxPos, handle, urls, title, subtitle), "musicplayer-jukebox-" + jukeboxPos);
         playbackThread.setDaemon(true);
         handle.thread = playbackThread;
@@ -144,6 +145,7 @@ public final class ClientJukeboxController {
     private static final class PlaybackHandle {
         private volatile Player player;
         private volatile Thread thread;
+        private volatile String coverUrl = "";
     }
 
     private static final class SpatialAudioDevice extends AudioDeviceBase {
