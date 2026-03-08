@@ -1,96 +1,106 @@
 plugins {
-	id 'fabric-loom' version "${loom_version}"
-	id 'maven-publish'
+    id 'fabric-loom' version "${loom_version}"
+    id 'maven-publish'
 }
 
 version = project.mod_version
 group = project.maven_group
 
+def minecraftVersion = project.minecraft_version
+def releaseFileBase = "${project.archives_base_name}-${project.version}-fabricmc${minecraftVersion}"
+
 base {
-	archivesName = project.archives_base_name
+    archivesName = project.archives_base_name
 }
 
 repositories {
-	// Add repositories to retrieve artifacts from in here.
-	// You should only use this when depending on other mods because
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
+    mavenCentral()
 }
 
 loom {
-	splitEnvironmentSourceSets()
+    splitEnvironmentSourceSets()
 
-	mods {
-		"musicplayer" {
-			sourceSet sourceSets.main
-			sourceSet sourceSets.client
-		}
-	}
-
+    mods {
+        musicplayer {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
 }
 
 dependencies {
-	// To change the versions see the gradle.properties file
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    minecraft "com.mojang:minecraft:${minecraftVersion}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
-	// Fabric API. This is technically optional, but you probably want it anyway.
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-	implementation 'javazoom:jlayer:1.0.1'
-	implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-	implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
-	include 'javazoom:jlayer:1.0.1'
-	
+    implementation(include('javazoom:jlayer:1.0.1'))
+    implementation(include('com.squareup.okhttp3:okhttp:4.12.0'))
+    implementation(include('com.squareup.okio:okio-jvm:3.6.0'))
+    implementation(include('org.jetbrains.kotlin:kotlin-stdlib:1.9.10'))
+    implementation(include('com.fasterxml.jackson.core:jackson-databind:2.18.2'))
+    implementation(include('com.fasterxml.jackson.core:jackson-core:2.18.2'))
+    implementation(include('com.fasterxml.jackson.core:jackson-annotations:2.18.2'))
+    implementation(include('com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2'))
 }
 
 processResources {
-	inputs.property "version", project.version
+    inputs.property 'version', project.version
+    inputs.property 'minecraft_version', project.minecraft_version
+    inputs.property 'loader_version', project.loader_version
+    inputs.property 'fabric_api_version', project.fabric_api_version
 
-	filesMatching("fabric.mod.json") {
-		expand "version": inputs.properties.version
-	}
+    filesMatching('fabric.mod.json') {
+        expand(
+                version: project.version,
+                minecraft_version: project.minecraft_version,
+                loader_version: project.loader_version,
+                fabric_api_version: project.fabric_api_version
+        )
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 17
+    options.release = 21
 }
 
 java {
-	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-	// if it is present.
-	// If you remove this line, sources will not be generated.
-	withSourcesJar()
-
-	sourceCompatibility = JavaVersion.VERSION_17
-	targetCompatibility = JavaVersion.VERSION_17
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
-jar {
-	inputs.property "archivesName", project.base.archivesName
-
-	from sourceSets.main.output
-
-	from("LICENSE") {
-		rename { "${it}_${inputs.properties.archivesName}"}
-	}
+tasks.named('jar', Jar) {
+    archiveBaseName.set(releaseFileBase)
+    archiveVersion.set('')
+    from('LICENSE') {
+        rename { "${it}_${project.archives_base_name}" }
+    }
 }
 
-// configure the maven publication
+tasks.named('sourcesJar', Jar) {
+    archiveBaseName.set(releaseFileBase)
+    archiveVersion.set('')
+    archiveClassifier.set('sources')
+}
+
+tasks.named('remapSourcesJar') {
+    archiveBaseName.set(releaseFileBase)
+    archiveVersion.set('')
+    archiveClassifier.set('sources')
+}
+
+tasks.named('remapJar') {
+    archiveBaseName.set(releaseFileBase)
+    archiveVersion.set('')
+    archiveClassifier.set('')
+}
+
 publishing {
-	publications {
-		create("mavenJava", MavenPublication) {
-			artifactId = project.archives_base_name
-			from components.java
-		}
-	}
-
-	// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-	repositories {
-		// Add repositories to publish to here.
-		// Notice: This block does NOT have the same function as the block in the top level.
-		// The repositories here will be used for publishing your artifact, not for
-		// retrieving dependencies.
-	}
+    publications {
+        create('mavenJava', MavenPublication) {
+            artifactId = project.archives_base_name
+            from components.java
+        }
+    }
 }

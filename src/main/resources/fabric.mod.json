@@ -1,34 +1,30 @@
 {
-	"schemaVersion": 1,
-	"id": "musicplayer",
-	"version": "1.0.0",
-	"name": "MusicPlayer",
-	"description": "This is an example description! Tell everyone what your mod is about!",
-	"authors": [
-		"Me!"
-	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
-	"license": "CC0-1.0",
-	"icon": "assets/musicplayer/icon.png",
-	"environment": "*",
-	"entrypoints": {
-		"main": [
-			"com.junhsiun.MusicPlayer"
-		],
-		"client": [
-			"com.junhsiun.MusicPlayerClient"
-		]
-	},
-	"depends": {
-		"fabricloader": ">=0.16.14",
-		"minecraft": "~1.20.1",
-		"java": ">=17",
-		"fabric-api": "*"
-	},
-	"suggests": {
-		"another-mod": "*"
-	}
+  "schemaVersion": 1,
+  "id": "musicplayer",
+  "version": "${version}",
+  "name": "Minecraft Music Player",
+  "description": "Client-assisted music playback for Fabric servers with NetEase search, queue and vote skip.",
+  "authors": [
+    "junhsiun"
+  ],
+  "contact": {
+    "sources": "https://github.com/junhsiun/MinecraftMusicPlayer"
+  },
+  "license": "MIT",
+  "icon": "assets/musicplayer/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.junhsiun.musicplayer.MusicPlayerMod"
+    ],
+    "client": [
+      "com.junhsiun.musicplayer.MusicPlayerClientMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=21",
+    "fabric-api": ">=${fabric_api_version}"
+  }
 }
