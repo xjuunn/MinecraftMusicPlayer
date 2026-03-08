@@ -330,8 +330,13 @@ public final class MusicQueueService {
         for (int index = start; index < end; index++) {
             QueuedTrack queuedTrack = all.get(index);
             MutableComponent line = Component.literal((index + 1) + ". ").withStyle(ChatFormatting.DARK_GRAY)
-                    .append(Component.literal(queuedTrack.title()).withStyle(ChatFormatting.GREEN))
-                    .append(Component.literal(" - " + queuedTrack.artist()).withStyle(ChatFormatting.GRAY));
+                    .append(Messages.clickableCommand(queuedTrack.title(), "点击重新点播这首歌曲", "/music play song " + queuedTrack.songId(), ChatFormatting.GREEN))
+                    .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
+            if (queuedTrack.artistCommand() != null && !queuedTrack.artistCommand().isBlank()) {
+                line.append(Messages.clickableCommand(queuedTrack.artist(), "点击查看作者详情", queuedTrack.artistCommand(), ChatFormatting.GRAY));
+            } else {
+                line.append(Component.literal(queuedTrack.artist()).withStyle(ChatFormatting.GRAY));
+            }
             lines.add(line);
         }
         return lines;
@@ -342,9 +347,7 @@ public final class MusicQueueService {
             return Component.literal("当前没有歌曲在播放。").withStyle(ChatFormatting.GRAY);
         }
         TrackInfo track = currentPlayback.track();
-        return Component.literal("当前播放: ").withStyle(ChatFormatting.GOLD)
-                .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
-                .append(Component.literal(" - " + track.artist()).withStyle(ChatFormatting.GRAY));
+        return renderCurrentTrackLine(track);
     }
 
     private void enqueueOrStart(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, TrackInfo track) {
@@ -369,8 +372,11 @@ public final class MusicQueueService {
         source.sendSuccess(() -> Component.literal("已加入队列: " + track.title()).withStyle(ChatFormatting.GREEN), false);
         if (MusicPlayerConfigManager.get().announceQueueChanges) {
             broadcast(server, Component.literal(requester.getGameProfile().name() + " 点歌: ").withStyle(ChatFormatting.GOLD)
-                    .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
-                    .append(Component.literal(" - " + track.artist()).withStyle(ChatFormatting.GRAY)));
+                    .append(Messages.clickableCommand(track.title(), "点击重新点播这首歌曲", "/music play song " + track.id(), ChatFormatting.AQUA))
+                    .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
+                    .append(track.artistId() != null && !track.artistId().isBlank()
+                            ? Messages.clickableCommand(track.artist(), "点击查看作者详情", "/music view artist " + track.artistId(), ChatFormatting.GRAY)
+                            : Component.literal(track.artist()).withStyle(ChatFormatting.GRAY)));
         }
     }
 
@@ -442,7 +448,23 @@ public final class MusicQueueService {
 
     private Component renderNowPlayingBroadcast(TrackInfo track) {
         MutableComponent line = Component.literal("正在播放: ").withStyle(ChatFormatting.GOLD)
-                .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
+                .append(Messages.clickableCommand(track.title(), "点击重新点播这首歌曲", "/music play song " + track.id(), ChatFormatting.AQUA))
+                .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
+        if (track.artistId() != null && !track.artistId().isBlank()) {
+            line.append(Messages.clickableCommand(track.artist(), "点击查看作者详情", "/music view artist " + track.artistId(), ChatFormatting.GRAY));
+        } else {
+            line.append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY));
+        }
+        if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
+            line.append(Component.literal(" "));
+            line.append(Messages.clickableUrl("[下载]", "点击在浏览器中打开当前歌曲直链", track.sourceUrls().getFirst(), ChatFormatting.GREEN));
+        }
+        return line;
+    }
+
+    private Component renderCurrentTrackLine(TrackInfo track) {
+        MutableComponent line = Component.literal("当前播放: ").withStyle(ChatFormatting.GOLD)
+                .append(Messages.clickableCommand(track.title(), "点击重新点播这首歌曲", "/music play song " + track.id(), ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
         if (track.artistId() != null && !track.artistId().isBlank()) {
             line.append(Messages.clickableCommand(track.artist(), "点击查看作者详情", "/music view artist " + track.artistId(), ChatFormatting.GRAY));
