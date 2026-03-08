@@ -14,6 +14,7 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
+import java.util.ArrayList;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -57,10 +58,24 @@ public final class ClientJukeboxController {
         }
     }
 
+    public List<JukeboxVisualState> getVisualStates() {
+        List<JukeboxVisualState> states = new ArrayList<>(playbackHandles.size());
+        for (Map.Entry<Long, PlaybackHandle> entry : playbackHandles.entrySet()) {
+            PlaybackHandle handle = entry.getValue();
+            if (handle == null || handle.coverUrl == null || handle.coverUrl.isBlank()) {
+                continue;
+            }
+            states.add(new JukeboxVisualState(BlockPos.of(entry.getKey()), handle.coverUrl, handle.startedAtMillis));
+        }
+        return states;
+    }
+
     private void play(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl) {
         stop(jukeboxPos);
         PlaybackHandle handle = new PlaybackHandle();
         handle.coverUrl = coverUrl == null ? "" : coverUrl;
+        handle.startedAtMillis = System.currentTimeMillis();
+        CoverArtTextureCache.getInstance().request(handle.coverUrl);
         Thread playbackThread = new Thread(() -> playWithFallback(jukeboxPos, handle, urls, title, subtitle), "musicplayer-jukebox-" + jukeboxPos);
         playbackThread.setDaemon(true);
         handle.thread = playbackThread;
@@ -146,6 +161,10 @@ public final class ClientJukeboxController {
         private volatile Player player;
         private volatile Thread thread;
         private volatile String coverUrl = "";
+        private volatile long startedAtMillis;
+    }
+
+    public record JukeboxVisualState(BlockPos pos, String coverUrl, long startedAtMillis) {
     }
 
     private static final class SpatialAudioDevice extends AudioDeviceBase {
