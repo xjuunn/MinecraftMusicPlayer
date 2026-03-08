@@ -18,5 +18,6 @@ public class MusicPlayerConfig {
     public int searchLimit = 8;
     public int maxQueueSize = 40;
     public int playlistQueueLimit = 20;
+    public int queueCacheSize = 3;
     public double voteSkipPercent = 0.6D;
 }

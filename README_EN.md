@@ -17,6 +17,7 @@ The server handles commands, queue state, search, synchronization, and configura
 - Search pages, detail pages, and queue pages include quick action links for faster navigation between now playing, queue, and related views
 - Playlist details, user playlists, and artist views fetch data in batches so full result sets can be shown instead of only the first few items
 - Automatic progression to the next track
+- The server automatically pre-caches the next few queued tracks, with `3` tracks cached by default
 - Vote skip support
 - Smart duplicate request suppression so rapid repeated clicks do not spam the queue with the same track
 - Multi-source playback fallback when a source fails
@@ -142,6 +143,7 @@ On the playlist detail page, the top action is `Play Playlist`:
 | `/music admin set searchLimit <3-20>` | Set the number of search results per page |
 | `/music admin set maxQueueSize <1-200>` | Set the queue capacity |
 | `/music admin set playlistQueueLimit <1-100>` | Set the maximum number of imported playlist tracks |
+| `/music admin set queueCacheSize <0-20>` | Set how many queued tracks are pre-cached on the server, `0` disables it |
 | `/music admin set voteSkipPercent <0.1-1.0>` | Set the vote skip threshold |
 
 ## Configuration
@@ -171,9 +173,18 @@ Default configuration example:
   "searchLimit": 8,
   "maxQueueSize": 40,
   "playlistQueueLimit": 20,
+  "queueCacheSize": 3,
   "voteSkipPercent": 0.6
 }
 ```
+
+## Queue Cache
+
+- The server automatically resolves and caches the next few queued tracks
+- The default cache size is `3`
+- When playback advances to the next track, cached data is reused to reduce waiting time
+- Admins can adjust this with `/music admin set queueCacheSize <0-20>`
+- Set it to `0` to disable queue pre-caching
 
 ## Source Selection and Fallback
 

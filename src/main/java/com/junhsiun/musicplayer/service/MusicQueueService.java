@@ -21,7 +21,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -34,6 +36,7 @@ public final class MusicQueueService {
     private final Set<UUID> optedOutPlayers = new HashSet<>();
     private final Set<UUID> voteSkipPlayers = new HashSet<>();
     private final Object requestPipelineLock = new Object();
+    private final Map<String, CompletableFuture<TrackInfo>> trackCache = new LinkedHashMap<>();
 
     private CurrentPlayback currentPlayback;
     private CompletableFuture<Void> requestPipeline = CompletableFuture.completedFuture(null);
@@ -87,6 +90,7 @@ public final class MusicQueueService {
     public void shutdown(MinecraftServer server) {
         stop(server, "服务器正在关闭，已停止播放。");
         queue.clear();
+        trackCache.clear();
         voteSkipPlayers.clear();
         optedOutPlayers.clear();
         synchronized (requestPipelineLock) {
@@ -98,6 +102,10 @@ public final class MusicQueueService {
         if (currentPlayback != null && !optedOutPlayers.contains(player.getUUID())) {
             sendPlay(player, currentPlayback.track());
         }
+    }
+
+    public void refreshCacheSettings() {
+        refreshTrackCache();
     }
 
     public void handleDisconnect(ServerPlayer player) {
@@ -156,7 +164,7 @@ public final class MusicQueueService {
             source.sendSuccess(() -> Component.literal("这首歌已经在播放或队列中，无需重复点歌。").withStyle(ChatFormatting.YELLOW), false);
             return;
         }
-        enqueueRequest(() -> MusicPlayerMod.netease().resolveSong(songId).handle((track, throwable) -> {
+        enqueueRequest(() -> resolveTrack(songId).handle((track, throwable) -> {
             server.execute(() -> {
                 if (throwable != null) {
                     source.sendFailure(Component.literal("点歌失败: " + rootMessage(throwable)));
@@ -208,9 +216,10 @@ public final class MusicQueueService {
                             requester.getGameProfile().name()
                     ));
                 }
+                refreshTrackCache();
 
                 int omittedCount = total - playableCount;
-                MusicPlayerMod.netease().resolveSong(firstTrack.id()).whenComplete((track, trackThrowable) -> server.execute(() -> {
+                resolveTrack(firstTrack.id()).whenComplete((track, trackThrowable) -> server.execute(() -> {
                     if (trackThrowable != null) {
                         source.sendFailure(Component.literal("歌单首曲加载失败: " + rootMessage(trackThrowable)));
                         if (queue.isEmpty()) {
@@ -263,11 +272,13 @@ public final class MusicQueueService {
     public void stop(MinecraftServer server, String reason) {
         currentPlayback = null;
         voteSkipPlayers.clear();
+        refreshTrackCache();
         server.getPlayerList().getPlayers().forEach(player -> sendStop(player, reason));
     }
 
     public void clearQueue(CommandSourceStack source) {
         queue.clear();
+        refreshTrackCache();
         source.sendSuccess(() -> Component.literal("播放队列已清空。"), false);
     }
 
@@ -334,6 +345,7 @@ public final class MusicQueueService {
                 requester.getUUID(),
                 requester.getGameProfile().name()
         ));
+        refreshTrackCache();
         source.sendSuccess(() -> Component.literal("已加入队列: " + track.title()).withStyle(ChatFormatting.GREEN), false);
         if (MusicPlayerConfigManager.get().announceQueueChanges) {
             broadcast(server, Component.literal(requester.getGameProfile().name() + " 点歌: ").withStyle(ChatFormatting.GOLD)
@@ -349,7 +361,8 @@ public final class MusicQueueService {
             return;
         }
         QueuedTrack next = queue.removeFirst();
-        MusicPlayerMod.netease().resolveSong(next.songId()).whenComplete((track, throwable) -> server.execute(() -> {
+        refreshTrackCache();
+        resolveTrack(next.songId()).whenComplete((track, throwable) -> server.execute(() -> {
             if (throwable != null) {
                 broadcast(server, Component.literal("跳过不可播放的歌曲: " + next.title()).withStyle(ChatFormatting.RED));
                 advance(server, null);
@@ -369,6 +382,7 @@ public final class MusicQueueService {
                 : FALLBACK_TRACK_TIMEOUT_MS;
         currentPlayback = new CurrentPlayback(track, now, now + Math.max(FALLBACK_TRACK_TIMEOUT_MS, fallbackDuration));
         voteSkipPlayers.clear();
+        refreshTrackCache();
         server.getPlayerList().getPlayers().stream()
                 .filter(player -> !optedOutPlayers.contains(player.getUUID()))
                 .sorted(Comparator.comparing(player -> player.getGameProfile().name()))
@@ -421,6 +435,70 @@ public final class MusicQueueService {
         synchronized (requestPipelineLock) {
             requestPipeline = requestPipeline.handle((ignored, throwable) -> null)
                     .thenCompose(ignored -> supplier.get().exceptionally(throwable -> null));
+        }
+    }
+
+    private CompletableFuture<TrackInfo> resolveTrack(String songId) {
+        synchronized (trackCache) {
+            CompletableFuture<TrackInfo> cached = trackCache.get(songId);
+            if (cached != null) {
+                return cached;
+            }
+            CompletableFuture<TrackInfo> future = MusicPlayerMod.netease().resolveSong(songId);
+            trackCache.put(songId, future);
+            future.whenComplete((track, throwable) -> {
+                if (throwable != null) {
+                    synchronized (trackCache) {
+                        trackCache.remove(songId);
+                    }
+                }
+            });
+            trimTrackCacheLocked();
+            return future;
+        }
+    }
+
+    private void refreshTrackCache() {
+        int cacheSize = Math.max(0, MusicPlayerConfigManager.get().queueCacheSize);
+        synchronized (trackCache) {
+            if (cacheSize == 0) {
+                trackCache.clear();
+                return;
+            }
+            List<String> keep = new ArrayList<>(cacheSize);
+            for (QueuedTrack queuedTrack : queue) {
+                if (keep.size() >= cacheSize) {
+                    break;
+                }
+                keep.add(queuedTrack.songId());
+            }
+            trackCache.keySet().removeIf(songId -> !keep.contains(songId));
+            for (String songId : keep) {
+                trackCache.computeIfAbsent(songId, key -> {
+                    CompletableFuture<TrackInfo> future = MusicPlayerMod.netease().resolveSong(key);
+                    future.whenComplete((track, throwable) -> {
+                        if (throwable != null) {
+                            synchronized (trackCache) {
+                                trackCache.remove(key);
+                            }
+                        }
+                    });
+                    return future;
+                });
+            }
+            trimTrackCacheLocked();
+        }
+    }
+
+    private void trimTrackCacheLocked() {
+        int cacheSize = Math.max(0, MusicPlayerConfigManager.get().queueCacheSize);
+        if (cacheSize == 0) {
+            trackCache.clear();
+            return;
+        }
+        while (trackCache.size() > cacheSize) {
+            String firstKey = trackCache.keySet().iterator().next();
+            trackCache.remove(firstKey);
         }
     }
 

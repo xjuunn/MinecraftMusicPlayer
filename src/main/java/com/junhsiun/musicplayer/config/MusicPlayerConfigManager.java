@@ -72,6 +72,9 @@ public final class MusicPlayerConfigManager {
         if (config.readTimeoutSeconds <= 0) {
             config.readTimeoutSeconds = 20;
         }
+        if (config.queueCacheSize < 0) {
+            config.queueCacheSize = 3;
+        }
     }
 
     private static void migrateLegacyConfigFile() {
