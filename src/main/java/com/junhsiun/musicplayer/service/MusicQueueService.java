@@ -22,12 +22,17 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 public final class MusicQueueService {
     private final Deque<QueuedTrack> queue = new ArrayDeque<>();
     private final Set<UUID> optedOutPlayers = new HashSet<>();
     private final Set<UUID> voteSkipPlayers = new HashSet<>();
+    private final Object requestPipelineLock = new Object();
+
     private CurrentPlayback currentPlayback;
+    private CompletableFuture<Void> requestPipeline = CompletableFuture.completedFuture(null);
 
     public boolean isPlaying() { return currentPlayback != null; }
     public int queuedCount() { return queue.size(); }
@@ -36,7 +41,9 @@ public final class MusicQueueService {
     public void tick(MinecraftServer server) {
         if (currentPlayback == null) return;
         MusicPlayerConfig config = MusicPlayerConfigManager.get();
-        if (config.autoAdvance && System.currentTimeMillis() >= currentPlayback.expectedEndAt()) advance(server, "当前歌曲播放结束，自动切换到下一首。");
+        if (config.autoAdvance && System.currentTimeMillis() >= currentPlayback.expectedEndAt()) {
+            advance(server, "当前歌曲播放结束，自动切换到下一首。");
+        }
     }
 
     public void shutdown(MinecraftServer server) {
@@ -44,6 +51,9 @@ public final class MusicQueueService {
         queue.clear();
         voteSkipPlayers.clear();
         optedOutPlayers.clear();
+        synchronized (requestPipelineLock) {
+            requestPipeline = CompletableFuture.completedFuture(null);
+        }
     }
 
     public void handleJoin(ServerPlayer player) { if (currentPlayback != null && !optedOutPlayers.contains(player.getUUID())) sendPlay(player, currentPlayback.track()); }
@@ -54,26 +64,32 @@ public final class MusicQueueService {
     public void requestSong(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String songId) {
         if (!MusicPlayerConfigManager.get().allowSongRequest) { source.sendFailure(Component.literal("管理员已关闭点歌功能。")); return; }
         if (queue.size() >= MusicPlayerConfigManager.get().maxQueueSize) { source.sendFailure(Component.literal("播放队列已满，请稍后再试。")); return; }
-        MusicPlayerMod.netease().resolveSong(songId).whenComplete((track, throwable) -> server.execute(() -> {
-            if (throwable != null) { source.sendFailure(Component.literal("点歌失败: " + rootMessage(throwable))); return; }
-            enqueueOrStart(server, source, requester, track);
+        enqueueRequest(() -> MusicPlayerMod.netease().resolveSong(songId).handle((track, throwable) -> {
+            server.execute(() -> {
+                if (throwable != null) { source.sendFailure(Component.literal("点歌失败: " + rootMessage(throwable))); return; }
+                enqueueOrStart(server, source, requester, track);
+            });
+            return null;
         }));
     }
 
     public void requestPlaylist(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String playlistId) {
         if (!MusicPlayerConfigManager.get().allowPlaylistRequest) { source.sendFailure(Component.literal("管理员已关闭歌单点播功能。")); return; }
-        MusicPlayerMod.netease().playlistDetail(playlistId).whenComplete((playlist, throwable) -> server.execute(() -> {
-            if (throwable != null) { source.sendFailure(Component.literal("加载歌单失败: " + rootMessage(throwable))); return; }
-            if (playlist.tracks().isEmpty()) { source.sendFailure(Component.literal("这个歌单没有可播放的歌曲。")); return; }
-            int added = 0; int playlistLimit = MusicPlayerConfigManager.get().playlistQueueLimit; int queueLimit = MusicPlayerConfigManager.get().maxQueueSize;
-            for (SearchEntry entry : playlist.tracks()) {
-                if (added >= playlistLimit || queue.size() >= queueLimit) break;
-                queue.addLast(new QueuedTrack(entry.id(), entry.title(), entry.subtitle(), requester.getUUID(), requester.getGameProfile().name()));
-                added++;
-            }
-            int total = playlist.tracks().size(); int finalAdded = added;
-            source.sendSuccess(() -> Component.literal("已将歌单《" + playlist.title() + "》加入队列，新增 " + finalAdded + "/" + total + " 首。").withStyle(ChatFormatting.GREEN), false);
-            if (currentPlayback == null) advance(server, null);
+        enqueueRequest(() -> MusicPlayerMod.netease().playlistDetail(playlistId).handle((playlist, throwable) -> {
+            server.execute(() -> {
+                if (throwable != null) { source.sendFailure(Component.literal("加载歌单失败: " + rootMessage(throwable))); return; }
+                if (playlist.tracks().isEmpty()) { source.sendFailure(Component.literal("这个歌单没有可播放的歌曲。")); return; }
+                int added = 0; int playlistLimit = MusicPlayerConfigManager.get().playlistQueueLimit; int queueLimit = MusicPlayerConfigManager.get().maxQueueSize;
+                for (SearchEntry entry : playlist.tracks()) {
+                    if (added >= playlistLimit || queue.size() >= queueLimit) break;
+                    queue.addLast(new QueuedTrack(entry.id(), entry.title(), entry.subtitle(), requester.getUUID(), requester.getGameProfile().name()));
+                    added++;
+                }
+                int total = playlist.tracks().size(); int finalAdded = added;
+                source.sendSuccess(() -> Component.literal("已将歌单《" + playlist.title() + "》加入队列，新增 " + finalAdded + "/" + total + " 首。").withStyle(ChatFormatting.GREEN), false);
+                if (currentPlayback == null) advance(server, null);
+            });
+            return null;
         }));
     }
 
@@ -151,6 +167,7 @@ public final class MusicQueueService {
     private void sendPlay(ServerPlayer player, TrackInfo track) { if (ServerPlayNetworking.canSend(player, MusicControlPayload.TYPE)) ServerPlayNetworking.send(player, MusicControlPayload.play(track.sourceUrls(), track.title(), track.artist())); }
     private void sendStop(ServerPlayer player, String reason) { if (ServerPlayNetworking.canSend(player, MusicControlPayload.TYPE)) ServerPlayNetworking.send(player, MusicControlPayload.stop(reason)); }
     private void broadcast(MinecraftServer server, Component message) { server.getPlayerList().broadcastSystemMessage(message, false); }
+    private void enqueueRequest(Supplier<CompletableFuture<Void>> supplier) { synchronized (requestPipelineLock) { requestPipeline = requestPipeline.handle((ignored, throwable) -> null).thenCompose(ignored -> supplier.get().exceptionally(throwable -> null)); } }
     private static String rootMessage(Throwable throwable) { Throwable current = throwable; while (current.getCause() != null) current = current.getCause(); return current.getMessage() == null ? current.toString() : current.getMessage(); }
     private record CurrentPlayback(TrackInfo track, long startedAt, long expectedEndAt) {}
     private record QueuedTrack(String songId, String title, String artist, UUID requesterId, String requesterName) {}
