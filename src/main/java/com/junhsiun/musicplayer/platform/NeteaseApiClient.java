@@ -10,12 +10,19 @@ import com.junhsiun.musicplayer.model.PlaylistInfo;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.model.UserPlaylistView;
+import okhttp3.Dns;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 
 import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.UnknownHostException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,8 +39,6 @@ public final class NeteaseApiClient {
         thread.setDaemon(true);
         return thread;
     });
-
-    private final OkHttpClient client = new OkHttpClient.Builder().build();
 
     public CompletableFuture<TrackInfo> resolveSong(String id) {
         return songDetail(id).thenCompose(detail ->
@@ -217,7 +222,15 @@ public final class NeteaseApiClient {
             for (int index = 0; index + 1 < queryPairs.length; index += 2) {
                 builder.addQueryParameter(queryPairs[index], queryPairs[index + 1]);
             }
-            Request request = new Request.Builder().url(builder.build()).get().build();
+
+            Request request = new Request.Builder()
+                    .url(builder.build())
+                    .header("User-Agent", "MinecraftMusicPlayer/2.0")
+                    .header("Accept", "application/json,text/plain,*/*")
+                    .get()
+                    .build();
+
+            OkHttpClient client = createHttpClient();
             try (Response response = client.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
                     throw new IOException("HTTP " + response.code());
@@ -229,6 +242,41 @@ public final class NeteaseApiClient {
                 throw new RuntimeException(exception);
             }
         }, EXECUTOR);
+    }
+
+    private OkHttpClient createHttpClient() {
+        MusicPlayerConfig config = MusicPlayerConfigManager.get();
+        OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                .connectTimeout(Duration.ofSeconds(config.connectTimeoutSeconds))
+                .readTimeout(Duration.ofSeconds(config.readTimeoutSeconds))
+                .callTimeout(Duration.ofSeconds(config.connectTimeoutSeconds + config.readTimeoutSeconds));
+
+        if (config.proxy != null && !config.proxy.isBlank()) {
+            String[] parts = config.proxy.trim().split(":");
+            if (parts.length == 2) {
+                try {
+                    int port = Integer.parseInt(parts[1]);
+                    builder.proxy(new Proxy(Proxy.Type.HTTP, new InetSocketAddress(parts[0], port)));
+                } catch (NumberFormatException exception) {
+                    MusicPlayerMod.LOGGER.warn("无效的代理端口: {}", config.proxy);
+                }
+            } else {
+                MusicPlayerMod.LOGGER.warn("无效的代理格式，应为 host:port，当前值: {}", config.proxy);
+            }
+        }
+
+        if (config.preferIpv4) {
+            builder.dns(hostname -> {
+                List<InetAddress> all = Dns.SYSTEM.lookup(hostname);
+                List<InetAddress> ipv4 = all.stream().filter(address -> address instanceof Inet4Address).toList();
+                if (!ipv4.isEmpty()) {
+                    return ipv4;
+                }
+                return all;
+            });
+        }
+
+        return builder.build();
     }
 
     private static String baseUrl() {
