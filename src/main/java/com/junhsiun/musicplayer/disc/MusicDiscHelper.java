@@ -143,7 +143,7 @@ public final class MusicDiscHelper {
             lines.add(Component.literal("时长: " + formatDuration(track.durationMillis())).withStyle(ChatFormatting.DARK_AQUA));
         }
         lines.add(Component.literal("音源数量: " + sourceCount).withStyle(ChatFormatting.DARK_AQUA));
-        lines.add(Component.literal("对唱片机使用即可播放").withStyle(ChatFormatting.GREEN));
+        lines.add(Component.literal("放入唱片机即可播放").withStyle(ChatFormatting.GREEN));
         return new ItemLore(lines);
     }
 

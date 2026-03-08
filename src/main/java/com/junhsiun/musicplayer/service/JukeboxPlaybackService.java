@@ -116,6 +116,9 @@ public final class JukeboxPlaybackService {
     }
 
     private boolean isStillValid(ServerLevel level, ActiveJukebox active) {
+        if (!level.isLoaded(active.pos())) {
+            return false;
+        }
         BlockState state = level.getBlockState(active.pos());
         if (!(state.getBlock() instanceof JukeboxBlock) || !state.getValue(JukeboxBlock.HAS_RECORD)) {
             return false;
@@ -125,7 +128,10 @@ public final class JukeboxPlaybackService {
             return false;
         }
         return MusicDiscHelper.read(jukebox.getTheItem())
-                .map(data -> data.trackId().equals(active.discData().trackId()) && data.title().equals(active.discData().title()))
+                .filter(data -> !data.urls().isEmpty())
+                .map(data -> data.trackId().equals(active.discData().trackId())
+                        && data.title().equals(active.discData().title())
+                        && data.artist().equals(active.discData().artist()))
                 .orElse(false);
     }
 
