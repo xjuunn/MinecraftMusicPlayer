@@ -12,6 +12,7 @@ The server handles commands, queue state, search, synchronization, and configura
 - The now-playing view includes a clickable direct track URL that opens in the browser
 - Paginated search results with clickable `Previous Page` and `Next Page` buttons
 - Queue pages and detail views expose clickable song, artist, playlist owner, and user entries where applicable
+- Search pages, detail pages, and queue pages include quick action links for faster navigation between now playing, queue, and related views
 - Automatic progression to the next track
 - Vote skip support
 - Smart duplicate request suppression so rapid repeated clicks do not spam the queue with the same track
@@ -96,6 +97,14 @@ Each search page shows:
 - a clickable `Next Page` button when more results are likely available
 - the current page number
 
+Most result pages also include quick action links such as:
+
+- `Now Playing`
+- `Queue`
+- `Repeat Search`
+- `Owner Details`
+- `Refresh Artist`
+
 ## Admin Commands
 
 | Command | Description |
@@ -136,6 +145,7 @@ Default configuration example:
 {
   "neteaseBaseUrl": "https://mycelis.dpdns.org/",
   "proxy": "",
+  "useSystemProxy": true,
   "preferIpv4": true,
   "allowCustomServer": true,
   "allowSongRequest": true,
