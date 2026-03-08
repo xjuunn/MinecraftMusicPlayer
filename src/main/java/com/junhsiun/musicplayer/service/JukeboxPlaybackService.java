@@ -1,8 +1,8 @@
 package com.junhsiun.musicplayer.service;
 
+import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper.DiscTrackData;
-import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -100,40 +100,39 @@ public final class JukeboxPlaybackService {
     }
 
     private void startPlayback(ServerLevel level, BlockPos pos, DiscTrackData discData) {
+        ActiveJukebox active = startPlaybackResolved(level, pos, discData);
         if (discData.trackId() != null && !discData.trackId().isBlank()) {
             MusicPlayerMod.netease().resolveSong(discData.trackId()).whenComplete((track, throwable) ->
-                    level.getServer().execute(() -> {
-                        DiscTrackData resolved = resolveDiscData(discData, track, throwable);
-                        startPlaybackResolved(level, pos, resolved);
-                    })
+                    level.getServer().execute(() -> refreshPlaybackData(pos, active, discData, track, throwable))
             );
-            return;
         }
-        startPlaybackResolved(level, pos, discData);
     }
 
-    private void startPlaybackResolved(ServerLevel level, BlockPos pos, DiscTrackData discData) {
+    private ActiveJukebox startPlaybackResolved(ServerLevel level, BlockPos pos, DiscTrackData discData) {
         long key = pos.asLong();
         ActiveJukebox existing = activeJukeboxes.remove(key);
         if (existing != null) {
             stopPlayback(level.getServer(), existing);
         }
 
-        ActiveJukebox active = new ActiveJukebox(
-                key,
-                level.dimension(),
-                pos.immutable(),
-                discData,
-                new HashSet<>()
-        );
+        ActiveJukebox active = new ActiveJukebox(key, level.dimension(), pos.immutable(), discData);
         activeJukeboxes.put(key, active);
         syncListeners(level, active);
+        return active;
+    }
+
+    private void refreshPlaybackData(BlockPos pos, ActiveJukebox expectedActive, DiscTrackData original, TrackInfo track, Throwable throwable) {
+        ActiveJukebox current = activeJukeboxes.get(pos.asLong());
+        if (current == null || current != expectedActive) {
+            return;
+        }
+        current.setDiscData(resolveDiscData(original, track, throwable));
     }
 
     private DiscTrackData resolveDiscData(DiscTrackData original, TrackInfo track, Throwable throwable) {
         if (throwable != null || track == null || track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
             if (throwable != null) {
-                MusicPlayerMod.LOGGER.warn("刷新唱片机音乐源失败，继续使用刻录时保存的音源: {}", original.trackId(), throwable);
+                MusicPlayerMod.LOGGER.warn("??????????????????????: {}", original.trackId(), throwable);
             }
             return original;
         }
@@ -227,12 +226,42 @@ public final class JukeboxPlaybackService {
         }
     }
 
-    private record ActiveJukebox(
-            long key,
-            ResourceKey<Level> dimension,
-            BlockPos pos,
-            DiscTrackData discData,
-            Set<UUID> listeners
-    ) {
+    private static final class ActiveJukebox {
+        private final long key;
+        private final ResourceKey<Level> dimension;
+        private final BlockPos pos;
+        private final Set<UUID> listeners = new HashSet<>();
+        private volatile DiscTrackData discData;
+
+        private ActiveJukebox(long key, ResourceKey<Level> dimension, BlockPos pos, DiscTrackData discData) {
+            this.key = key;
+            this.dimension = dimension;
+            this.pos = pos;
+            this.discData = discData;
+        }
+
+        private long key() {
+            return key;
+        }
+
+        private ResourceKey<Level> dimension() {
+            return dimension;
+        }
+
+        private BlockPos pos() {
+            return pos;
+        }
+
+        private DiscTrackData discData() {
+            return discData;
+        }
+
+        private void setDiscData(DiscTrackData discData) {
+            this.discData = discData;
+        }
+
+        private Set<UUID> listeners() {
+            return listeners;
+        }
     }
 }
