@@ -1,7 +1,7 @@
 package com.junhsiun.musicplayer.config;
 
 public class MusicPlayerConfig {
-    public static final String DEFAULT_NETEASE_BASE_URL = "https://odlimemusicapi.vercel.app";
+    public static final String DEFAULT_NETEASE_BASE_URL = "https://mycelis.dpdns.org/";
 
     public String neteaseBaseUrl = DEFAULT_NETEASE_BASE_URL;
     public String proxy = "";

@@ -37,7 +37,7 @@ Recommended setup:
 - Fabric Loader `0.18.4` or newer
 - Fabric API `0.141.3+1.21.11` or compatible
 - Java `21`
-- A reachable NetEase-related API service, defaulting to `https://odlimemusicapi.vercel.app`
+- A reachable NetEase-related API service, defaulting to `https://mycelis.dpdns.org/`
 
 ## Installation
 
@@ -54,7 +54,7 @@ Place the mod jar and `Fabric API` in the client `mods` directory.
 The default configuration uses:
 
 ```text
-https://odlimemusicapi.vercel.app
+https://mycelis.dpdns.org/
 ```
 
 Admins can change the endpoint by command or reset it back to the default value.
@@ -131,7 +131,7 @@ Default configuration example:
 
 ```json
 {
-  "neteaseBaseUrl": "https://odlimemusicapi.vercel.app",
+  "neteaseBaseUrl": "https://mycelis.dpdns.org/",
   "proxy": "",
   "preferIpv4": true,
   "allowCustomServer": true,
