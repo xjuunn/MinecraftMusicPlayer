@@ -61,6 +61,7 @@ public final class MusicCommands {
         source.sendSuccess(() -> Component.literal("/music play song <歌曲ID>").withStyle(ChatFormatting.GRAY), false);
         source.sendSuccess(() -> Component.literal("/music play playlist <歌单ID>").withStyle(ChatFormatting.GRAY), false);
         source.sendSuccess(() -> Component.literal("/music search song <关键词>").withStyle(ChatFormatting.GRAY), false);
+        source.sendSuccess(() -> Component.literal("/music search song page <页码> <关键词>").withStyle(ChatFormatting.GRAY), false);
         source.sendSuccess(() -> Component.literal("/music search artist <关键词>").withStyle(ChatFormatting.GRAY), false);
         source.sendSuccess(() -> Component.literal("/music search playlist <关键词>").withStyle(ChatFormatting.GRAY), false);
         source.sendSuccess(() -> Component.literal("/music search user <关键词>").withStyle(ChatFormatting.GRAY), false);
@@ -141,31 +142,31 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> search() {
         return Commands.literal("search")
-                .then(Commands.literal("song").then(keywordArgument("keyword", (source, keyword) -> {
-                    loading(source, "正在搜索歌曲，请稍候...");
+                .then(pagedSearch("song", "正在搜索歌曲，请稍候...", (source, keyword, page) -> {
                     MinecraftServer server = source.getServer();
-                    MusicPlayerMod.netease().searchSongs(keyword).whenComplete((results, throwable) -> server.execute(() -> sendSongResults(source, results, throwable)));
-                })))
-                .then(Commands.literal("artist").then(keywordArgument("keyword", (source, keyword) -> {
-                    loading(source, "正在搜索作者，请稍候...");
+                    MusicPlayerMod.netease().searchSongs(keyword, page)
+                            .whenComplete((results, throwable) -> server.execute(() -> sendSongResults(source, keyword, page, results, throwable)));
+                }))
+                .then(pagedSearch("artist", "正在搜索作者，请稍候...", (source, keyword, page) -> {
                     MinecraftServer server = source.getServer();
-                    MusicPlayerMod.netease().searchArtists(keyword).whenComplete((results, throwable) -> server.execute(() -> sendArtistResults(source, results, throwable)));
-                })))
-                .then(Commands.literal("author").then(keywordArgument("keyword", (source, keyword) -> {
-                    loading(source, "正在搜索作者，请稍候...");
+                    MusicPlayerMod.netease().searchArtists(keyword, page)
+                            .whenComplete((results, throwable) -> server.execute(() -> sendArtistResults(source, keyword, page, results, throwable)));
+                }))
+                .then(pagedSearch("author", "正在搜索作者，请稍候...", (source, keyword, page) -> {
                     MinecraftServer server = source.getServer();
-                    MusicPlayerMod.netease().searchArtists(keyword).whenComplete((results, throwable) -> server.execute(() -> sendArtistResults(source, results, throwable)));
-                })))
-                .then(Commands.literal("playlist").then(keywordArgument("keyword", (source, keyword) -> {
-                    loading(source, "正在搜索歌单，请稍候...");
+                    MusicPlayerMod.netease().searchArtists(keyword, page)
+                            .whenComplete((results, throwable) -> server.execute(() -> sendArtistResults(source, keyword, page, results, throwable)));
+                }))
+                .then(pagedSearch("playlist", "正在搜索歌单，请稍候...", (source, keyword, page) -> {
                     MinecraftServer server = source.getServer();
-                    MusicPlayerMod.netease().searchPlaylists(keyword).whenComplete((results, throwable) -> server.execute(() -> sendPlaylistResults(source, results, throwable)));
-                })))
-                .then(Commands.literal("user").then(keywordArgument("keyword", (source, keyword) -> {
-                    loading(source, "正在搜索用户，请稍候...");
+                    MusicPlayerMod.netease().searchPlaylists(keyword, page)
+                            .whenComplete((results, throwable) -> server.execute(() -> sendPlaylistResults(source, keyword, page, results, throwable)));
+                }))
+                .then(pagedSearch("user", "正在搜索用户，请稍候...", (source, keyword, page) -> {
                     MinecraftServer server = source.getServer();
-                    MusicPlayerMod.netease().searchUsers(keyword).whenComplete((results, throwable) -> server.execute(() -> sendUserResults(source, results, throwable)));
-                })));
+                    MusicPlayerMod.netease().searchUsers(keyword, page)
+                            .whenComplete((results, throwable) -> server.execute(() -> sendUserResults(source, keyword, page, results, throwable)));
+                }));
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> view() {
@@ -243,11 +244,14 @@ public final class MusicCommands {
                         .then(Commands.literal("baseUrl").then(Commands.argument("value", StringArgumentType.greedyString()).executes(context -> {
                             MusicPlayerConfig config = MusicPlayerConfigManager.get();
                             String value = StringArgumentType.getString(context, "value").trim();
-                            if (!config.allowCustomServer && !"default".equalsIgnoreCase(value) && !com.junhsiun.musicplayer.config.MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL.equalsIgnoreCase(value)) {
+                            if (!config.allowCustomServer && !"default".equalsIgnoreCase(value)
+                                    && !com.junhsiun.musicplayer.config.MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL.equalsIgnoreCase(value)) {
                                 Messages.warning(context.getSource(), "管理员已禁用自定义网易云服务地址。");
                                 return 0;
                             }
-                            config.neteaseBaseUrl = "default".equalsIgnoreCase(value) ? com.junhsiun.musicplayer.config.MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL : value;
+                            config.neteaseBaseUrl = "default".equalsIgnoreCase(value)
+                                    ? com.junhsiun.musicplayer.config.MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL
+                                    : value;
                             MusicPlayerConfigManager.save();
                             Messages.success(context.getSource(), "网易云服务地址已更新为: " + config.neteaseBaseUrl, false);
                             return 1;
@@ -274,11 +278,21 @@ public final class MusicCommands {
                         .then(doubleSetting("voteSkipPercent", 0.1D, 1.0D, value -> MusicPlayerConfigManager.get().voteSkipPercent = value)));
     }
 
-    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> keywordArgument(String name, SearchExecutor executor) {
-        return Commands.argument(name, StringArgumentType.greedyString()).executes(context -> {
-            executor.execute(context.getSource(), StringArgumentType.getString(context, name));
-            return 1;
-        });
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> pagedSearch(String literal, String loadingText, PagedSearchExecutor executor) {
+        return Commands.literal(literal)
+                .then(Commands.argument("keyword", StringArgumentType.greedyString()).executes(context -> {
+                    loading(context.getSource(), loadingText);
+                    executor.execute(context.getSource(), StringArgumentType.getString(context, "keyword"), 1);
+                    return 1;
+                }))
+                .then(Commands.literal("page")
+                        .then(Commands.argument("page", IntegerArgumentType.integer(1))
+                                .then(Commands.argument("keyword", StringArgumentType.greedyString()).executes(context -> {
+                                    int page = IntegerArgumentType.getInteger(context, "page");
+                                    loading(context.getSource(), loadingText);
+                                    executor.execute(context.getSource(), StringArgumentType.getString(context, "keyword"), page);
+                                    return 1;
+                                }))));
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> boolSetting(String name, java.util.function.Consumer<Boolean> setter) {
@@ -311,7 +325,7 @@ public final class MusicCommands {
         }));
     }
 
-    private static void sendSongResults(CommandSourceStack source, List<SearchEntry> results, Throwable throwable) {
+    private static void sendSongResults(CommandSourceStack source, String keyword, int page, List<SearchEntry> results, Throwable throwable) {
         if (throwable != null) {
             Messages.warning(source, "搜索歌曲失败：" + rootMessage(throwable));
             return;
@@ -326,9 +340,10 @@ public final class MusicCommands {
                     .append(Component.literal(" " + entry.title()).withStyle(ChatFormatting.AQUA))
                     .append(Component.literal(" - " + entry.subtitle()).withStyle(ChatFormatting.GRAY)), false);
         }
+        sendSearchNavigation(source, "song", keyword, page, results.size());
     }
 
-    private static void sendArtistResults(CommandSourceStack source, List<SearchEntry> results, Throwable throwable) {
+    private static void sendArtistResults(CommandSourceStack source, String keyword, int page, List<SearchEntry> results, Throwable throwable) {
         if (throwable != null) {
             Messages.warning(source, "搜索作者失败：" + rootMessage(throwable));
             return;
@@ -343,9 +358,10 @@ public final class MusicCommands {
                     .append(Component.literal(" " + entry.title()).withStyle(ChatFormatting.AQUA))
                     .append(Component.literal(" - " + entry.subtitle()).withStyle(ChatFormatting.GRAY)), false);
         }
+        sendSearchNavigation(source, "artist", keyword, page, results.size());
     }
 
-    private static void sendPlaylistResults(CommandSourceStack source, List<SearchEntry> results, Throwable throwable) {
+    private static void sendPlaylistResults(CommandSourceStack source, String keyword, int page, List<SearchEntry> results, Throwable throwable) {
         if (throwable != null) {
             Messages.warning(source, "搜索歌单失败：" + rootMessage(throwable));
             return;
@@ -360,9 +376,10 @@ public final class MusicCommands {
                     .append(Component.literal(" " + entry.title()).withStyle(ChatFormatting.AQUA))
                     .append(Component.literal(" - " + entry.subtitle()).withStyle(ChatFormatting.GRAY)), false);
         }
+        sendSearchNavigation(source, "playlist", keyword, page, results.size());
     }
 
-    private static void sendUserResults(CommandSourceStack source, List<SearchEntry> results, Throwable throwable) {
+    private static void sendUserResults(CommandSourceStack source, String keyword, int page, List<SearchEntry> results, Throwable throwable) {
         if (throwable != null) {
             Messages.warning(source, "搜索用户失败：" + rootMessage(throwable));
             return;
@@ -377,6 +394,29 @@ public final class MusicCommands {
                     .append(Component.literal(" " + entry.title()).withStyle(ChatFormatting.AQUA))
                     .append(Component.literal(" - " + entry.subtitle()).withStyle(ChatFormatting.GRAY)), false);
         }
+        sendSearchNavigation(source, "user", keyword, page, results.size());
+    }
+
+    private static void sendSearchNavigation(CommandSourceStack source, String type, String keyword, int page, int resultSize) {
+        int pageSize = MusicPlayerConfigManager.get().searchLimit;
+        Component navigation = Component.empty();
+
+        if (page > 1) {
+            navigation = navigation.copy().append(Messages.clickableCommand("[上一页]", "查看上一页", "/music search " + type + " page " + (page - 1) + " " + keyword, ChatFormatting.YELLOW));
+        } else {
+            navigation = navigation.copy().append(Component.literal("[上一页]").withStyle(ChatFormatting.DARK_GRAY));
+        }
+
+        navigation = navigation.copy().append(Component.literal(" 第 " + page + " 页 ").withStyle(ChatFormatting.GRAY));
+
+        if (resultSize >= pageSize) {
+            navigation = navigation.copy().append(Messages.clickableCommand("[下一页]", "查看下一页", "/music search " + type + " page " + (page + 1) + " " + keyword, ChatFormatting.YELLOW));
+        } else {
+            navigation = navigation.copy().append(Component.literal("[下一页]").withStyle(ChatFormatting.DARK_GRAY));
+        }
+
+        Component finalNavigation = navigation;
+        source.sendSuccess(() -> finalNavigation, false);
     }
 
     private static void showPlaylist(CommandSourceStack source, PlaylistInfo playlist, Throwable throwable) {
@@ -450,7 +490,7 @@ public final class MusicCommands {
     }
 
     @FunctionalInterface
-    private interface SearchExecutor {
-        void execute(CommandSourceStack source, String keyword);
+    private interface PagedSearchExecutor {
+        void execute(CommandSourceStack source, String keyword, int page);
     }
 }

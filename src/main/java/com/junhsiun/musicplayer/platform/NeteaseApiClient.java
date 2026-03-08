@@ -41,19 +41,35 @@ public final class NeteaseApiClient {
     }
 
     public CompletableFuture<List<SearchEntry>> searchSongs(String keyword) {
-        return search(keyword, 1);
+        return searchSongs(keyword, 1);
+    }
+
+    public CompletableFuture<List<SearchEntry>> searchSongs(String keyword, int page) {
+        return search(keyword, 1, page);
     }
 
     public CompletableFuture<List<SearchEntry>> searchArtists(String keyword) {
-        return search(keyword, 100);
+        return searchArtists(keyword, 1);
+    }
+
+    public CompletableFuture<List<SearchEntry>> searchArtists(String keyword, int page) {
+        return search(keyword, 100, page);
     }
 
     public CompletableFuture<List<SearchEntry>> searchPlaylists(String keyword) {
-        return search(keyword, 1000);
+        return searchPlaylists(keyword, 1);
+    }
+
+    public CompletableFuture<List<SearchEntry>> searchPlaylists(String keyword, int page) {
+        return search(keyword, 1000, page);
     }
 
     public CompletableFuture<List<SearchEntry>> searchUsers(String keyword) {
-        return search(keyword, 1002);
+        return searchUsers(keyword, 1);
+    }
+
+    public CompletableFuture<List<SearchEntry>> searchUsers(String keyword, int page) {
+        return search(keyword, 1002, page);
     }
 
     public CompletableFuture<PlaylistInfo> playlistDetail(String id) {
@@ -127,9 +143,15 @@ public final class NeteaseApiClient {
         });
     }
 
-    private CompletableFuture<List<SearchEntry>> search(String keyword, int type) {
+    private CompletableFuture<List<SearchEntry>> search(String keyword, int type, int page) {
         MusicPlayerConfig config = MusicPlayerConfigManager.get();
-        return getJson("/cloudsearch", "limit", Integer.toString(config.searchLimit), "type", Integer.toString(type), "keywords", keyword)
+        int safePage = Math.max(1, page);
+        int offset = (safePage - 1) * config.searchLimit;
+        return getJson("/cloudsearch",
+                        "limit", Integer.toString(config.searchLimit),
+                        "offset", Integer.toString(offset),
+                        "type", Integer.toString(type),
+                        "keywords", keyword)
                 .thenApply(root -> {
                     List<SearchEntry> entries = new ArrayList<>();
                     JsonNode result = root.path("result");
