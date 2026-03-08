@@ -172,6 +172,21 @@ public final class NeteaseApiClient {
     }
 
     private CompletableFuture<List<String>> songUrls(String id) {
+        CompletableFuture<String> vkeys320 = getJsonFromAbsoluteUrl("https://api.vkeys.cn/v2/music/netease", "id", id, "quality", "4")
+                .thenApply(root -> root.path("data").path("url").asText(null))
+                .exceptionally(throwable -> null);
+        CompletableFuture<String> vkeys192 = getJsonFromAbsoluteUrl("https://api.vkeys.cn/v2/music/netease", "id", id, "quality", "3")
+                .thenApply(root -> root.path("data").path("url").asText(null))
+                .exceptionally(throwable -> null);
+        CompletableFuture<String> vkeys128 = getJsonFromAbsoluteUrl("https://api.vkeys.cn/v2/music/netease", "id", id, "quality", "2")
+                .thenApply(root -> root.path("data").path("url").asText(null))
+                .exceptionally(throwable -> null);
+        CompletableFuture<String> byfunsExhigh = getTextFromAbsoluteUrl("https://api.byfuns.top/1/", "id", id, "level", "exhigh")
+                .exceptionally(throwable -> null);
+        CompletableFuture<String> byfunsHigher = getTextFromAbsoluteUrl("https://api.byfuns.top/1/", "id", id, "level", "higher")
+                .exceptionally(throwable -> null);
+        CompletableFuture<String> byfunsStandard = getTextFromAbsoluteUrl("https://api.byfuns.top/1/", "id", id, "level", "standard")
+                .exceptionally(throwable -> null);
         CompletableFuture<String> standardUrl = getJson("/song/url/v1", "id", id, "level", "standard")
                 .thenApply(root -> firstUrl(root.path("data")))
                 .exceptionally(throwable -> null);
@@ -184,19 +199,22 @@ public final class NeteaseApiClient {
         CompletableFuture<String> legacyUrl = getJson("/song/url", "id", id)
                 .thenApply(root -> firstUrl(root.path("data")))
                 .exceptionally(throwable -> null);
-        CompletableFuture<String> vkeysUrl = getJsonFromAbsoluteUrl("https://api.vkeys.cn/v2/music/netease", "id", id, "quality", "4")
-                .thenApply(root -> root.path("data").path("url").asText(null))
-                .exceptionally(throwable -> null);
         CompletableFuture<String> directUrl = CompletableFuture.completedFuture("https://music.163.com/song/media/outer/url?id=" + id + ".mp3");
 
-        return CompletableFuture.allOf(standardUrl, higherUrl, exhighUrl, legacyUrl, vkeysUrl, directUrl)
+        return CompletableFuture.allOf(vkeys320, vkeys192, vkeys128, byfunsExhigh, byfunsHigher, byfunsStandard,
+                        standardUrl, higherUrl, exhighUrl, legacyUrl, directUrl)
                 .thenApply(ignored -> {
                     Set<String> urls = new LinkedHashSet<>();
+                    addCandidate(urls, vkeys320.join());
+                    addCandidate(urls, vkeys192.join());
+                    addCandidate(urls, vkeys128.join());
+                    addCandidate(urls, byfunsExhigh.join());
+                    addCandidate(urls, byfunsHigher.join());
+                    addCandidate(urls, byfunsStandard.join());
                     addCandidate(urls, standardUrl.join());
                     addCandidate(urls, higherUrl.join());
                     addCandidate(urls, exhighUrl.join());
                     addCandidate(urls, legacyUrl.join());
-                    addCandidate(urls, vkeysUrl.join());
                     addCandidate(urls, directUrl.join());
 
                     if (urls.isEmpty()) {
@@ -212,30 +230,60 @@ public final class NeteaseApiClient {
 
     private CompletableFuture<JsonNode> getJsonFromAbsoluteUrl(String absoluteUrl, String... queryPairs) {
         return CompletableFuture.supplyAsync(() -> {
-            HttpUrl.Builder builder = Objects.requireNonNull(HttpUrl.parse(absoluteUrl)).newBuilder();
-            for (int index = 0; index + 1 < queryPairs.length; index += 2) {
-                builder.addQueryParameter(queryPairs[index], queryPairs[index + 1]);
-            }
-
-            Request request = new Request.Builder()
-                    .url(builder.build())
-                    .header("User-Agent", "MinecraftMusicPlayer/2.0")
-                    .header("Accept", "application/json,text/plain,*/*")
-                    .get()
-                    .build();
-
-            OkHttpClient client = HttpClientFactory.create();
-            try (Response response = client.newCall(request).execute()) {
-                if (!response.isSuccessful()) {
-                    throw new IOException("HTTP " + response.code());
-                }
-                String body = Objects.requireNonNull(response.body()).string();
-                return MAPPER.readTree(body);
-            } catch (Exception exception) {
-                MusicPlayerMod.LOGGER.warn("请求网易云接口失败: {}", request.url(), exception);
-                throw new RuntimeException(exception);
-            }
+            Request request = baseRequest(absoluteUrl, queryPairs, "application/json,text/plain,*/*");
+            return executeJson(request);
         }, EXECUTOR);
+    }
+
+    private CompletableFuture<String> getTextFromAbsoluteUrl(String absoluteUrl, String... queryPairs) {
+        return CompletableFuture.supplyAsync(() -> {
+            Request request = baseRequest(absoluteUrl, queryPairs, "text/plain,*/*");
+            return executeText(request);
+        }, EXECUTOR);
+    }
+
+    private static Request baseRequest(String absoluteUrl, String[] queryPairs, String accept) {
+        HttpUrl.Builder builder = Objects.requireNonNull(HttpUrl.parse(absoluteUrl)).newBuilder();
+        for (int index = 0; index + 1 < queryPairs.length; index += 2) {
+            builder.addQueryParameter(queryPairs[index], queryPairs[index + 1]);
+        }
+        return new Request.Builder()
+                .url(builder.build())
+                .header("User-Agent", "MinecraftMusicPlayer/2.0")
+                .header("Accept", accept)
+                .get()
+                .build();
+    }
+
+    private JsonNode executeJson(Request request) {
+        OkHttpClient client = HttpClientFactory.create();
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("HTTP " + response.code());
+            }
+            String body = Objects.requireNonNull(response.body()).string();
+            return MAPPER.readTree(body);
+        } catch (Exception exception) {
+            MusicPlayerMod.LOGGER.warn("请求网易云接口失败: {}", request.url(), exception);
+            throw new RuntimeException(exception);
+        }
+    }
+
+    private String executeText(Request request) {
+        OkHttpClient client = HttpClientFactory.create();
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("HTTP " + response.code());
+            }
+            String body = Objects.requireNonNull(response.body()).string().trim();
+            if (body.isBlank() || body.startsWith("404 ")) {
+                return null;
+            }
+            return body;
+        } catch (Exception exception) {
+            MusicPlayerMod.LOGGER.warn("请求网易云接口失败: {}", request.url(), exception);
+            throw new RuntimeException(exception);
+        }
     }
 
     private static String baseUrl() {
@@ -247,7 +295,12 @@ public final class NeteaseApiClient {
         if (url == null || url.isBlank() || "null".equalsIgnoreCase(url)) {
             return;
         }
-        urls.add(url);
+        String normalized = url.trim();
+        String lower = normalized.toLowerCase();
+        if (!(lower.contains(".mp3") || lower.contains("type=mp3") || lower.contains("encodeType=mp3"))) {
+            return;
+        }
+        urls.add(normalized);
     }
 
     private static String firstArtist(JsonNode songNode) {
