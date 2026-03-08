@@ -10,11 +10,11 @@ import com.junhsiun.musicplayer.model.PlaylistInfo;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.model.UserPlaylistView;
+import com.junhsiun.musicplayer.util.HttpClientFactory;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
-import com.junhsiun.musicplayer.util.HttpClientFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -77,13 +77,14 @@ public final class NeteaseApiClient {
             JsonNode playlist = root.path("playlist");
             List<SearchEntry> tracks = new ArrayList<>();
             JsonNode trackNodes = playlist.path("tracks");
-            int limit = Math.min(trackNodes.size(), MusicPlayerConfigManager.get().playlistQueueLimit);
-            for (int index = 0; index < limit; index++) {
-                JsonNode track = trackNodes.get(index);
+            for (JsonNode track : trackNodes) {
+                String artistId = firstArtistId(track);
                 tracks.add(new SearchEntry(
                         track.path("id").asText(),
                         track.path("name").asText(),
-                        firstArtist(track)
+                        firstArtistName(track),
+                        playSongCommand(track.path("id").asText()),
+                        artistId.isBlank() ? "" : viewArtistCommand(artistId)
                 ));
             }
             return new PlaylistInfo(
@@ -102,13 +103,17 @@ public final class NeteaseApiClient {
             if (!playlists.isArray() || playlists.isEmpty()) {
                 return new UserPlaylistView(userId, "", "", List.of());
             }
+
             JsonNode creator = playlists.get(0).path("creator");
             List<SearchEntry> entries = new ArrayList<>();
             for (JsonNode playlist : playlists) {
+                String playlistId = playlist.path("id").asText();
                 entries.add(new SearchEntry(
-                        playlist.path("id").asText(),
+                        playlistId,
                         playlist.path("name").asText(),
-                        "共 " + playlist.path("trackCount").asInt() + " 首"
+                        "共 " + playlist.path("trackCount").asInt() + " 首",
+                        viewPlaylistCommand(playlistId),
+                        ""
                 ));
             }
             return new UserPlaylistView(
@@ -125,13 +130,14 @@ public final class NeteaseApiClient {
             JsonNode artist = root.path("artist");
             JsonNode hotSongs = root.path("hotSongs");
             List<SearchEntry> tracks = new ArrayList<>();
-            int limit = Math.min(hotSongs.size(), 10);
-            for (int index = 0; index < limit; index++) {
-                JsonNode song = hotSongs.get(index);
+            for (JsonNode song : hotSongs) {
+                String songId = song.path("id").asText();
                 tracks.add(new SearchEntry(
-                        song.path("id").asText(),
+                        songId,
                         song.path("name").asText(),
-                        song.path("al").path("name").asText("")
+                        song.path("al").path("name").asText(""),
+                        playSongCommand(songId),
+                        ""
                 ));
             }
             return new ArtistInfo(
@@ -147,37 +153,69 @@ public final class NeteaseApiClient {
         MusicPlayerConfig config = MusicPlayerConfigManager.get();
         int safePage = Math.max(1, page);
         int offset = (safePage - 1) * config.searchLimit;
-        return getJson("/cloudsearch",
-                        "limit", Integer.toString(config.searchLimit),
-                        "offset", Integer.toString(offset),
-                        "type", Integer.toString(type),
-                        "keywords", keyword)
-                .thenApply(root -> {
-                    List<SearchEntry> entries = new ArrayList<>();
-                    JsonNode result = root.path("result");
-                    JsonNode list = switch (type) {
-                        case 1 -> result.path("songs");
-                        case 100 -> result.path("artists");
-                        case 1000 -> result.path("playlists");
-                        case 1002 -> result.path("userprofiles");
-                        default -> MAPPER.createArrayNode();
-                    };
-                    if (!list.isArray()) {
-                        return entries;
-                    }
-                    for (JsonNode node : list) {
-                        if (type == 1) {
-                            entries.add(new SearchEntry(node.path("id").asText(), node.path("name").asText(), firstArtist(node)));
-                        } else if (type == 100) {
-                            entries.add(new SearchEntry(node.path("id").asText(), node.path("name").asText(), "作者"));
-                        } else if (type == 1000) {
-                            entries.add(new SearchEntry(node.path("id").asText(), node.path("name").asText(), node.path("creator").path("nickname").asText("")));
-                        } else if (type == 1002) {
-                            entries.add(new SearchEntry(node.path("userId").asText(), node.path("nickname").asText(), node.path("signature").asText("")));
-                        }
-                    }
-                    return entries;
-                });
+        return getJson(
+                "/cloudsearch",
+                "limit", Integer.toString(config.searchLimit),
+                "offset", Integer.toString(offset),
+                "type", Integer.toString(type),
+                "keywords", keyword
+        ).thenApply(root -> {
+            List<SearchEntry> entries = new ArrayList<>();
+            JsonNode result = root.path("result");
+            JsonNode list = switch (type) {
+                case 1 -> result.path("songs");
+                case 100 -> result.path("artists");
+                case 1000 -> result.path("playlists");
+                case 1002 -> result.path("userprofiles");
+                default -> MAPPER.createArrayNode();
+            };
+            if (!list.isArray()) {
+                return entries;
+            }
+
+            for (JsonNode node : list) {
+                if (type == 1) {
+                    String songId = node.path("id").asText();
+                    String artistId = firstArtistId(node);
+                    entries.add(new SearchEntry(
+                            songId,
+                            node.path("name").asText(),
+                            firstArtistName(node),
+                            playSongCommand(songId),
+                            artistId.isBlank() ? "" : viewArtistCommand(artistId)
+                    ));
+                } else if (type == 100) {
+                    String artistId = node.path("id").asText();
+                    entries.add(new SearchEntry(
+                            artistId,
+                            node.path("name").asText(),
+                            "作者",
+                            viewArtistCommand(artistId),
+                            ""
+                    ));
+                } else if (type == 1000) {
+                    String playlistId = node.path("id").asText();
+                    String ownerId = node.path("creator").path("userId").asText("");
+                    entries.add(new SearchEntry(
+                            playlistId,
+                            node.path("name").asText(),
+                            node.path("creator").path("nickname").asText(""),
+                            viewPlaylistCommand(playlistId),
+                            ownerId.isBlank() ? "" : viewUserCommand(ownerId)
+                    ));
+                } else if (type == 1002) {
+                    String foundUserId = node.path("userId").asText();
+                    entries.add(new SearchEntry(
+                            foundUserId,
+                            node.path("nickname").asText(),
+                            node.path("signature").asText(""),
+                            viewUserCommand(foundUserId),
+                            ""
+                    ));
+                }
+            }
+            return entries;
+        });
     }
 
     private CompletableFuture<TrackInfo> songDetail(String id) {
@@ -186,7 +224,7 @@ public final class NeteaseApiClient {
             return new TrackInfo(
                     song.path("id").asText(),
                     song.path("name").asText(),
-                    firstArtist(song),
+                    firstArtistName(song),
                     List.of(),
                     song.path("dt").asLong(0L)
             );
@@ -223,27 +261,29 @@ public final class NeteaseApiClient {
                 .exceptionally(throwable -> null);
         CompletableFuture<String> directUrl = CompletableFuture.completedFuture("https://music.163.com/song/media/outer/url?id=" + id + ".mp3");
 
-        return CompletableFuture.allOf(vkeys320, vkeys192, vkeys128, byfunsExhigh, byfunsHigher, byfunsStandard,
-                        standardUrl, higherUrl, exhighUrl, legacyUrl, directUrl)
-                .thenApply(ignored -> {
-                    Set<String> urls = new LinkedHashSet<>();
-                    addCandidate(urls, byfunsExhigh.join());
-                    addCandidate(urls, byfunsHigher.join());
-                    addCandidate(urls, byfunsStandard.join());
-                    addCandidate(urls, vkeys320.join());
-                    addCandidate(urls, vkeys192.join());
-                    addCandidate(urls, vkeys128.join());
-                    addCandidate(urls, standardUrl.join());
-                    addCandidate(urls, higherUrl.join());
-                    addCandidate(urls, exhighUrl.join());
-                    addCandidate(urls, legacyUrl.join());
-                    addCandidate(urls, directUrl.join());
+        return CompletableFuture.allOf(
+                vkeys320, vkeys192, vkeys128,
+                byfunsExhigh, byfunsHigher, byfunsStandard,
+                standardUrl, higherUrl, exhighUrl, legacyUrl, directUrl
+        ).thenApply(ignored -> {
+            Set<String> urls = new LinkedHashSet<>();
+            addCandidate(urls, byfunsExhigh.join());
+            addCandidate(urls, byfunsHigher.join());
+            addCandidate(urls, byfunsStandard.join());
+            addCandidate(urls, vkeys320.join());
+            addCandidate(urls, vkeys192.join());
+            addCandidate(urls, vkeys128.join());
+            addCandidate(urls, standardUrl.join());
+            addCandidate(urls, higherUrl.join());
+            addCandidate(urls, exhighUrl.join());
+            addCandidate(urls, legacyUrl.join());
+            addCandidate(urls, directUrl.join());
 
-                    if (urls.isEmpty()) {
-                        throw new IllegalStateException("无法获取任何可用的歌曲播放源，请检查网易云 API 服务。");
-                    }
-                    return List.copyOf(urls);
-                });
+            if (urls.isEmpty()) {
+                throw new IllegalStateException("无法获取任何可用的歌曲播放源，请检查音乐 API 服务。");
+            }
+            return List.copyOf(urls);
+        });
     }
 
     private CompletableFuture<JsonNode> getJson(String path, String... queryPairs) {
@@ -286,7 +326,7 @@ public final class NeteaseApiClient {
             String body = Objects.requireNonNull(response.body()).string();
             return MAPPER.readTree(body);
         } catch (Exception exception) {
-            MusicPlayerMod.LOGGER.warn("请求网易云接口失败: {}", request.url(), exception);
+            MusicPlayerMod.LOGGER.warn("请求音乐接口失败: {}", request.url(), exception);
             throw new RuntimeException(exception);
         }
     }
@@ -303,7 +343,7 @@ public final class NeteaseApiClient {
             }
             return body;
         } catch (Exception exception) {
-            MusicPlayerMod.LOGGER.warn("请求网易云接口失败: {}", request.url(), exception);
+            MusicPlayerMod.LOGGER.warn("请求音乐接口失败: {}", request.url(), exception);
             throw new RuntimeException(exception);
         }
     }
@@ -322,13 +362,13 @@ public final class NeteaseApiClient {
         if (lower.contains("musicrep-ts") || lower.contains("jd-musicrep-ts")) {
             return;
         }
-        if (!(lower.contains(".mp3") || lower.contains("type=mp3") || lower.contains("encodeType=mp3"))) {
+        if (!(lower.contains(".mp3") || lower.contains("type=mp3") || lower.contains("encodetype=mp3"))) {
             return;
         }
         urls.add(normalized);
     }
 
-    private static String firstArtist(JsonNode songNode) {
+    private static String firstArtistName(JsonNode songNode) {
         JsonNode artists = songNode.path("ar");
         if (artists.isArray() && !artists.isEmpty()) {
             return artists.get(0).path("name").asText("");
@@ -340,10 +380,38 @@ public final class NeteaseApiClient {
         return "";
     }
 
+    private static String firstArtistId(JsonNode songNode) {
+        JsonNode artists = songNode.path("ar");
+        if (artists.isArray() && !artists.isEmpty()) {
+            return artists.get(0).path("id").asText("");
+        }
+        JsonNode artistsAlt = songNode.path("artists");
+        if (artistsAlt.isArray() && !artistsAlt.isEmpty()) {
+            return artistsAlt.get(0).path("id").asText("");
+        }
+        return "";
+    }
+
     private static String firstUrl(JsonNode data) {
         if (data.isArray() && !data.isEmpty()) {
             return data.get(0).path("url").asText(null);
         }
         return null;
+    }
+
+    private static String playSongCommand(String songId) {
+        return "/music play song " + songId;
+    }
+
+    private static String viewArtistCommand(String artistId) {
+        return "/music view artist " + artistId;
+    }
+
+    private static String viewPlaylistCommand(String playlistId) {
+        return "/music view playlist " + playlistId;
+    }
+
+    private static String viewUserCommand(String userId) {
+        return "/music view user " + userId;
     }
 }
