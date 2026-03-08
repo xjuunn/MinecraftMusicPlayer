@@ -46,6 +46,7 @@ public final class CoverArtTextureCache {
         if (existing != null) {
             return;
         }
+        MusicPlayerMod.LOGGER.info("Requesting cover art: {}", coverUrl);
         entries.put(coverUrl, CacheEntry.pending());
         executor.execute(() -> downloadAndRegister(coverUrl));
     }
@@ -105,6 +106,7 @@ public final class CoverArtTextureCache {
             texture.upload();
             client.getTextureManager().register(textureId, texture);
             entries.put(coverUrl, CacheEntry.ready(textureId));
+            MusicPlayerMod.LOGGER.info("Registered cover art texture: {} -> {}", coverUrl, textureId);
 
             while (entries.size() > MAX_CACHE_SIZE) {
                 String eldestKey = entries.keySet().iterator().next();
