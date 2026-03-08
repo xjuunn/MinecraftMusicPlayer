@@ -29,6 +29,10 @@ public final class MusicQueueService {
 
     private CurrentPlayback currentPlayback;
 
+    public boolean isPlaying() {
+        return currentPlayback != null;
+    }
+
     public void tick(MinecraftServer server) {
         if (currentPlayback == null) {
             return;

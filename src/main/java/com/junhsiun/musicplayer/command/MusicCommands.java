@@ -123,7 +123,9 @@ public final class MusicCommands {
                         .then(Commands.argument("song_id", StringArgumentType.string()).executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
                             String songId = StringArgumentType.getString(context, "song_id");
-                            loading(context.getSource(), "正在解析歌曲并准备播放...");
+                            loading(context.getSource(), MusicPlayerMod.queueService().isPlaying()
+                                    ? "正在解析音乐并加入队列..."
+                                    : "正在解析音乐并准备播放...");
                             MusicPlayerMod.queueService().requestSong(context.getSource().getServer(), context.getSource(), player, songId);
                             return 1;
                         })))

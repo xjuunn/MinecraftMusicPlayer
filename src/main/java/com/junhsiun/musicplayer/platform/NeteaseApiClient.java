@@ -205,12 +205,12 @@ public final class NeteaseApiClient {
                         standardUrl, higherUrl, exhighUrl, legacyUrl, directUrl)
                 .thenApply(ignored -> {
                     Set<String> urls = new LinkedHashSet<>();
-                    addCandidate(urls, vkeys320.join());
-                    addCandidate(urls, vkeys192.join());
-                    addCandidate(urls, vkeys128.join());
                     addCandidate(urls, byfunsExhigh.join());
                     addCandidate(urls, byfunsHigher.join());
                     addCandidate(urls, byfunsStandard.join());
+                    addCandidate(urls, vkeys320.join());
+                    addCandidate(urls, vkeys192.join());
+                    addCandidate(urls, vkeys128.join());
                     addCandidate(urls, standardUrl.join());
                     addCandidate(urls, higherUrl.join());
                     addCandidate(urls, exhighUrl.join());
@@ -297,6 +297,9 @@ public final class NeteaseApiClient {
         }
         String normalized = url.trim();
         String lower = normalized.toLowerCase();
+        if (lower.contains("musicrep-ts") || lower.contains("jd-musicrep-ts")) {
+            return;
+        }
         if (!(lower.contains(".mp3") || lower.contains("type=mp3") || lower.contains("encodeType=mp3"))) {
             return;
         }
