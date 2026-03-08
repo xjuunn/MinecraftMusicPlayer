@@ -14,6 +14,7 @@ The server handles commands, queue state, search, synchronization, and configura
 - Queue pages and detail views expose clickable song, artist, playlist owner, and user entries where applicable
 - Automatic progression to the next track
 - Vote skip support
+- Smart duplicate request suppression so rapid repeated clicks do not spam the queue with the same track
 - Multi-source playback fallback when a source fails
 - Prefer third-party sources that can fully play some VIP tracks instead of 30-second preview links
 - Admin configuration for API endpoint, proxy, IPv4 preference, timeouts, queue size, and search size
