@@ -6,6 +6,7 @@ import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
+import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -26,6 +27,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 public final class MusicQueueService {
+    private static final long FALLBACK_TRACK_TIMEOUT_MS = 10 * 60_000L;
+
     private final Deque<QueuedTrack> queue = new ArrayDeque<>();
     private final Set<UUID> optedOutPlayers = new HashSet<>();
     private final Set<UUID> voteSkipPlayers = new HashSet<>();
@@ -99,6 +102,32 @@ public final class MusicQueueService {
     public void handleDisconnect(ServerPlayer player) {
         optedOutPlayers.remove(player.getUUID());
         voteSkipPlayers.remove(player.getUUID());
+    }
+
+    public void handlePlaybackReport(MinecraftServer server, ServerPlayer player, MusicPlaybackReportPayload payload) {
+        if (payload == null || currentPlayback == null) {
+            return;
+        }
+        if (optedOutPlayers.contains(player.getUUID())) {
+            return;
+        }
+        if (payload.trackId() == null || payload.trackId().isBlank()) {
+            return;
+        }
+        if (!payload.trackId().equals(currentPlayback.track().id())) {
+            return;
+        }
+
+        if ("ended".equals(payload.action())) {
+            advance(server, "当前歌曲播放结束，自动切换到下一首。");
+            return;
+        }
+        if ("failed".equals(payload.action())) {
+            String message = payload.message() == null || payload.message().isBlank()
+                    ? "当前歌曲播放失败，自动切换到下一首。"
+                    : "当前歌曲播放失败，自动切换到下一首。原因: " + payload.message();
+            advance(server, message);
+        }
     }
 
     public void joinPlayer(ServerPlayer player) {
@@ -311,7 +340,11 @@ public final class MusicQueueService {
     }
 
     private void startTrack(MinecraftServer server, TrackInfo track) {
-        currentPlayback = new CurrentPlayback(track, System.currentTimeMillis(), System.currentTimeMillis() + Math.max(30_000L, track.durationMillis()));
+        long now = System.currentTimeMillis();
+        long fallbackDuration = track.durationMillis() > 0L
+                ? track.durationMillis() + 60_000L
+                : FALLBACK_TRACK_TIMEOUT_MS;
+        currentPlayback = new CurrentPlayback(track, now, now + Math.max(FALLBACK_TRACK_TIMEOUT_MS, fallbackDuration));
         voteSkipPlayers.clear();
         server.getPlayerList().getPlayers().stream()
                 .filter(player -> !optedOutPlayers.contains(player.getUUID()))
@@ -338,7 +371,7 @@ public final class MusicQueueService {
 
     private void sendPlay(ServerPlayer player, TrackInfo track) {
         if (ServerPlayNetworking.canSend(player, MusicControlPayload.TYPE)) {
-            ServerPlayNetworking.send(player, MusicControlPayload.play(track.sourceUrls(), track.title(), track.artist()));
+            ServerPlayNetworking.send(player, MusicControlPayload.play(track.id(), track.sourceUrls(), track.title(), track.artist()));
         }
     }
 
