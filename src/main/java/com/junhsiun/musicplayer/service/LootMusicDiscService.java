@@ -12,6 +12,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.RandomizableContainer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
@@ -22,7 +23,6 @@ import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.storage.LevelResource;
 
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -54,9 +54,9 @@ public final class LootMusicDiscService {
                 player,
                 world,
                 randomizable,
+                randomizable,
                 key(world, pos),
-                pos.toShortString(),
-                randomizable
+                pos.toShortString()
         );
     }
 
@@ -64,16 +64,16 @@ public final class LootMusicDiscService {
         if (entity.level().isClientSide()) {
             return InteractionResult.PASS;
         }
-        if (!(entity instanceof Container container)) {
+        if (!(entity instanceof Container container) || !(entity instanceof RandomizableContainer randomizable)) {
             return InteractionResult.PASS;
         }
         return tryInjectOnOpen(
                 player,
                 entity.level(),
                 container,
+                randomizable,
                 key(entity),
-                entity.getType().toString() + "/" + entity.getUUID(),
-                entity
+                entity.getType() + "/" + entity.getUUID()
         );
     }
 
@@ -91,11 +91,11 @@ public final class LootMusicDiscService {
             ServerPlayer player,
             Level world,
             Container container,
+            RandomizableContainer randomizable,
             String containerKey,
-            String locationDescription,
-            Object lootHolder
+            String locationDescription
     ) {
-        if (!hasLootTable(lootHolder)) {
+        if (randomizable.getLootTable() == null) {
             return InteractionResult.PASS;
         }
 
@@ -120,12 +120,13 @@ public final class LootMusicDiscService {
             return InteractionResult.PASS;
         }
 
-        unpackLootTable(lootHolder, player);
+        randomizable.unpackLootTable(player);
         List<PendingDiscPlacement> placements = insertPendingDiscs(container, world, requestedCount);
         if (placements.isEmpty()) {
             return InteractionResult.PASS;
         }
 
+        MusicPlayerMod.LOGGER.info("Injecting random music disc placeholders into loot container: {}", locationDescription);
         MusicPlayerMod.netease().randomHotTracks(placements.size()).whenComplete((tracks, throwable) ->
                 server.execute(() -> resolvePendingDiscs(container, placements, tracks, throwable, locationDescription)));
         return InteractionResult.PASS;
@@ -160,7 +161,7 @@ public final class LootMusicDiscService {
             String locationDescription
     ) {
         if (throwable != null) {
-            MusicPlayerMod.LOGGER.warn("生成战利品随机音乐唱片失败: {}", locationDescription, throwable);
+            MusicPlayerMod.LOGGER.warn("Failed to generate random loot music discs: {}", locationDescription, throwable);
             clearPendingDiscs(container, placements);
             return;
         }
@@ -306,7 +307,7 @@ public final class LootMusicDiscService {
             processedContainers.clear();
             processedContainers.addAll(MAPPER.readValue(path.toFile(), STRING_SET));
         } catch (IOException exception) {
-            MusicPlayerMod.LOGGER.warn("读取战利品唱片注入状态失败。", exception);
+            MusicPlayerMod.LOGGER.warn("Failed to read loot music disc injection state.", exception);
         }
     }
 
@@ -316,7 +317,7 @@ public final class LootMusicDiscService {
             Files.createDirectories(path.getParent());
             MAPPER.writeValue(path.toFile(), processedContainers);
         } catch (IOException exception) {
-            MusicPlayerMod.LOGGER.warn("保存战利品唱片注入状态失败。", exception);
+            MusicPlayerMod.LOGGER.warn("Failed to save loot music disc injection state.", exception);
         }
     }
 
@@ -332,24 +333,6 @@ public final class LootMusicDiscService {
 
     private static String key(Entity entity) {
         return entity.level().dimension().toString() + ":entity:" + entity.getUUID();
-    }
-
-    private static boolean hasLootTable(Object container) {
-        try {
-            Method getter = container.getClass().getMethod("getLootTable");
-            Object value = getter.invoke(container);
-            return value != null;
-        } catch (ReflectiveOperationException ignored) {
-            return true;
-        }
-    }
-
-    private static void unpackLootTable(Object container, ServerPlayer player) {
-        try {
-            Method method = container.getClass().getMethod("unpackLootTable", ServerPlayer.class);
-            method.invoke(container, player);
-        } catch (ReflectiveOperationException ignored) {
-        }
     }
 
     private record PendingDiscPlacement(int slot, String token) {

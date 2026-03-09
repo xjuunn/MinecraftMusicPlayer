@@ -86,7 +86,9 @@ public final class JukeboxPlaybackService {
         Set<Long> expiredKeys = new HashSet<>();
         for (ActiveJukebox active : activeJukeboxes.values()) {
             ServerLevel level = server.getLevel(active.dimension());
-            if (level == null || !isStillValid(level, active)) {
+            String invalidReason = level == null ? "missing level" : getInvalidReason(level, active);
+            if (invalidReason != null) {
+                MusicPlayerMod.LOGGER.info("Stopping custom jukebox playback on server at {}: {}", active.pos(), invalidReason);
                 stopPlayback(server, active);
                 expiredKeys.add(active.key());
                 continue;
@@ -161,28 +163,32 @@ public final class JukeboxPlaybackService {
         );
     }
 
-    private boolean isStillValid(ServerLevel level, ActiveJukebox active) {
+    private String getInvalidReason(ServerLevel level, ActiveJukebox active) {
         if (!level.isLoaded(active.pos())) {
-            return false;
+            return "chunk not loaded";
         }
         BlockState state = level.getBlockState(active.pos());
         if (!(state.getBlock() instanceof JukeboxBlock) || !state.getValue(JukeboxBlock.HAS_RECORD)) {
-            return false;
+            return "jukebox block missing or has no record";
         }
         BlockEntity blockEntity = level.getBlockEntity(active.pos());
         if (!(blockEntity instanceof JukeboxBlockEntity jukebox)) {
-            return false;
+            return "missing jukebox block entity";
         }
         return MusicDiscHelper.read(jukebox.getTheItem())
                 .filter(data -> !data.urls().isEmpty())
                 .map(data -> {
                     if (!active.sourceTrackId().isBlank() && !data.trackId().isBlank()) {
-                        return data.trackId().equals(active.sourceTrackId());
+                        return data.trackId().equals(active.sourceTrackId())
+                                ? null
+                                : "track id changed from " + active.sourceTrackId() + " to " + data.trackId();
                     }
                     return data.title().equals(active.sourceTitle())
-                            && data.artist().equals(active.sourceArtist());
+                            && data.artist().equals(active.sourceArtist())
+                            ? null
+                            : "disc metadata no longer matches source";
                 })
-                .orElse(false);
+                .orElse("jukebox item is missing custom disc data");
     }
 
     private void syncListeners(ServerLevel level, ActiveJukebox active) {
@@ -228,6 +234,7 @@ public final class JukeboxPlaybackService {
 
     private void sendPlay(ServerPlayer player, ActiveJukebox active) {
         if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
+            MusicPlayerMod.LOGGER.info("Sending custom jukebox play to {} at {}", player.getScoreboardName(), active.pos());
             ServerPlayNetworking.send(player, JukeboxMusicPayload.play(
                     active.key(),
                     active.discData().urls(),
@@ -240,6 +247,7 @@ public final class JukeboxPlaybackService {
 
     private void sendStop(ServerPlayer player, long key) {
         if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
+            MusicPlayerMod.LOGGER.info("Sending custom jukebox stop to {} at {}", player.getScoreboardName(), BlockPos.of(key));
             ServerPlayNetworking.send(player, JukeboxMusicPayload.stop(key));
         }
     }

@@ -1,15 +1,26 @@
 package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.junhsiun.musicplayer.disc.MusicDiscHelper;
+import com.junhsiun.musicplayer.mixin.client.ClientLevelAccessor;
+import com.junhsiun.musicplayer.mixin.client.LevelEventHandlerAccessor;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
 import javazoom.jl.decoder.JavaLayerException;
 import javazoom.jl.player.AudioDeviceBase;
 import javazoom.jl.player.Player;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.LevelEventHandler;
+import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.block.JukeboxBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
 import okhttp3.OkHttpClient;
+import okhttp3.Call;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
@@ -45,6 +56,7 @@ public final class ClientJukeboxController {
     }
 
     public void handle(JukeboxMusicPayload payload) {
+        MusicPlayerMod.LOGGER.info("Received custom jukebox payload: action={}, pos={}", payload.action(), BlockPos.of(payload.jukeboxPos()));
         switch (payload.action()) {
             case "play" -> play(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl());
             case "refresh" -> refresh(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl());
@@ -58,6 +70,26 @@ public final class ClientJukeboxController {
         playbackHandles.keySet().forEach(this::stop);
         if (reason != null && !reason.isBlank()) {
             MusicPlayerMod.LOGGER.info("Stopped all jukebox playback: {}", reason);
+        }
+    }
+
+    public void tick(Minecraft client) {
+        if (playbackHandles.isEmpty()) {
+            return;
+        }
+        if (client.level == null) {
+            stopAll("Client level missing.");
+            return;
+        }
+
+        for (Long jukeboxPos : List.copyOf(playbackHandles.keySet())) {
+            silenceVanillaJukeboxSound(jukeboxPos, "tick suppression");
+            String invalidReason = getInvalidStateReason(client.level, jukeboxPos);
+            if (invalidReason == null) {
+                continue;
+            }
+            MusicPlayerMod.LOGGER.info("Stopping custom jukebox playback locally because jukebox state is invalid at {}: {}", BlockPos.of(jukeboxPos), invalidReason);
+            stop(jukeboxPos);
         }
     }
 
@@ -82,6 +114,8 @@ public final class ClientJukeboxController {
         handle.coverUrl = coverUrl == null ? "" : coverUrl;
         handle.startedAtMillis = System.currentTimeMillis();
         CoverArtTextureCache.getInstance().request(handle.coverUrl);
+        silenceVanillaJukeboxSound(jukeboxPos, "custom play payload");
+        showNowPlaying(handle.title, handle.subtitle);
         Thread playbackThread = new Thread(() -> playWithFallback(jukeboxPos, handle, urls, title, subtitle), "musicplayer-jukebox-" + jukeboxPos);
         playbackThread.setDaemon(true);
         handle.thread = playbackThread;
@@ -107,6 +141,7 @@ public final class ClientJukeboxController {
             handle.coverUrl = coverUrl;
             CoverArtTextureCache.getInstance().request(coverUrl);
         }
+        silenceVanillaJukeboxSound(jukeboxPos, "custom refresh payload");
         Thread thread = handle.thread;
         if (thread == null || !thread.isAlive()) {
             Thread playbackThread = new Thread(
@@ -122,6 +157,7 @@ public final class ClientJukeboxController {
 
     private void stop(long jukeboxPos) {
         PlaybackHandle handle = playbackHandles.remove(jukeboxPos);
+        silenceVanillaJukeboxSound(jukeboxPos, "custom stop payload");
         if (handle == null) {
             return;
         }
@@ -135,6 +171,10 @@ public final class ClientJukeboxController {
         if (handle.player != null) {
             handle.player.close();
             handle.player = null;
+        }
+        if (handle.currentCall != null) {
+            handle.currentCall.cancel();
+            handle.currentCall = null;
         }
         if (handle.thread != null) {
             handle.thread.interrupt();
@@ -165,17 +205,20 @@ public final class ClientJukeboxController {
             if (Thread.currentThread().isInterrupted()) {
                 handle.thread = null;
                 handle.player = null;
+                handle.currentCall = null;
                 return;
             }
             try {
                 playSingle(jukeboxPos, handle, url, title, subtitle);
                 handle.thread = null;
                 handle.player = null;
+                handle.currentCall = null;
                 return;
             } catch (IOException | JavaLayerException exception) {
                 if (Thread.currentThread().isInterrupted() || exception instanceof InterruptedIOException) {
                     handle.thread = null;
                     handle.player = null;
+                    handle.currentCall = null;
                     return;
                 }
                 logSourceFallback(url, exception);
@@ -183,6 +226,7 @@ public final class ClientJukeboxController {
         }
         handle.thread = null;
         handle.player = null;
+        handle.currentCall = null;
     }
 
     private void playSingle(long jukeboxPos, PlaybackHandle handle, String url, String title, String subtitle) throws IOException, JavaLayerException {
@@ -193,7 +237,9 @@ public final class ClientJukeboxController {
                 .get()
                 .build();
 
-        try (Response response = client.newCall(request).execute()) {
+        Call call = client.newCall(request);
+        handle.currentCall = call;
+        try (Response response = call.execute()) {
             if (!response.isSuccessful()) {
                 throw new IOException("HTTP " + response.code());
             }
@@ -213,6 +259,7 @@ public final class ClientJukeboxController {
                 currentPlayer.play();
             }
         } finally {
+            handle.currentCall = null;
             handle.player = null;
         }
     }
@@ -220,6 +267,7 @@ public final class ClientJukeboxController {
     private static final class PlaybackHandle {
         private volatile Player player;
         private volatile Thread thread;
+        private volatile Call currentCall;
         private volatile List<String> urls = List.of();
         private volatile String title = "";
         private volatile String subtitle = "";
@@ -241,6 +289,59 @@ public final class ClientJukeboxController {
             return;
         }
         MusicPlayerMod.LOGGER.warn("Jukebox source failed, trying next source: {}", url, exception);
+    }
+
+    private void showNowPlaying(String title, String subtitle) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.gui == null || title == null || title.isBlank()) {
+            return;
+        }
+        String text = subtitle == null || subtitle.isBlank() ? title : title + " - " + subtitle;
+        minecraft.gui.setNowPlaying(Component.literal(text));
+    }
+
+    private String getInvalidStateReason(ClientLevel level, long jukeboxPos) {
+        BlockPos pos = BlockPos.of(jukeboxPos);
+        if (!level.isLoaded(pos)) {
+            return "chunk not loaded";
+        }
+        if (!(level.getBlockState(pos).getBlock() instanceof JukeboxBlock)) {
+            return "block is no longer a jukebox";
+        }
+        if (!level.getBlockState(pos).getValue(JukeboxBlock.HAS_RECORD)) {
+            return "jukebox no longer has a record";
+        }
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (!(blockEntity instanceof JukeboxBlockEntity jukebox)) {
+            return "missing jukebox block entity";
+        }
+        if (!MusicDiscHelper.isMusicPlayerDisc(jukebox.getTheItem())) {
+            return "jukebox record is no longer a custom music disc";
+        }
+        return null;
+    }
+
+    private void silenceVanillaJukeboxSound(long jukeboxPos, String reason) {
+        Minecraft minecraft = Minecraft.getInstance();
+        ClientLevel level = minecraft.level;
+        if (level == null || !(level instanceof ClientLevelAccessor clientLevelAccessor)) {
+            return;
+        }
+
+        LevelEventHandler levelEventHandler = clientLevelAccessor.musicplayer$getLevelEventHandler();
+        if (!(levelEventHandler instanceof LevelEventHandlerAccessor accessor)) {
+            return;
+        }
+
+        BlockPos pos = BlockPos.of(jukeboxPos);
+        Map<BlockPos, SoundInstance> playingJukeboxSongs = accessor.musicplayer$getPlayingJukeboxSongs();
+        SoundInstance soundInstance = playingJukeboxSongs.remove(pos);
+        if (soundInstance == null) {
+            return;
+        }
+
+        minecraft.getSoundManager().stop(soundInstance);
+        MusicPlayerMod.LOGGER.info("Stopped vanilla jukebox sound at {}: {}", pos, reason);
     }
 
     private static final class SpatialAudioDevice extends AudioDeviceBase {
