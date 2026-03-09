@@ -4,6 +4,20 @@ Minecraft Music Player is a Fabric music mod for Minecraft `1.21.11`. It provide
 
 The server handles commands, queue logic, search requests, sync, random loot disc injection, and jukebox control. The client handles actual audio download, playback, and jukebox cover rendering. This is a dual-side mod, not a pure server-side audio mod.
 
+![img](https://cdn.modrinth.com/data/cached_images/5c2f4460b27729217aacf0722ce706ff0c65bf92.png)
+
+![img](https://cdn.modrinth.com/data/cached_images/95b8961a79392a69e9a9bbaff77d1fa2fdc8b433.png)
+
+![img](https://cdn.modrinth.com/data/cached_images/0a5d5463d0b775d10f2e0bd5b352fd10ec48f596.png)
+
+![img](https://cdn.modrinth.com/data/cached_images/b171b9e6cb1764fffcb62ec2e12d890559bdeaf9.png)
+
+![img](https://cdn.modrinth.com/data/cached_images/c02c2173e84bcc6b5d461fd9cb3d55c66ee5f6de.png)
+
+![img](https://cdn.modrinth.com/data/cached_images/503d7f7f1a4b7cacf04b0757cf1ff2bcfd84d7be.png)
+
+![img](https://cdn.modrinth.com/data/cached_images/20d3b12f90f0f836e7a16a8e18359da56fe65d3d.png)
+
 ## Features
 
 - Search songs, artists, playlists, and users
