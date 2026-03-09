@@ -62,8 +62,9 @@ public final class JukeboxPlaybackService {
         }
 
         ItemStack insertedDisc = heldStack.copyWithCount(1);
-        jukebox.setTheItem(insertedDisc);
+        jukebox.setSongItemWithoutPlaying(insertedDisc);
         jukebox.setChanged();
+        serverLevel.setBlock(pos, state.setValue(JukeboxBlock.HAS_RECORD, true), 2);
 
         if (heldStack.getCount() == 1) {
             player.setItemInHand(hand, ItemStack.EMPTY);
@@ -71,12 +72,7 @@ public final class JukeboxPlaybackService {
             heldStack.shrink(1);
         }
 
-        MusicPlayerMod.LOGGER.info(
-                "Inserted custom music disc into jukebox at {}: trackId={}, preservedCustomData={}",
-                pos,
-                discData.trackId(),
-                MusicDiscHelper.isMusicPlayerDisc(jukebox.getTheItem())
-        );
+        MusicPlayerMod.LOGGER.info("Inserted custom music disc into jukebox at {}: trackId={}", pos, discData.trackId());
         startPlayback(serverLevel, pos, discData);
         return InteractionResult.SUCCESS;
     }
@@ -178,20 +174,10 @@ public final class JukeboxPlaybackService {
         if (!(blockEntity instanceof JukeboxBlockEntity jukebox)) {
             return "missing jukebox block entity";
         }
-        return MusicDiscHelper.read(jukebox.getTheItem())
-                .filter(data -> !data.urls().isEmpty())
-                .map(data -> {
-                    if (!active.sourceTrackId().isBlank() && !data.trackId().isBlank()) {
-                        return data.trackId().equals(active.sourceTrackId())
-                                ? null
-                                : "track id changed from " + active.sourceTrackId() + " to " + data.trackId();
-                    }
-                    return data.title().equals(active.sourceTitle())
-                            && data.artist().equals(active.sourceArtist())
-                            ? null
-                            : "disc metadata no longer matches source";
-                })
-                .orElse("jukebox item is missing custom disc data");
+        if (jukebox.getTheItem().isEmpty()) {
+            return "jukebox record item is empty";
+        }
+        return null;
     }
 
     private void syncListeners(ServerLevel level, ActiveJukebox active) {

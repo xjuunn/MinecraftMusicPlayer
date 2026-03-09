@@ -35,6 +35,7 @@ import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
@@ -46,8 +47,10 @@ import javax.sound.sampled.SourceDataLine;
 public final class ClientJukeboxController {
     private static final ClientJukeboxController INSTANCE = new ClientJukeboxController();
     private static final double AUDIBLE_RANGE = 64.0D;
+    private static final long PENDING_TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(5);
 
     private final Map<Long, PlaybackHandle> playbackHandles = new ConcurrentHashMap<>();
+    private final Map<Long, Long> pendingInsertions = new ConcurrentHashMap<>();
 
     private ClientJukeboxController() {
     }
@@ -69,19 +72,23 @@ public final class ClientJukeboxController {
 
     public void stopAll(String reason) {
         playbackHandles.keySet().forEach(this::stop);
+        pendingInsertions.clear();
         if (reason != null && !reason.isBlank()) {
             MusicPlayerMod.LOGGER.info("Stopped all jukebox playback: {}", reason);
         }
     }
 
     public void tick(Minecraft client) {
-        if (playbackHandles.isEmpty()) {
+        if (playbackHandles.isEmpty() && pendingInsertions.isEmpty()) {
             return;
         }
         if (client.level == null) {
             stopAll("Client level missing.");
             return;
         }
+
+        long now = System.currentTimeMillis();
+        pendingInsertions.entrySet().removeIf(entry -> now - entry.getValue() > PENDING_TIMEOUT_MILLIS);
 
         for (Long jukeboxPos : List.copyOf(playbackHandles.keySet())) {
             silenceVanillaJukeboxSound(jukeboxPos, "tick suppression");
@@ -92,6 +99,16 @@ public final class ClientJukeboxController {
             MusicPlayerMod.LOGGER.info("Stopping custom jukebox playback locally because jukebox state is invalid at {}: {}", BlockPos.of(jukeboxPos), invalidReason);
             stop(jukeboxPos);
         }
+    }
+
+    public void markPendingInsertion(BlockPos pos) {
+        pendingInsertions.put(pos.asLong(), System.currentTimeMillis());
+        MusicPlayerMod.LOGGER.info("Marked custom jukebox insertion pending at {}", pos);
+    }
+
+    public boolean shouldSuppressVanillaSound(BlockPos pos) {
+        long key = pos.asLong();
+        return playbackHandles.containsKey(key) || pendingInsertions.containsKey(key);
     }
 
     public List<JukeboxVisualState> getVisualStates() {
@@ -107,6 +124,7 @@ public final class ClientJukeboxController {
     }
 
     private void play(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl) {
+        pendingInsertions.remove(jukeboxPos);
         PlaybackHandle handle = playbackHandles.computeIfAbsent(jukeboxPos, ignored -> new PlaybackHandle());
         stopPlaybackOnly(handle);
         handle.urls = urls == null ? List.of() : List.copyOf(urls);
@@ -124,6 +142,7 @@ public final class ClientJukeboxController {
     }
 
     private void refresh(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl) {
+        pendingInsertions.remove(jukeboxPos);
         PlaybackHandle handle = playbackHandles.get(jukeboxPos);
         if (handle == null) {
             play(jukeboxPos, urls, title, subtitle, coverUrl);
@@ -157,6 +176,7 @@ public final class ClientJukeboxController {
     }
 
     private void stop(long jukeboxPos) {
+        pendingInsertions.remove(jukeboxPos);
         PlaybackHandle handle = playbackHandles.remove(jukeboxPos);
         silenceVanillaJukeboxSound(jukeboxPos, "custom stop payload");
         if (handle == null) {
@@ -315,9 +335,6 @@ public final class ClientJukeboxController {
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (!(blockEntity instanceof JukeboxBlockEntity jukebox)) {
             return "missing jukebox block entity";
-        }
-        if (!MusicDiscHelper.isMusicPlayerDisc(jukebox.getTheItem())) {
-            return "jukebox record is no longer a custom music disc";
         }
         return null;
     }

@@ -1,15 +1,13 @@
 package com.junhsiun.musicplayer.mixin.client;
 
+import com.junhsiun.musicplayer.client.ClientJukeboxController;
 import com.junhsiun.musicplayer.MusicPlayerMod;
-import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelEventHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.world.item.JukeboxSong;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -29,20 +27,12 @@ public abstract class LevelEventHandlerMixin {
 
     @Inject(method = "playJukeboxSong", at = @At("HEAD"), cancellable = true)
     private void musicplayer$skipVanillaJukeboxSound(Holder<JukeboxSong> song, BlockPos pos, CallbackInfo ci) {
-        if (!musicplayer$isCustomDisc(pos)) {
+        if (!ClientJukeboxController.getInstance().shouldSuppressVanillaSound(pos)) {
             return;
         }
         stopJukeboxSong(pos);
         notifyNearbyEntities(level, pos, true);
         MusicPlayerMod.LOGGER.info("Intercepted vanilla jukebox sound at {} for custom URL disc.", pos);
         ci.cancel();
-    }
-
-    private boolean musicplayer$isCustomDisc(BlockPos pos) {
-        BlockEntity blockEntity = level.getBlockEntity(pos);
-        if (!(blockEntity instanceof JukeboxBlockEntity jukebox)) {
-            return false;
-        }
-        return MusicDiscHelper.isMusicPlayerDisc(jukebox.getTheItem());
     }
 }
