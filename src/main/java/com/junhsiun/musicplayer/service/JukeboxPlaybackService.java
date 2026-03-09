@@ -21,7 +21,6 @@ import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 
-import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -63,10 +62,8 @@ public final class JukeboxPlaybackService {
         }
 
         ItemStack insertedDisc = heldStack.copyWithCount(1);
-        jukebox.setSongItemWithoutPlaying(insertedDisc);
+        jukebox.setTheItem(insertedDisc);
         jukebox.setChanged();
-        serverLevel.setBlock(pos, state.setValue(JukeboxBlock.HAS_RECORD, true), 3);
-        triggerVanillaStartPlaying(jukebox);
 
         if (heldStack.getCount() == 1) {
             player.setItemInHand(hand, ItemStack.EMPTY);
@@ -74,6 +71,12 @@ public final class JukeboxPlaybackService {
             heldStack.shrink(1);
         }
 
+        MusicPlayerMod.LOGGER.info(
+                "Inserted custom music disc into jukebox at {}: trackId={}, preservedCustomData={}",
+                pos,
+                discData.trackId(),
+                MusicDiscHelper.isMusicPlayerDisc(jukebox.getTheItem())
+        );
         startPlayback(serverLevel, pos, discData);
         return InteractionResult.SUCCESS;
     }
@@ -278,16 +281,6 @@ public final class JukeboxPlaybackService {
             }
         }
     }
-
-    private void triggerVanillaStartPlaying(JukeboxBlockEntity jukebox) {
-        try {
-            Method method = jukebox.getClass().getMethod("startPlaying");
-            method.invoke(jukebox);
-        } catch (ReflectiveOperationException exception) {
-            MusicPlayerMod.LOGGER.debug("Failed to trigger vanilla jukebox startPlaying.", exception);
-        }
-    }
-
     private static final class ActiveJukebox {
         private final long key;
         private final ResourceKey<Level> dimension;

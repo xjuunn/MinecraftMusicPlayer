@@ -48,17 +48,22 @@ public final class MusicPlayerMod implements ModInitializer {
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             BlockState state = world.getBlockState(hitResult.getBlockPos());
             ItemStack heldStack = player.getItemInHand(hand);
-            if (state.getBlock() instanceof JukeboxBlock
-                    && !state.getValue(JukeboxBlock.HAS_RECORD)
-                    && MusicDiscHelper.isPendingDisc(heldStack)) {
-                return net.minecraft.world.InteractionResult.FAIL;
+            if (state.getBlock() instanceof JukeboxBlock && !state.getValue(JukeboxBlock.HAS_RECORD)) {
+                if (MusicDiscHelper.isPendingDisc(heldStack)) {
+                    return net.minecraft.world.InteractionResult.FAIL;
+                }
+                if (MusicDiscHelper.isMusicPlayerDisc(heldStack)) {
+                    if (world.isClientSide()) {
+                        return net.minecraft.world.InteractionResult.SUCCESS;
+                    }
+                    if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                        return JUKEBOX_PLAYBACK_SERVICE.tryInsertCustomDisc(serverPlayer, world, hand, hitResult);
+                    }
+                    return net.minecraft.world.InteractionResult.FAIL;
+                }
             }
             if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
                 return net.minecraft.world.InteractionResult.PASS;
-            }
-            net.minecraft.world.InteractionResult result = JUKEBOX_PLAYBACK_SERVICE.tryInsertCustomDisc(serverPlayer, world, hand, hitResult);
-            if (result.consumesAction()) {
-                return result;
             }
             return LOOT_MUSIC_DISC_SERVICE.tryInjectOnOpen(serverPlayer, world, hitResult.getBlockPos());
         });
