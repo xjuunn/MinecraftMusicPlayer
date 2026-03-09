@@ -21,6 +21,7 @@ import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -65,6 +66,7 @@ public final class JukeboxPlaybackService {
         jukebox.setSongItemWithoutPlaying(insertedDisc);
         jukebox.setChanged();
         serverLevel.setBlock(pos, state.setValue(JukeboxBlock.HAS_RECORD, true), 3);
+        triggerVanillaStartPlaying(jukebox);
 
         if (heldStack.getCount() == 1) {
             player.setItemInHand(hand, ItemStack.EMPTY);
@@ -266,6 +268,15 @@ public final class JukeboxPlaybackService {
                     ));
                 }
             }
+        }
+    }
+
+    private void triggerVanillaStartPlaying(JukeboxBlockEntity jukebox) {
+        try {
+            Method method = jukebox.getClass().getMethod("startPlaying");
+            method.invoke(jukebox);
+        } catch (ReflectiveOperationException exception) {
+            MusicPlayerMod.LOGGER.debug("Failed to trigger vanilla jukebox startPlaying.", exception);
         }
     }
 
