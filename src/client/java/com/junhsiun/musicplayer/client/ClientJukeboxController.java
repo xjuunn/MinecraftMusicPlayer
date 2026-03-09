@@ -16,6 +16,7 @@ import net.minecraft.client.renderer.LevelEventHandler;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
@@ -449,17 +450,25 @@ public final class ClientJukeboxController {
             if (player == null) {
                 return;
             }
+            float masterVolume = minecraft.options.getSoundSourceVolume(SoundSource.MASTER);
+            float recordsVolume = minecraft.options.getSoundSourceVolume(SoundSource.RECORDS);
+            double categoryVolume = Math.max(0.0D, masterVolume * recordsVolume);
+            if (categoryVolume <= 0.0001D) {
+                gainControl.setValue(gainControl.getMinimum());
+                return;
+            }
             double dx = player.getX() - (jukeboxPos.getX() + 0.5D);
             double dy = player.getY() - (jukeboxPos.getY() + 0.5D);
             double dz = player.getZ() - (jukeboxPos.getZ() + 0.5D);
             double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
             double normalized = 1.0D - Math.min(1.0D, distance / AUDIBLE_RANGE);
             normalized *= normalized;
-            if (normalized <= 0.0001D) {
+            double finalVolume = normalized * categoryVolume;
+            if (finalVolume <= 0.0001D) {
                 gainControl.setValue(gainControl.getMinimum());
                 return;
             }
-            float decibel = (float) (20.0D * Math.log10(normalized));
+            float decibel = (float) (20.0D * Math.log10(finalVolume));
             decibel = Math.max(gainControl.getMinimum(), Math.min(0.0F, decibel));
             gainControl.setValue(decibel);
         }
