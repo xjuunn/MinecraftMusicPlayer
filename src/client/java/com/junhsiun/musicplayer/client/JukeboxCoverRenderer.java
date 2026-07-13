@@ -2,15 +2,12 @@ package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -30,15 +27,15 @@ public final class JukeboxCoverRenderer {
     private JukeboxCoverRenderer() {
     }
 
-    public static void render(WorldRenderContext context) {
+    public static void render(LevelRenderContext context) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || minecraft.player == null || context.consumers() == null || context.matrices() == null) {
+        if (minecraft.level == null || minecraft.player == null || context.poseStack() == null) {
             return;
         }
 
         ensureBlackTexture();
-        PoseStack poseStack = context.matrices();
-        Vec3 camera = minecraft.gameRenderer.getMainCamera().position();
+        SubmitNodeCollector collector = context.submitNodeCollector();
+        Vec3 camera = minecraft.gameRenderer.mainCamera().position();
         long now = System.currentTimeMillis();
 
         for (ClientJukeboxController.JukeboxVisualState state : ClientJukeboxController.getInstance().getVisualStates()) {
@@ -59,26 +56,26 @@ public final class JukeboxCoverRenderer {
                 }
             }
 
-            renderForJukebox(poseStack, camera, state.pos(), coverTexture, now, state.startedAtMillis());
+            renderForJukebox(collector, camera, state.pos(), coverTexture, now, state.startedAtMillis());
         }
     }
 
-    private static void renderForJukebox(PoseStack poseStack, Vec3 camera, BlockPos pos, Identifier coverTexture, long now, long startedAtMillis) {
+    private static void renderForJukebox(SubmitNodeCollector collector, Vec3 camera, BlockPos pos, Identifier coverTexture, long now, long startedAtMillis) {
         float sideSpin = Math.max(0L, now - startedAtMillis) / 1000.0F * 18.0F;
-        int light = LightTexture.FULL_BRIGHT;
+        int light = 0xF000F0;
 
         double baseX = pos.getX() + 0.5D - camera.x;
         double baseY = pos.getY() + 0.5D - camera.y;
         double baseZ = pos.getZ() + 0.5D - camera.z;
 
-        renderDiscQuad(poseStack, baseX, baseY + SIDE_CENTER_Y, baseZ + SIDE_OFFSET, 0.0F, 0.0F, sideSpin, OUTER_HALF_SIZE, INNER_HALF_SIZE, coverTexture, light);
-        renderDiscQuad(poseStack, baseX, baseY + SIDE_CENTER_Y, baseZ - SIDE_OFFSET, 180.0F, 0.0F, sideSpin, OUTER_HALF_SIZE, INNER_HALF_SIZE, coverTexture, light);
-        renderDiscQuad(poseStack, baseX + SIDE_OFFSET, baseY + SIDE_CENTER_Y, baseZ, 90.0F, 0.0F, sideSpin, OUTER_HALF_SIZE, INNER_HALF_SIZE, coverTexture, light);
-        renderDiscQuad(poseStack, baseX - SIDE_OFFSET, baseY + SIDE_CENTER_Y, baseZ, -90.0F, 0.0F, sideSpin, OUTER_HALF_SIZE, INNER_HALF_SIZE, coverTexture, light);
+        renderDiscQuad(collector, baseX, baseY + SIDE_CENTER_Y, baseZ + SIDE_OFFSET, 0.0F, 0.0F, sideSpin, OUTER_HALF_SIZE, INNER_HALF_SIZE, coverTexture, light);
+        renderDiscQuad(collector, baseX, baseY + SIDE_CENTER_Y, baseZ - SIDE_OFFSET, 180.0F, 0.0F, sideSpin, OUTER_HALF_SIZE, INNER_HALF_SIZE, coverTexture, light);
+        renderDiscQuad(collector, baseX + SIDE_OFFSET, baseY + SIDE_CENTER_Y, baseZ, 90.0F, 0.0F, sideSpin, OUTER_HALF_SIZE, INNER_HALF_SIZE, coverTexture, light);
+        renderDiscQuad(collector, baseX - SIDE_OFFSET, baseY + SIDE_CENTER_Y, baseZ, -90.0F, 0.0F, sideSpin, OUTER_HALF_SIZE, INNER_HALF_SIZE, coverTexture, light);
     }
 
     private static void renderDiscQuad(
-            PoseStack poseStack,
+            SubmitNodeCollector collector,
             double x,
             double y,
             double z,
@@ -90,54 +87,53 @@ public final class JukeboxCoverRenderer {
             Identifier coverTexture,
             int light
     ) {
-        poseStack.pushPose();
-        poseStack.translate(x, y, z);
+        PoseStack ps = new PoseStack();
+        ps.translate(x, y, z);
         if (yRotationDegrees != 0.0F) {
-            poseStack.mulPose(Axis.YP.rotationDegrees(yRotationDegrees));
+            ps.mulPose(Axis.YP.rotationDegrees(yRotationDegrees));
         }
         if (xRotationDegrees != 0.0F) {
-            poseStack.mulPose(Axis.XP.rotationDegrees(xRotationDegrees));
+            ps.mulPose(Axis.XP.rotationDegrees(xRotationDegrees));
         }
         if (spinDegrees != 0.0F) {
-            poseStack.mulPose(Axis.ZP.rotationDegrees(spinDegrees));
+            ps.mulPose(Axis.ZP.rotationDegrees(spinDegrees));
         }
 
-        drawQuad(RenderTypes.entityCutoutNoCull(BLACK_DISC_TEXTURE), poseStack, outerHalfSize, light, 255, 255, 255, 255, 0.0F);
+        collector.submitCustomGeometry(ps, RenderTypes.entityCutout(BLACK_DISC_TEXTURE), (pose, consumer) ->
+                writeQuadVertices(consumer, pose, outerHalfSize, light, 255, 255, 255, 255, 0.0F)
+        );
         if (coverTexture != null) {
-            drawQuad(RenderTypes.entityCutoutNoCull(coverTexture), poseStack, innerHalfSize, light, 255, 255, 255, 255, 0.003F);
+            collector.submitCustomGeometry(ps, RenderTypes.entityCutout(coverTexture), (pose, consumer) ->
+                    writeQuadVertices(consumer, pose, innerHalfSize, light, 255, 255, 255, 255, 0.003F)
+            );
         }
-        poseStack.popPose();
     }
 
-    private static void drawQuad(RenderType renderType, PoseStack poseStack, float halfSize, int light, int red, int green, int blue, int alpha, float depthOffset) {
-        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(renderType.mode(), renderType.format());
-        VertexConsumer consumer = bufferBuilder;
-        consumer.addVertex(poseStack.last().pose(), -halfSize, -halfSize, depthOffset)
+    private static void writeQuadVertices(VertexConsumer consumer, PoseStack.Pose pose, float halfSize, int light, int red, int green, int blue, int alpha, float depthOffset) {
+        consumer.addVertex(pose.pose(), -halfSize, -halfSize, depthOffset)
                 .setColor(red, green, blue, alpha)
                 .setUv(0.0F, 1.0F)
                 .setOverlay(OverlayTexture.NO_OVERLAY)
                 .setLight(light)
-                .setNormal(poseStack.last(), 0.0F, 0.0F, 1.0F);
-        consumer.addVertex(poseStack.last().pose(), halfSize, -halfSize, depthOffset)
+                .setNormal(pose, 0.0F, 0.0F, 1.0F);
+        consumer.addVertex(pose.pose(), halfSize, -halfSize, depthOffset)
                 .setColor(red, green, blue, alpha)
                 .setUv(1.0F, 1.0F)
                 .setOverlay(OverlayTexture.NO_OVERLAY)
                 .setLight(light)
-                .setNormal(poseStack.last(), 0.0F, 0.0F, 1.0F);
-        consumer.addVertex(poseStack.last().pose(), halfSize, halfSize, depthOffset)
+                .setNormal(pose, 0.0F, 0.0F, 1.0F);
+        consumer.addVertex(pose.pose(), halfSize, halfSize, depthOffset)
                 .setColor(red, green, blue, alpha)
                 .setUv(1.0F, 0.0F)
                 .setOverlay(OverlayTexture.NO_OVERLAY)
                 .setLight(light)
-                .setNormal(poseStack.last(), 0.0F, 0.0F, 1.0F);
-        consumer.addVertex(poseStack.last().pose(), -halfSize, halfSize, depthOffset)
+                .setNormal(pose, 0.0F, 0.0F, 1.0F);
+        consumer.addVertex(pose.pose(), -halfSize, halfSize, depthOffset)
                 .setColor(red, green, blue, alpha)
                 .setUv(0.0F, 0.0F)
                 .setOverlay(OverlayTexture.NO_OVERLAY)
                 .setLight(light)
-                .setNormal(poseStack.last(), 0.0F, 0.0F, 1.0F);
-        MeshData meshData = bufferBuilder.buildOrThrow();
-        renderType.draw(meshData);
+                .setNormal(pose, 0.0F, 0.0F, 1.0F);
     }
 
     private static void ensureBlackTexture() {

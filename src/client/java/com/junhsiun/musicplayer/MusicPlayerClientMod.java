@@ -12,7 +12,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.block.JukeboxBlock;
@@ -27,7 +27,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(JukeboxMusicPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> ClientJukeboxController.getInstance().handle(payload))
         );
-        WorldRenderEvents.AFTER_ENTITIES.register(JukeboxCoverRenderer::render);
+        LevelRenderEvents.COLLECT_SUBMITS.register(JukeboxCoverRenderer::render);
         ClientTickEvents.END_CLIENT_TICK.register(client -> ClientJukeboxController.getInstance().tick(client));
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             if (!world.isClientSide()) {

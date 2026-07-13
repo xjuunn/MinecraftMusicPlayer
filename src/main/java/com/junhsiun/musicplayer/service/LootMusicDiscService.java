@@ -141,7 +141,7 @@ public final class LootMusicDiscService {
             }
             String token = UUID.randomUUID().toString();
             ItemStack pendingDisc = MusicDiscHelper.createPendingDisc(
-                    MusicDiscHelper.randomBaseDiscStack(world.random),
+                    MusicDiscHelper.randomBaseDiscStack(world.getRandom()),
                     token
             );
             container.setItem(slot, pendingDisc);

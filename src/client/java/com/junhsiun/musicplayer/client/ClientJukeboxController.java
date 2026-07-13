@@ -318,7 +318,7 @@ public final class ClientJukeboxController {
             return;
         }
         String text = subtitle == null || subtitle.isBlank() ? title : title + " - " + subtitle;
-        minecraft.gui.setNowPlaying(Component.literal(text));
+        minecraft.gui.hud.setNowPlaying(Component.literal(text));
     }
 
     private String getInvalidStateReason(ClientLevel level, long jukeboxPos) {

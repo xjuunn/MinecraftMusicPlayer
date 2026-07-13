@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version "${loom_version}"
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
     id 'maven-publish'
 }
 
@@ -30,9 +30,8 @@ loom {
 
 dependencies {
     minecraft "com.mojang:minecraft:${minecraftVersion}"
-    mappings loom.officialMojangMappings()
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
     implementation(include('javazoom:jlayer:1.0.1'))
     implementation(include('com.squareup.okhttp3:okhttp:4.12.0'))
@@ -61,13 +60,13 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.release = 21
+    options.release = 25
 }
 
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 tasks.named('jar', Jar) {
@@ -82,18 +81,6 @@ tasks.named('sourcesJar', Jar) {
     archiveBaseName.set(releaseFileBase)
     archiveVersion.set('')
     archiveClassifier.set('sources')
-}
-
-tasks.named('remapSourcesJar') {
-    archiveBaseName.set(releaseFileBase)
-    archiveVersion.set('')
-    archiveClassifier.set('sources')
-}
-
-tasks.named('remapJar') {
-    archiveBaseName.set(releaseFileBase)
-    archiveVersion.set('')
-    archiveClassifier.set('')
 }
 
 publishing {
