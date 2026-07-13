@@ -101,9 +101,9 @@ public final class MusicDiscHelper {
         wrapper.putBoolean(PENDING_KEY, true);
         wrapper.putString(PENDING_TOKEN_KEY, safe(token));
         CustomData.set(DataComponents.CUSTOM_DATA, pendingDisc, wrapper);
-        pendingDisc.set(DataComponents.CUSTOM_NAME, Component.literal("随机音乐唱片生成中").withStyle(ChatFormatting.GRAY));
+        pendingDisc.set(DataComponents.CUSTOM_NAME, Component.literal("随机音乐唱片").withStyle(ChatFormatting.LIGHT_PURPLE));
         pendingDisc.set(DataComponents.LORE, new ItemLore(List.of(
-                Component.literal("正在生成，请稍候").withStyle(ChatFormatting.DARK_GRAY)
+                Component.literal("右键使用以生成随机音乐").withStyle(ChatFormatting.DARK_GRAY)
         )));
         return pendingDisc;
     }

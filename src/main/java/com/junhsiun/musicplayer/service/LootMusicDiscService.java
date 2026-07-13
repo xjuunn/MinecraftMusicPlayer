@@ -7,15 +7,17 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.model.TrackInfo;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.RandomizableContainer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -28,18 +30,25 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class LootMusicDiscService {
     private static final ObjectMapper MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
     private static final TypeReference<Set<String>> STRING_SET = new TypeReference<>() {
     };
+    private static final int POOL_TARGET = 5;
+    private static final int POOL_REFILL_THRESHOLD = 3;
 
     private final Set<String> processedContainers = new HashSet<>();
-    private final Map<String, TrackInfo> resolvedPendingDiscs = new ConcurrentHashMap<>();
+    private final Queue<TrackInfo> trackPool = new ConcurrentLinkedQueue<>();
+    private final AtomicBoolean poolRefilling = new AtomicBoolean(false);
+    private final Set<UUID> pendingPlayers = new HashSet<>();
     private boolean loaded;
 
     public InteractionResult tryInjectOnOpen(ServerPlayer player, Level world, BlockPos pos) {
@@ -52,11 +61,9 @@ public final class LootMusicDiscService {
         }
         return tryInjectOnOpen(
                 player,
-                world,
                 randomizable,
                 randomizable,
-                key(world, pos),
-                pos.toShortString()
+                key(world, pos)
         );
     }
 
@@ -69,37 +76,109 @@ public final class LootMusicDiscService {
         }
         return tryInjectOnOpen(
                 player,
-                entity.level(),
                 container,
                 randomizable,
-                key(entity),
-                entity.getType() + "/" + entity.getUUID()
+                key(entity)
         );
     }
 
-    public void tick(MinecraftServer server) {
-        if (resolvedPendingDiscs.isEmpty()) {
+    public void start() {
+        refillPool();
+    }
+
+    public void useRandomDisc(ServerPlayer player, InteractionHand hand) {
+        ItemStack held = player.getItemInHand(hand);
+        if (!MusicDiscHelper.isPendingDisc(held)) {
             return;
         }
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            replaceResolvedInPlayerInventory(player);
-            replaceResolvedInMenu(player.containerMenu);
+        if (!pendingPlayers.add(player.getUUID())) {
+            player.sendSystemMessage(Component.literal("已有正在进行的随机生成，请稍候...").withStyle(ChatFormatting.YELLOW));
+            return;
         }
+
+        player.sendSystemMessage(Component.literal("正在生成随机音乐...").withStyle(ChatFormatting.GRAY));
+
+        ItemStack baseDisc = held.copyWithCount(1);
+        if (held.getCount() == 1) {
+            player.setItemInHand(hand, ItemStack.EMPTY);
+        } else {
+            held.shrink(1);
+        }
+
+        TrackInfo cached = trackPool.poll();
+        if (cached != null) {
+            pendingPlayers.remove(player.getUUID());
+            giveBurnedDisc(player, baseDisc, cached);
+            refillPool();
+            return;
+        }
+
+        fetchOneTrack().whenComplete((track, throwable) -> {
+            MinecraftServer server = player.level().getServer();
+            if (server == null) {
+                return;
+            }
+            server.execute(() -> {
+                pendingPlayers.remove(player.getUUID());
+                if (throwable != null || track == null) {
+                    MusicPlayerMod.LOGGER.warn("Failed to generate random music disc for player {}", player.getScoreboardName(), throwable);
+                    ItemStack returned = baseDisc.copyWithCount(1);
+                    if (!player.getInventory().add(returned)) {
+                        player.drop(returned, false, true);
+                    }
+                    player.sendSystemMessage(Component.literal("生成失败，唱片已归还").withStyle(ChatFormatting.RED));
+                    return;
+                }
+                giveBurnedDisc(player, baseDisc, track);
+                refillPool();
+            });
+        });
+    }
+
+    private CompletableFuture<TrackInfo> fetchOneTrack() {
+        return MusicPlayerMod.netease().randomHotTracks(1)
+                .orTimeout(30, TimeUnit.SECONDS)
+                .thenApply(tracks -> tracks == null || tracks.isEmpty() ? null : tracks.getFirst());
+    }
+
+    private void giveBurnedDisc(ServerPlayer player, ItemStack baseDisc, TrackInfo track) {
+        ItemStack burnedDisc = MusicDiscHelper.burn(baseDisc, track);
+        if (!player.getInventory().add(burnedDisc)) {
+            player.drop(burnedDisc, false, true);
+        }
+        player.sendSystemMessage(Component.literal("已生成: ").withStyle(ChatFormatting.GREEN)
+                .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
+                .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
+                .append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY)));
+    }
+
+    private void refillPool() {
+        if (trackPool.size() >= POOL_REFILL_THRESHOLD || !poolRefilling.compareAndSet(false, true)) {
+            return;
+        }
+        MusicPlayerMod.netease().randomHotTracks(POOL_TARGET)
+                .orTimeout(30, TimeUnit.SECONDS)
+                .whenComplete((tracks, throwable) -> {
+                    poolRefilling.set(false);
+                    if (throwable != null || tracks == null) {
+                        return;
+                    }
+                    trackPool.addAll(tracks);
+                    MusicPlayerMod.LOGGER.info("Refilled random track pool with {} tracks (pool size: {})", tracks.size(), trackPool.size());
+                });
     }
 
     private InteractionResult tryInjectOnOpen(
             ServerPlayer player,
-            Level world,
             Container container,
             RandomizableContainer randomizable,
-            String containerKey,
-            String locationDescription
+            String containerKey
     ) {
         if (randomizable.getLootTable() == null) {
             return InteractionResult.PASS;
         }
 
-        MinecraftServer server = world.getServer();
+        MinecraftServer server = player.level().getServer();
         if (server == null) {
             return InteractionResult.PASS;
         }
@@ -112,8 +191,8 @@ public final class LootMusicDiscService {
         if (!MusicPlayerConfigManager.get().enableLootMusicDiscs) {
             return InteractionResult.PASS;
         }
-        int requestedCount = Math.max(0, MusicPlayerConfigManager.get().lootMusicDiscCount);
-        if (requestedCount <= 0) {
+        int count = MusicPlayerConfigManager.get().lootMusicDiscCount;
+        if (count <= 0) {
             return InteractionResult.PASS;
         }
         if (player.getRandom().nextDouble() > MusicPlayerConfigManager.get().lootMusicDiscChance) {
@@ -121,177 +200,29 @@ public final class LootMusicDiscService {
         }
 
         randomizable.unpackLootTable(player);
-        List<PendingDiscPlacement> placements = insertPendingDiscs(container, world, requestedCount);
-        if (placements.isEmpty()) {
-            return InteractionResult.PASS;
+        int inserted = insertPendingDiscs(container, player.level().getRandom());
+        if (inserted > 0) {
+            MusicPlayerMod.LOGGER.info("Injected {} random music disc(s) into loot container: {}", inserted, containerKey);
+            container.setChanged();
         }
-
-        MusicPlayerMod.LOGGER.info("Injecting random music disc placeholders into loot container: {}", locationDescription);
-        MusicPlayerMod.netease().randomHotTracks(placements.size()).whenComplete((tracks, throwable) ->
-                server.execute(() -> resolvePendingDiscs(container, placements, tracks, throwable, locationDescription)));
         return InteractionResult.PASS;
     }
 
-    private List<PendingDiscPlacement> insertPendingDiscs(Container container, Level world, int requestedCount) {
-        List<PendingDiscPlacement> placements = new ArrayList<>();
-        for (int count = 0; count < requestedCount; count++) {
-            int slot = firstEmptySlot(container);
-            if (slot < 0) {
-                break;
+    private int insertPendingDiscs(Container container, net.minecraft.util.RandomSource random) {
+        int inserted = 0;
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            if (!container.getItem(slot).isEmpty()) {
+                continue;
             }
             String token = UUID.randomUUID().toString();
             ItemStack pendingDisc = MusicDiscHelper.createPendingDisc(
-                    MusicDiscHelper.randomBaseDiscStack(world.getRandom()),
+                    MusicDiscHelper.randomBaseDiscStack(random),
                     token
             );
             container.setItem(slot, pendingDisc);
-            placements.add(new PendingDiscPlacement(slot, token));
+            inserted++;
         }
-        if (!placements.isEmpty()) {
-            container.setChanged();
-        }
-        return placements;
-    }
-
-    private void resolvePendingDiscs(
-            Container container,
-            List<PendingDiscPlacement> placements,
-            List<TrackInfo> tracks,
-            Throwable throwable,
-            String locationDescription
-    ) {
-        if (throwable != null) {
-            MusicPlayerMod.LOGGER.warn("Failed to generate random loot music discs: {}", locationDescription, throwable);
-            clearPendingDiscs(container, placements);
-            return;
-        }
-        if (tracks == null || tracks.isEmpty()) {
-            clearPendingDiscs(container, placements);
-            return;
-        }
-
-        int resolveCount = Math.min(placements.size(), tracks.size());
-        for (int index = 0; index < resolveCount; index++) {
-            resolvedPendingDiscs.put(placements.get(index).token(), tracks.get(index));
-        }
-
-        replaceResolvedInContainer(container, placements);
-        clearUnresolvedPlacements(container, placements.subList(resolveCount, placements.size()));
-    }
-
-    private void replaceResolvedInContainer(Container container, List<PendingDiscPlacement> placements) {
-        boolean changed = false;
-        for (PendingDiscPlacement placement : placements) {
-            if (placement.slot() < 0 || placement.slot() >= container.getContainerSize()) {
-                continue;
-            }
-            ItemStack current = container.getItem(placement.slot());
-            if (!placement.matches(current)) {
-                continue;
-            }
-            TrackInfo track = resolvedPendingDiscs.remove(placement.token());
-            if (track == null) {
-                continue;
-            }
-            container.setItem(placement.slot(), MusicDiscHelper.burn(current.copyWithCount(1), track));
-            changed = true;
-        }
-        if (changed) {
-            container.setChanged();
-        }
-    }
-
-    private void clearPendingDiscs(Container container, List<PendingDiscPlacement> placements) {
-        boolean changed = false;
-        for (PendingDiscPlacement placement : placements) {
-            resolvedPendingDiscs.remove(placement.token());
-            if (placement.slot() < 0 || placement.slot() >= container.getContainerSize()) {
-                continue;
-            }
-            ItemStack current = container.getItem(placement.slot());
-            if (!placement.matches(current)) {
-                continue;
-            }
-            container.setItem(placement.slot(), ItemStack.EMPTY);
-            changed = true;
-        }
-        if (changed) {
-            container.setChanged();
-        }
-    }
-
-    private void clearUnresolvedPlacements(Container container, List<PendingDiscPlacement> placements) {
-        if (placements.isEmpty()) {
-            return;
-        }
-        boolean changed = false;
-        for (PendingDiscPlacement placement : placements) {
-            if (placement.slot() < 0 || placement.slot() >= container.getContainerSize()) {
-                continue;
-            }
-            ItemStack current = container.getItem(placement.slot());
-            if (!placement.matches(current)) {
-                continue;
-            }
-            container.setItem(placement.slot(), ItemStack.EMPTY);
-            changed = true;
-        }
-        if (changed) {
-            container.setChanged();
-        }
-    }
-
-    private void replaceResolvedInPlayerInventory(ServerPlayer player) {
-        Container inventory = player.getInventory();
-        boolean changed = false;
-        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
-            ItemStack current = inventory.getItem(slot);
-            ItemStack replacement = resolveStack(current);
-            if (replacement != null) {
-                inventory.setItem(slot, replacement);
-                changed = true;
-            }
-        }
-        if (changed) {
-            player.getInventory().setChanged();
-        }
-    }
-
-    private void replaceResolvedInMenu(AbstractContainerMenu menu) {
-        if (menu == null) {
-            return;
-        }
-        for (Slot slot : menu.slots) {
-            ItemStack replacement = resolveStack(slot.getItem());
-            if (replacement != null) {
-                slot.set(replacement);
-                slot.setChanged();
-            }
-        }
-    }
-
-    private ItemStack resolveStack(ItemStack stack) {
-        if (!MusicDiscHelper.isPendingDisc(stack)) {
-            return null;
-        }
-        String token = MusicDiscHelper.getPendingToken(stack);
-        if (token.isBlank()) {
-            return null;
-        }
-        TrackInfo track = resolvedPendingDiscs.remove(token);
-        if (track == null) {
-            return null;
-        }
-        return MusicDiscHelper.burn(stack.copyWithCount(1), track);
-    }
-
-    private static int firstEmptySlot(Container container) {
-        for (int slot = 0; slot < container.getContainerSize(); slot++) {
-            if (container.getItem(slot).isEmpty()) {
-                return slot;
-            }
-        }
-        return -1;
+        return inserted;
     }
 
     private void load(MinecraftServer server) {
@@ -333,11 +264,5 @@ public final class LootMusicDiscService {
 
     private static String key(Entity entity) {
         return entity.level().dimension().toString() + ":entity:" + entity.getUUID();
-    }
-
-    private record PendingDiscPlacement(int slot, String token) {
-        private boolean matches(ItemStack stack) {
-            return MusicDiscHelper.isPendingDisc(stack) && token.equals(MusicDiscHelper.getPendingToken(stack));
-        }
     }
 }

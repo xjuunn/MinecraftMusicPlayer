@@ -14,11 +14,13 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -44,32 +46,47 @@ public final class MusicPlayerMod implements ModInitializer {
         CommandRegistrationCallback.EVENT.register(MusicCommands::register);
         ServerTickEvents.END_SERVER_TICK.register(MUSIC_QUEUE_SERVICE::tick);
         ServerTickEvents.END_SERVER_TICK.register(JUKEBOX_PLAYBACK_SERVICE::tick);
-        ServerTickEvents.END_SERVER_TICK.register(LOOT_MUSIC_DISC_SERVICE::tick);
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
-            BlockState state = world.getBlockState(hitResult.getBlockPos());
             ItemStack heldStack = player.getItemInHand(hand);
-            if (state.getBlock() instanceof JukeboxBlock && !state.getValue(JukeboxBlock.HAS_RECORD)) {
-                if (MusicDiscHelper.isPendingDisc(heldStack)) {
-                    return net.minecraft.world.InteractionResult.FAIL;
+
+            if (MusicDiscHelper.isPendingDisc(heldStack)) {
+                if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                    LOOT_MUSIC_DISC_SERVICE.useRandomDisc(serverPlayer, hand);
                 }
+                return InteractionResult.SUCCESS;
+            }
+
+            BlockState state = world.getBlockState(hitResult.getBlockPos());
+            if (state.getBlock() instanceof JukeboxBlock && !state.getValue(JukeboxBlock.HAS_RECORD)) {
                 if (MusicDiscHelper.isMusicPlayerDisc(heldStack)) {
                     if (world.isClientSide()) {
-                        return net.minecraft.world.InteractionResult.SUCCESS;
+                        return InteractionResult.SUCCESS;
                     }
                     if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                         return JUKEBOX_PLAYBACK_SERVICE.tryInsertCustomDisc(serverPlayer, world, hand, hitResult);
                     }
-                    return net.minecraft.world.InteractionResult.FAIL;
+                    return InteractionResult.FAIL;
                 }
             }
+
             if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
-                return net.minecraft.world.InteractionResult.PASS;
+                return InteractionResult.PASS;
             }
             return LOOT_MUSIC_DISC_SERVICE.tryInjectOnOpen(serverPlayer, world, hitResult.getBlockPos());
         });
+        UseItemCallback.EVENT.register((player, world, hand) -> {
+            if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+                return InteractionResult.PASS;
+            }
+            if (MusicDiscHelper.isPendingDisc(player.getItemInHand(hand))) {
+                LOOT_MUSIC_DISC_SERVICE.useRandomDisc(serverPlayer, hand);
+                return InteractionResult.SUCCESS;
+            }
+            return InteractionResult.PASS;
+        });
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
             if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
-                return net.minecraft.world.InteractionResult.PASS;
+                return InteractionResult.PASS;
             }
             return LOOT_MUSIC_DISC_SERVICE.tryInjectOnOpen(serverPlayer, entity);
         });
@@ -79,6 +96,7 @@ public final class MusicPlayerMod implements ModInitializer {
         );
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> MUSIC_QUEUE_SERVICE.handleJoin(handler.player));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> MUSIC_QUEUE_SERVICE.handleDisconnect(handler.player));
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> LOOT_MUSIC_DISC_SERVICE.start());
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             MUSIC_QUEUE_SERVICE.shutdown(server);
             JUKEBOX_PLAYBACK_SERVICE.shutdown(server);

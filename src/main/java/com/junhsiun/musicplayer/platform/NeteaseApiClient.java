@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 public final class NeteaseApiClient {
@@ -301,59 +302,126 @@ public final class NeteaseApiClient {
         });
     }
 
+    private static final int PROVIDER_VKEYS = 0;
+    private static final int PROVIDER_BYFUNS = 1;
+    private static final int PROVIDER_QIJIEYA = 2;
+    private static final int PROVIDER_MYCELIS = 3;
+    private static final int NORMAL_PROVIDER_COUNT = 3;
+    private static final String[] VKEYS_QUALITIES = {"4", "3", "2"};
+    private static final String[] BYFUNS_QUALITIES = {"exhigh", "higher", "standard"};
+    private static final String QIJIEYA_URL = "https://api.qijieya.cn/meting/";
+    private static final String VKEYS_URL = "https://api.vkeys.cn/v2/music/netease";
+    private static final String BYFUNS_URL = "https://api.byfuns.top/1/";
+
+    private final AtomicInteger preferredProvider = new AtomicInteger(PROVIDER_VKEYS);
+
     private CompletableFuture<List<String>> songUrls(String id) {
-        CompletableFuture<String> vkeys320 = getJsonFromAbsoluteUrl("https://api.vkeys.cn/v2/music/netease", "id", id, "quality", "4")
-                .thenApply(root -> root.path("data").path("url").asText(null))
-                .exceptionally(throwable -> null);
-        CompletableFuture<String> vkeys192 = getJsonFromAbsoluteUrl("https://api.vkeys.cn/v2/music/netease", "id", id, "quality", "3")
-                .thenApply(root -> root.path("data").path("url").asText(null))
-                .exceptionally(throwable -> null);
-        CompletableFuture<String> vkeys128 = getJsonFromAbsoluteUrl("https://api.vkeys.cn/v2/music/netease", "id", id, "quality", "2")
-                .thenApply(root -> root.path("data").path("url").asText(null))
-                .exceptionally(throwable -> null);
-        CompletableFuture<String> byfunsExhigh = getTextFromAbsoluteUrl("https://api.byfuns.top/1/", "id", id, "level", "exhigh")
-                .exceptionally(throwable -> null);
-        CompletableFuture<String> byfunsHigher = getTextFromAbsoluteUrl("https://api.byfuns.top/1/", "id", id, "level", "higher")
-                .exceptionally(throwable -> null);
-        CompletableFuture<String> byfunsStandard = getTextFromAbsoluteUrl("https://api.byfuns.top/1/", "id", id, "level", "standard")
-                .exceptionally(throwable -> null);
-        CompletableFuture<String> standardUrl = getJson("/song/url/v1", "id", id, "level", "standard")
-                .thenApply(root -> firstUrl(root.path("data")))
-                .exceptionally(throwable -> null);
-        CompletableFuture<String> higherUrl = getJson("/song/url/v1", "id", id, "level", "higher")
-                .thenApply(root -> firstUrl(root.path("data")))
-                .exceptionally(throwable -> null);
-        CompletableFuture<String> exhighUrl = getJson("/song/url/v1", "id", id, "level", "exhigh")
-                .thenApply(root -> firstUrl(root.path("data")))
-                .exceptionally(throwable -> null);
-        CompletableFuture<String> legacyUrl = getJson("/song/url", "id", id)
-                .thenApply(root -> firstUrl(root.path("data")))
-                .exceptionally(throwable -> null);
-        CompletableFuture<String> directUrl = CompletableFuture.completedFuture("https://music.163.com/song/media/outer/url?id=" + id + ".mp3");
-
-        return CompletableFuture.allOf(
-                vkeys320, vkeys192, vkeys128,
-                byfunsExhigh, byfunsHigher, byfunsStandard,
-                standardUrl, higherUrl, exhighUrl, legacyUrl, directUrl
-        ).thenApply(ignored -> {
-            Set<String> urls = new LinkedHashSet<>();
-            addCandidate(urls, byfunsExhigh.join());
-            addCandidate(urls, byfunsHigher.join());
-            addCandidate(urls, byfunsStandard.join());
-            addCandidate(urls, vkeys320.join());
-            addCandidate(urls, vkeys192.join());
-            addCandidate(urls, vkeys128.join());
-            addCandidate(urls, standardUrl.join());
-            addCandidate(urls, higherUrl.join());
-            addCandidate(urls, exhighUrl.join());
-            addCandidate(urls, legacyUrl.join());
-            addCandidate(urls, directUrl.join());
-
-            if (urls.isEmpty()) {
-                throw new IllegalStateException("无法获取任何可用的歌曲播放源，请检查音乐 API 服务。");
+        return CompletableFuture.supplyAsync(() -> {
+            String url = tryProviders(id);
+            if (url != null) {
+                return List.of(url);
             }
-            return List.copyOf(urls);
-        });
+            String direct = "https://music.163.com/song/media/outer/url?id=" + id + ".mp3";
+            return List.of(direct);
+        }, EXECUTOR);
+    }
+
+    private String tryProviders(String id) {
+        int preferred = preferredProvider.get();
+        for (int offset = 0; offset < NORMAL_PROVIDER_COUNT; offset++) {
+            int index = (preferred + offset) % NORMAL_PROVIDER_COUNT;
+            String url = fetchFromProvider(index, id);
+            if (url != null) {
+                if (index != preferred) {
+                    preferredProvider.compareAndSet(preferred, index);
+                }
+                return url;
+            }
+        }
+        String mycelisUrl = fetchMycelisUrl(id);
+        if (mycelisUrl != null) {
+            return mycelisUrl;
+        }
+        return null;
+    }
+
+    private String fetchFromProvider(int provider, String id) {
+        return switch (provider) {
+            case PROVIDER_VKEYS -> fetchVkeysUrl(id);
+            case PROVIDER_BYFUNS -> fetchByfunsUrl(id);
+            case PROVIDER_QIJIEYA -> fetchQijieyaUrl(id);
+            default -> null;
+        };
+    }
+
+    private String fetchVkeysUrl(String id) {
+        for (String quality : VKEYS_QUALITIES) {
+            try {
+                Request request = baseRequest(VKEYS_URL, new String[]{"id", id, "quality", quality}, "application/json,text/plain,*/*");
+                JsonNode root = executeJson(request);
+                String url = root.path("data").path("url").asText(null);
+                if (isValidUrl(url)) {
+                    return url.trim();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private String fetchByfunsUrl(String id) {
+        for (String level : BYFUNS_QUALITIES) {
+            try {
+                Request request = baseRequest(BYFUNS_URL, new String[]{"id", id, "level", level}, "text/plain,*/*");
+                String url = executeText(request);
+                if (isValidUrl(url)) {
+                    return url.trim();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private String fetchQijieyaUrl(String id) {
+        try {
+            Request request = baseRequest(QIJIEYA_URL, new String[]{"type", "url", "id", id}, "text/plain,*/*");
+            String url = executeText(request);
+            if (url != null && !url.isBlank()) {
+                return url.trim();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private String fetchMycelisUrl(String id) {
+        String base = baseUrl();
+        for (String level : new String[]{"lossless", "exhigh", "higher", "standard"}) {
+            try {
+                Request request = baseRequest(base + "/song/url/v1", new String[]{"id", id, "level", level}, "application/json,text/plain,*/*");
+                JsonNode root = executeJson(request);
+                String url = firstUrl(root.path("data"));
+                if (isValidUrl(url)) {
+                    return url.trim();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        try {
+            Request request = baseRequest(base + "/song/url", new String[]{"id", id}, "application/json,text/plain,*/*");
+            JsonNode root = executeJson(request);
+            String url = firstUrl(root.path("data"));
+            if (isValidUrl(url)) {
+                return url.trim();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private static boolean isValidUrl(String url) {
+        return url != null && !url.isBlank() && !"null".equalsIgnoreCase(url.trim());
     }
 
     private CompletableFuture<JsonNode> getJson(String path, String... queryPairs) {
