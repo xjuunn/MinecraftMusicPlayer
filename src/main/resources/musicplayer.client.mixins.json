@@ -5,7 +5,8 @@
   "client": [
     "ClientLevelAccessor",
     "LevelEventHandlerAccessor",
-    "LevelEventHandlerMixin"
+    "LevelEventHandlerMixin",
+    "MusicManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

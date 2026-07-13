@@ -51,7 +51,8 @@ public final class MusicDiscHelper {
             Items.MUSIC_DISC_5,
             Items.MUSIC_DISC_PIGSTEP,
             Items.MUSIC_DISC_PRECIPICE,
-            Items.MUSIC_DISC_TEARS
+            Items.MUSIC_DISC_TEARS,
+            Items.MUSIC_DISC_BOUNCE
     );
 
     private MusicDiscHelper() {
