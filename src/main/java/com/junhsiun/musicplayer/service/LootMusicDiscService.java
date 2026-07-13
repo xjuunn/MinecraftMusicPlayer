@@ -200,7 +200,7 @@ public final class LootMusicDiscService {
         }
 
         randomizable.unpackLootTable(player);
-        int inserted = insertPendingDiscs(container, player.level().getRandom());
+        int inserted = insertPendingDiscs(container, player.level().getRandom(), count);
         if (inserted > 0) {
             MusicPlayerMod.LOGGER.info("Injected {} random music disc(s) into loot container: {}", inserted, containerKey);
             container.setChanged();
@@ -208,21 +208,25 @@ public final class LootMusicDiscService {
         return InteractionResult.PASS;
     }
 
-    private int insertPendingDiscs(Container container, net.minecraft.util.RandomSource random) {
-        int inserted = 0;
+    private int insertPendingDiscs(Container container, net.minecraft.util.RandomSource random, int maxCount) {
+        List<Integer> emptySlots = new ArrayList<>();
         for (int slot = 0; slot < container.getContainerSize(); slot++) {
-            if (!container.getItem(slot).isEmpty()) {
-                continue;
+            if (container.getItem(slot).isEmpty()) {
+                emptySlots.add(slot);
             }
+        }
+        int toInsert = Math.min(maxCount, emptySlots.size());
+        for (int i = 0; i < toInsert; i++) {
+            int pick = random.nextInt(emptySlots.size());
+            int slot = emptySlots.remove(pick);
             String token = UUID.randomUUID().toString();
             ItemStack pendingDisc = MusicDiscHelper.createPendingDisc(
                     MusicDiscHelper.randomBaseDiscStack(random),
                     token
             );
             container.setItem(slot, pendingDisc);
-            inserted++;
         }
-        return inserted;
+        return toInsert;
     }
 
     private void load(MinecraftServer server) {
