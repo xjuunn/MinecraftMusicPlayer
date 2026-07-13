@@ -62,8 +62,8 @@ public final class ClientJukeboxController {
     public void handle(JukeboxMusicPayload payload) {
         MusicPlayerMod.LOGGER.info("Received custom jukebox payload: action={}, pos={}", payload.action(), BlockPos.of(payload.jukeboxPos()));
         switch (payload.action()) {
-            case "play" -> play(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl());
-            case "refresh" -> refresh(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl());
+            case "play" -> play(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl(), payload.offsetMillis());
+            case "refresh" -> refresh(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl(), payload.offsetMillis());
             case "update" -> update(payload.jukeboxPos(), payload.title(), payload.subtitle(), payload.coverUrl());
             case "stop" -> stop(payload.jukeboxPos());
             default -> MusicPlayerMod.LOGGER.warn("Unknown jukebox action: {}", payload.action());
@@ -144,7 +144,7 @@ public final class ClientJukeboxController {
         return states;
     }
 
-    private void play(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl) {
+    private void play(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis) {
         pendingInsertions.remove(jukeboxPos);
         PlaybackHandle handle = playbackHandles.computeIfAbsent(jukeboxPos, ignored -> new PlaybackHandle());
         stopPlaybackOnly(handle);
@@ -153,6 +153,7 @@ public final class ClientJukeboxController {
         handle.subtitle = subtitle == null ? "" : subtitle;
         handle.coverUrl = coverUrl == null ? "" : coverUrl;
         handle.startedAtMillis = System.currentTimeMillis();
+        handle.offsetMillis = offsetMillis;
         CoverArtTextureCache.getInstance().request(handle.coverUrl);
         silenceVanillaJukeboxSound(jukeboxPos, "custom play payload");
         showNowPlaying(handle.title, handle.subtitle);
@@ -162,11 +163,11 @@ public final class ClientJukeboxController {
         playbackThread.start();
     }
 
-    private void refresh(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl) {
+    private void refresh(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis) {
         pendingInsertions.remove(jukeboxPos);
         PlaybackHandle handle = playbackHandles.get(jukeboxPos);
         if (handle == null) {
-            play(jukeboxPos, urls, title, subtitle, coverUrl);
+            play(jukeboxPos, urls, title, subtitle, coverUrl, offsetMillis);
             return;
         }
         if (urls != null && !urls.isEmpty()) {
@@ -182,6 +183,7 @@ public final class ClientJukeboxController {
             handle.coverUrl = coverUrl;
             CoverArtTextureCache.getInstance().request(coverUrl);
         }
+        handle.offsetMillis = offsetMillis;
         silenceVanillaJukeboxSound(jukeboxPos, "custom refresh payload");
         Thread thread = handle.thread;
         if (thread == null || !thread.isAlive()) {
@@ -295,6 +297,7 @@ public final class ClientJukeboxController {
             }
             try (BufferedInputStream inputStream = new BufferedInputStream(new ByteArrayInputStream(audioBytes))) {
                 SpatialAudioDevice audioDevice = new SpatialAudioDevice(jukeboxPos);
+                audioDevice.setSeekPosition(handle.offsetMillis);
                 Player currentPlayer = new Player(inputStream, audioDevice);
                 handle.player = currentPlayer;
                 MusicPlayerMod.LOGGER.info("Start jukebox playback: {} - {}", title, subtitle);
@@ -315,6 +318,7 @@ public final class ClientJukeboxController {
         private volatile String subtitle = "";
         private volatile String coverUrl = "";
         private volatile long startedAtMillis;
+        private volatile long offsetMillis;
     }
 
     public record JukeboxVisualState(BlockPos pos, String coverUrl, long startedAtMillis) {
@@ -389,9 +393,16 @@ public final class ClientJukeboxController {
         private AudioFormat audioFormat;
         private byte[] byteBuffer;
         private FloatControl gainControl;
+        private long seekPositionMillis;
+        private long decodedMillis;
 
         private SpatialAudioDevice(long jukeboxPos) {
             this.jukeboxPos = BlockPos.of(jukeboxPos);
+        }
+
+        private void setSeekPosition(long millis) {
+            this.seekPositionMillis = millis;
+            this.decodedMillis = 0L;
         }
 
         @Override
@@ -405,6 +416,16 @@ public final class ClientJukeboxController {
                 createSource();
             }
             updateVolume();
+            if (seekPositionMillis > 0L) {
+                float sampleRate = audioFormat.getSampleRate();
+                int channels = audioFormat.getChannels();
+                float frameMillis = (float) (len / channels) / sampleRate * 1000.0f;
+                decodedMillis += (long) frameMillis;
+                if (decodedMillis < seekPositionMillis) {
+                    return;
+                }
+                seekPositionMillis = 0L;
+            }
             byte[] buffer = getByteArray(len * 2);
             int index = 0;
             for (int i = offs; i < offs + len; i++) {

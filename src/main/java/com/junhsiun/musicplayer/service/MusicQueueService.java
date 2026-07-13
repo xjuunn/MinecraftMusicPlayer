@@ -100,7 +100,8 @@ public final class MusicQueueService {
 
     public void handleJoin(ServerPlayer player) {
         if (currentPlayback != null && !optedOutPlayers.contains(player.getUUID())) {
-            sendPlay(player, currentPlayback.track());
+            long offset = Math.max(0L, System.currentTimeMillis() - currentPlayback.startedAt());
+            sendPlay(player, currentPlayback.track(), offset);
         }
     }
 
@@ -142,7 +143,8 @@ public final class MusicQueueService {
     public void joinPlayer(ServerPlayer player) {
         optedOutPlayers.remove(player.getUUID());
         if (currentPlayback != null) {
-            sendPlay(player, currentPlayback.track());
+            long offset = Math.max(0L, System.currentTimeMillis() - currentPlayback.startedAt());
+            sendPlay(player, currentPlayback.track(), offset);
         }
     }
 
@@ -409,7 +411,7 @@ public final class MusicQueueService {
         server.getPlayerList().getPlayers().stream()
                 .filter(player -> !optedOutPlayers.contains(player.getUUID()))
                 .sorted(Comparator.comparing(player -> player.getGameProfile().name()))
-                .forEach(player -> sendPlay(player, track));
+                .forEach(player -> sendPlay(player, track, 0L));
         broadcast(server, renderNowPlayingBroadcast(track));
     }
 
@@ -429,9 +431,9 @@ public final class MusicQueueService {
         return queue.stream().anyMatch(track -> songId.equals(track.songId()));
     }
 
-    private void sendPlay(ServerPlayer player, TrackInfo track) {
+    private void sendPlay(ServerPlayer player, TrackInfo track, long offsetMillis) {
         if (ServerPlayNetworking.canSend(player, MusicControlPayload.TYPE)) {
-            ServerPlayNetworking.send(player, MusicControlPayload.play(track.id(), track.sourceUrls(), track.title(), track.artist()));
+            ServerPlayNetworking.send(player, MusicControlPayload.play(track.id(), track.sourceUrls(), track.title(), track.artist(), offsetMillis));
         }
     }
 

@@ -50,7 +50,7 @@ public final class ClientMusicController {
 
     public void handle(MusicControlPayload payload) {
         switch (payload.action()) {
-            case "play" -> play(payload.trackId(), payload.urls(), payload.title(), payload.subtitle());
+            case "play" -> play(payload.trackId(), payload.urls(), payload.title(), payload.subtitle(), payload.offsetMillis());
             case "stop" -> stop(payload.message());
             default -> MusicPlayerMod.LOGGER.warn("未知的音乐控制动作: {}", payload.action());
         }
@@ -73,7 +73,7 @@ public final class ClientMusicController {
         }
     }
 
-    private synchronized void play(String trackId, List<String> urls, String title, String subtitle) {
+    private synchronized void play(String trackId, List<String> urls, String title, String subtitle, long offsetMillis) {
         stop(null);
         currentTrackId = trackId == null ? "" : trackId;
         Minecraft minecraft = Minecraft.getInstance();
@@ -81,6 +81,7 @@ public final class ClientMusicController {
             minecraft.getMusicManager().stopPlaying();
         }
         backgroundMusicPlaying = true;
+        audioDevice.setSeekPosition(offsetMillis);
         playbackThread = new Thread(() -> playWithFallback(urls, currentTrackId, title, subtitle), "musicplayer-client-playback");
         playbackThread.setDaemon(true);
         playbackThread.start();
@@ -188,6 +189,13 @@ public final class ClientMusicController {
         private byte[] byteBuffer;
         private FloatControl gainControl;
         private double jukeboxFadeVolume = 1.0D;
+        private long seekPositionMillis;
+        private long decodedMillis;
+
+        private void setSeekPosition(long millis) {
+            this.seekPositionMillis = millis;
+            this.decodedMillis = 0L;
+        }
 
         private void reset() {
             if (sourceLine != null) {
@@ -211,6 +219,16 @@ public final class ClientMusicController {
                 createSource();
             }
             updateVolume();
+            if (seekPositionMillis > 0L) {
+                float sampleRate = audioFormat.getSampleRate();
+                int channels = audioFormat.getChannels();
+                float frameMillis = (float) (len / channels) / sampleRate * 1000.0f;
+                decodedMillis += (long) frameMillis;
+                if (decodedMillis < seekPositionMillis) {
+                    return;
+                }
+                seekPositionMillis = 0L;
+            }
             byte[] buffer = getByteArray(len * 2);
             int index = 0;
             for (int i = offs; i < offs + len; i++) {

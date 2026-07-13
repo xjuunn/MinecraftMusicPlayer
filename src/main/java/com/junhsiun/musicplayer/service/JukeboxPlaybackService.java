@@ -224,12 +224,14 @@ public final class JukeboxPlaybackService {
     private void sendPlay(ServerPlayer player, ActiveJukebox active) {
         if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
             MusicPlayerMod.LOGGER.info("Sending custom jukebox play to {} at {}", player.getScoreboardName(), active.pos());
+            long offset = Math.max(0L, System.currentTimeMillis() - active.startedAtMillis());
             ServerPlayNetworking.send(player, JukeboxMusicPayload.play(
                     active.key(),
                     active.discData().urls(),
                     active.discData().title(),
                     active.discData().artist(),
-                    active.discData().coverUrl()
+                    active.discData().coverUrl(),
+                    offset
             ));
         }
     }
@@ -249,12 +251,14 @@ public final class JukeboxPlaybackService {
             }
             if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
                 if (urlsChanged) {
+                    long offset = Math.max(0L, System.currentTimeMillis() - active.startedAtMillis());
                     ServerPlayNetworking.send(player, JukeboxMusicPayload.refresh(
                             active.key(),
                             active.discData().urls(),
                             active.discData().title(),
                             active.discData().artist(),
-                            active.discData().coverUrl()
+                            active.discData().coverUrl(),
+                            offset
                     ));
                 } else {
                     ServerPlayNetworking.send(player, JukeboxMusicPayload.update(
@@ -276,6 +280,7 @@ public final class JukeboxPlaybackService {
         private final String sourceArtist;
         private final Set<UUID> listeners = new HashSet<>();
         private volatile DiscTrackData discData;
+        private final long startedAtMillis;
 
         private ActiveJukebox(long key, ResourceKey<Level> dimension, BlockPos pos, DiscTrackData discData) {
             this.key = key;
@@ -285,6 +290,7 @@ public final class JukeboxPlaybackService {
             this.sourceTitle = discData.title() == null ? "" : discData.title();
             this.sourceArtist = discData.artist() == null ? "" : discData.artist();
             this.discData = discData;
+            this.startedAtMillis = System.currentTimeMillis();
         }
 
         private long key() {
@@ -313,6 +319,10 @@ public final class JukeboxPlaybackService {
 
         private DiscTrackData discData() {
             return discData;
+        }
+
+        private long startedAtMillis() {
+            return startedAtMillis;
         }
 
         private void setDiscData(DiscTrackData discData) {

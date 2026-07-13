@@ -9,13 +9,13 @@ import net.minecraft.resources.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 
-public record MusicControlPayload(String action, String trackId, List<String> urls, String title, String subtitle, String message) implements CustomPacketPayload {
+public record MusicControlPayload(String action, String trackId, List<String> urls, String title, String subtitle, String message, long offsetMillis) implements CustomPacketPayload {
     public static final Type<MusicControlPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_control"));
     public static final StreamCodec<RegistryFriendlyByteBuf, MusicControlPayload> CODEC =
             CustomPacketPayload.codec(MusicControlPayload::write, MusicControlPayload::new);
 
     public MusicControlPayload(RegistryFriendlyByteBuf buffer) {
-        this(buffer.readUtf(), buffer.readUtf(), readUrls(buffer), buffer.readUtf(), buffer.readUtf(), buffer.readUtf());
+        this(buffer.readUtf(), buffer.readUtf(), readUrls(buffer), buffer.readUtf(), buffer.readUtf(), buffer.readUtf(), buffer.readLong());
     }
 
     private void write(RegistryFriendlyByteBuf buffer) {
@@ -28,6 +28,7 @@ public record MusicControlPayload(String action, String trackId, List<String> ur
         buffer.writeUtf(this.title);
         buffer.writeUtf(this.subtitle);
         buffer.writeUtf(this.message);
+        buffer.writeLong(this.offsetMillis);
     }
 
     private static List<String> readUrls(RegistryFriendlyByteBuf buffer) {
@@ -44,11 +45,11 @@ public record MusicControlPayload(String action, String trackId, List<String> ur
         return TYPE;
     }
 
-    public static MusicControlPayload play(String trackId, List<String> urls, String title, String subtitle) {
-        return new MusicControlPayload("play", trackId == null ? "" : trackId, List.copyOf(urls), title, subtitle, "");
+    public static MusicControlPayload play(String trackId, List<String> urls, String title, String subtitle, long offsetMillis) {
+        return new MusicControlPayload("play", trackId == null ? "" : trackId, List.copyOf(urls), title, subtitle, "", offsetMillis);
     }
 
     public static MusicControlPayload stop(String message) {
-        return new MusicControlPayload("stop", "", List.of(), "", "", message == null ? "" : message);
+        return new MusicControlPayload("stop", "", List.of(), "", "", message == null ? "" : message, 0L);
     }
 }
