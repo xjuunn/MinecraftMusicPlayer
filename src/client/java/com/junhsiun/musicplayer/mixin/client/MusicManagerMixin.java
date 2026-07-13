@@ -1,5 +1,6 @@
 package com.junhsiun.musicplayer.mixin.client;
 
+import com.junhsiun.musicplayer.client.ClientJukeboxController;
 import com.junhsiun.musicplayer.client.ClientMusicController;
 import net.minecraft.client.sounds.MusicManager;
 import org.spongepowered.asm.mixin.Mixin;
@@ -12,7 +13,8 @@ public abstract class MusicManagerMixin {
 
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void musicplayer$suppressVanillaMusic(CallbackInfo ci) {
-        if (ClientMusicController.getInstance().isBackgroundMusicPlaying()) {
+        if (ClientMusicController.getInstance().isBackgroundMusicPlaying()
+                || ClientJukeboxController.getInstance().isPlayerNearAnyActiveJukebox()) {
             ci.cancel();
         }
     }

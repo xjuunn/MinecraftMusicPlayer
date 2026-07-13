@@ -224,7 +224,12 @@ public final class JukeboxPlaybackService {
     private void sendPlay(ServerPlayer player, ActiveJukebox active) {
         if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
             MusicPlayerMod.LOGGER.info("Sending custom jukebox play to {} at {}", player.getScoreboardName(), active.pos());
-            long offset = Math.max(0L, System.currentTimeMillis() - active.startedAtMillis());
+            long offset;
+            if (active.tryMarkFirstPlaySent()) {
+                offset = 0L;
+            } else {
+                offset = Math.max(0L, System.currentTimeMillis() - active.startedAtMillis());
+            }
             ServerPlayNetworking.send(player, JukeboxMusicPayload.play(
                     active.key(),
                     active.discData().urls(),
@@ -251,14 +256,13 @@ public final class JukeboxPlaybackService {
             }
             if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
                 if (urlsChanged) {
-                    long offset = Math.max(0L, System.currentTimeMillis() - active.startedAtMillis());
                     ServerPlayNetworking.send(player, JukeboxMusicPayload.refresh(
                             active.key(),
                             active.discData().urls(),
                             active.discData().title(),
                             active.discData().artist(),
                             active.discData().coverUrl(),
-                            offset
+                            0L
                     ));
                 } else {
                     ServerPlayNetworking.send(player, JukeboxMusicPayload.update(
@@ -281,6 +285,7 @@ public final class JukeboxPlaybackService {
         private final Set<UUID> listeners = new HashSet<>();
         private volatile DiscTrackData discData;
         private final long startedAtMillis;
+        private boolean firstPlaySent;
 
         private ActiveJukebox(long key, ResourceKey<Level> dimension, BlockPos pos, DiscTrackData discData) {
             this.key = key;
@@ -323,6 +328,14 @@ public final class JukeboxPlaybackService {
 
         private long startedAtMillis() {
             return startedAtMillis;
+        }
+
+        private synchronized boolean tryMarkFirstPlaySent() {
+            if (firstPlaySent) {
+                return false;
+            }
+            firstPlaySent = true;
+            return true;
         }
 
         private void setDiscData(DiscTrackData discData) {

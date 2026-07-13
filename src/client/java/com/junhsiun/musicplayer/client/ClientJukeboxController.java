@@ -99,6 +99,12 @@ public final class ClientJukeboxController {
             MusicPlayerMod.LOGGER.info("Stopping custom jukebox playback locally because jukebox state is invalid at {}: {}", BlockPos.of(jukeboxPos), invalidReason);
             stop(jukeboxPos);
         }
+
+        if (!playbackHandles.isEmpty() && isPlayerNearAnyActiveJukebox()) {
+            if (client.getMusicManager() != null) {
+                client.getMusicManager().stopPlaying();
+            }
+        }
     }
 
     public void markPendingInsertion(BlockPos pos) {
@@ -153,11 +159,12 @@ public final class ClientJukeboxController {
         handle.subtitle = subtitle == null ? "" : subtitle;
         handle.coverUrl = coverUrl == null ? "" : coverUrl;
         handle.startedAtMillis = System.currentTimeMillis();
-        handle.offsetMillis = offsetMillis;
         CoverArtTextureCache.getInstance().request(handle.coverUrl);
         silenceVanillaJukeboxSound(jukeboxPos, "custom play payload");
         showNowPlaying(handle.title, handle.subtitle);
-        Thread playbackThread = new Thread(() -> playWithFallback(jukeboxPos, handle, urls, title, subtitle), "musicplayer-jukebox-" + jukeboxPos);
+        stopVanillaBackgroundMusic();
+        long startOffset = offsetMillis;
+        Thread playbackThread = new Thread(() -> playWithFallback(jukeboxPos, handle, urls, title, subtitle, startOffset), "musicplayer-jukebox-" + jukeboxPos);
         playbackThread.setDaemon(true);
         handle.thread = playbackThread;
         playbackThread.start();
@@ -183,12 +190,13 @@ public final class ClientJukeboxController {
             handle.coverUrl = coverUrl;
             CoverArtTextureCache.getInstance().request(coverUrl);
         }
-        handle.offsetMillis = offsetMillis;
         silenceVanillaJukeboxSound(jukeboxPos, "custom refresh payload");
+        stopVanillaBackgroundMusic();
         Thread thread = handle.thread;
         if (thread == null || !thread.isAlive()) {
+            long startOffset = offsetMillis;
             Thread playbackThread = new Thread(
-                    () -> playWithFallback(jukeboxPos, handle, handle.urls, handle.title, handle.subtitle),
+                    () -> playWithFallback(jukeboxPos, handle, handle.urls, handle.title, handle.subtitle, startOffset),
                     "musicplayer-jukebox-" + jukeboxPos
             );
             playbackThread.setDaemon(true);
@@ -237,7 +245,7 @@ public final class ClientJukeboxController {
         }
     }
 
-    private void playWithFallback(long jukeboxPos, PlaybackHandle handle, List<String> urls, String title, String subtitle) {
+    private void playWithFallback(long jukeboxPos, PlaybackHandle handle, List<String> urls, String title, String subtitle, long startOffset) {
         if (urls == null || urls.isEmpty()) {
             MusicPlayerMod.LOGGER.warn("Jukebox {} has no playable urls: {} - {}", jukeboxPos, title, subtitle);
             handle.thread = null;
@@ -253,7 +261,7 @@ public final class ClientJukeboxController {
                 return;
             }
             try {
-                playSingle(jukeboxPos, handle, url, title, subtitle);
+                playSingle(jukeboxPos, handle, url, title, subtitle, startOffset);
                 handle.thread = null;
                 handle.player = null;
                 handle.currentCall = null;
@@ -273,7 +281,7 @@ public final class ClientJukeboxController {
         handle.currentCall = null;
     }
 
-    private void playSingle(long jukeboxPos, PlaybackHandle handle, String url, String title, String subtitle) throws IOException, JavaLayerException {
+    private void playSingle(long jukeboxPos, PlaybackHandle handle, String url, String title, String subtitle, long startOffset) throws IOException, JavaLayerException {
         OkHttpClient client = HttpClientFactory.create();
         Request request = new Request.Builder()
                 .url(url)
@@ -297,7 +305,7 @@ public final class ClientJukeboxController {
             }
             try (BufferedInputStream inputStream = new BufferedInputStream(new ByteArrayInputStream(audioBytes))) {
                 SpatialAudioDevice audioDevice = new SpatialAudioDevice(jukeboxPos);
-                audioDevice.setSeekPosition(handle.offsetMillis);
+                audioDevice.setSeekPosition(startOffset);
                 Player currentPlayer = new Player(inputStream, audioDevice);
                 handle.player = currentPlayer;
                 MusicPlayerMod.LOGGER.info("Start jukebox playback: {} - {}", title, subtitle);
@@ -318,7 +326,6 @@ public final class ClientJukeboxController {
         private volatile String subtitle = "";
         private volatile String coverUrl = "";
         private volatile long startedAtMillis;
-        private volatile long offsetMillis;
     }
 
     public record JukeboxVisualState(BlockPos pos, String coverUrl, long startedAtMillis) {
@@ -335,6 +342,13 @@ public final class ClientJukeboxController {
             return;
         }
         MusicPlayerMod.LOGGER.warn("Jukebox source failed, trying next source: {}", url, exception);
+    }
+
+    private void stopVanillaBackgroundMusic() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.getMusicManager() != null) {
+            minecraft.getMusicManager().stopPlaying();
+        }
     }
 
     private void showNowPlaying(String title, String subtitle) {
