@@ -17,6 +17,9 @@ import java.util.List;
 import java.util.Locale;
 
 public final class HttpClientFactory {
+    private static final int API_CONNECT_TIMEOUT = 5;
+    private static final int API_READ_TIMEOUT = 10;
+
     private HttpClientFactory() {
     }
 
@@ -57,6 +60,17 @@ public final class HttpClientFactory {
         }
 
         return builder.build();
+    }
+
+    public static OkHttpClient createApiClient() {
+        MusicPlayerConfig config = MusicPlayerConfigManager.get();
+        return new OkHttpClient.Builder()
+                .connectTimeout(Duration.ofSeconds(Math.min(config.connectTimeoutSeconds, API_CONNECT_TIMEOUT)))
+                .readTimeout(Duration.ofSeconds(Math.min(config.readTimeoutSeconds, API_READ_TIMEOUT)))
+                .callTimeout(Duration.ofSeconds(Math.min(config.connectTimeoutSeconds + config.readTimeoutSeconds, API_CONNECT_TIMEOUT + API_READ_TIMEOUT)))
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .build();
     }
 
     private static Proxy resolveManualProxy(String value) {

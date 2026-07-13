@@ -135,6 +135,40 @@ public final class NeteaseApiClient {
         }, EXECUTOR);
     }
 
+    public CompletableFuture<List<TrackInfo>> artistTopSongs(String artistId) {
+        return getJson("/artist/top/song", "id", artistId).thenCompose(root -> {
+            JsonNode songs = root.path("songs");
+            if (!songs.isArray() || songs.isEmpty()) {
+                return CompletableFuture.completedFuture(List.of());
+            }
+            List<CompletableFuture<TrackInfo>> futures = new ArrayList<>();
+            for (JsonNode song : songs) {
+                futures.add(resolveSongFromNode(song));
+            }
+            return collectResults(futures);
+        });
+    }
+
+    public CompletableFuture<List<SearchEntry>> topArtists(int limit, int offset) {
+        return getJson("/top/artists", "limit", Integer.toString(limit), "offset", Integer.toString(offset))
+                .thenApply(root -> {
+                    List<SearchEntry> entries = new ArrayList<>();
+                    JsonNode artists = root.path("artists");
+                    if (!artists.isArray()) return entries;
+                    for (JsonNode artist : artists) {
+                        String artistId = artist.path("id").asText();
+                        entries.add(new SearchEntry(
+                                artistId,
+                                artist.path("name").asText(),
+                                "作者",
+                                viewArtistCommand(artistId),
+                                ""
+                        ));
+                    }
+                    return entries;
+                });
+    }
+
     public CompletableFuture<ArtistInfo> artistDetail(String artistId) {
         return getJson("/artists", "id", artistId).thenCompose(root -> {
             JsonNode artist = root.path("artist");
@@ -165,39 +199,32 @@ public final class NeteaseApiClient {
             }
 
             Collections.shuffle(playlists, random);
-            LinkedHashSet<String> songIds = new LinkedHashSet<>();
+            List<JsonNode> candidateNodes = new ArrayList<>();
             int playlistProbeCount = Math.min(playlists.size(), 8);
-            for (int index = 0; index < playlistProbeCount && songIds.size() < safeCount * 4; index++) {
+            for (int index = 0; index < playlistProbeCount && candidateNodes.size() < safeCount * 4; index++) {
                 SearchEntry playlist = playlists.get(index);
-                List<SearchEntry> tracks = fetchAllPlaylistTracksSync(playlist.id());
-                if (tracks.isEmpty()) {
+                List<JsonNode> songNodes = fetchAllPlaylistSongsRawSync(playlist.id());
+                if (songNodes.isEmpty()) {
                     continue;
                 }
-                Collections.shuffle(tracks, random);
-                int take = Math.min(tracks.size(), Math.max(12, safeCount));
-                for (int trackIndex = 0; trackIndex < take; trackIndex++) {
-                    String songId = tracks.get(trackIndex).id();
-                    if (songId != null && !songId.isBlank()) {
-                        songIds.add(songId);
-                    }
-                    if (songIds.size() >= safeCount * 4) {
-                        break;
-                    }
+                Collections.shuffle(songNodes, random);
+                int take = Math.min(songNodes.size(), Math.max(12, safeCount));
+                for (int songIndex = 0; songIndex < take && candidateNodes.size() < safeCount * 4; songIndex++) {
+                    candidateNodes.add(songNodes.get(songIndex));
                 }
             }
 
-            if (songIds.isEmpty()) {
+            if (candidateNodes.isEmpty()) {
                 throw new IllegalStateException("热门歌单中没有可用歌曲。");
             }
 
-            List<String> selectedSongIds = new ArrayList<>(songIds);
-            Collections.shuffle(selectedSongIds, random);
-            if (selectedSongIds.size() > safeCount) {
-                selectedSongIds = new ArrayList<>(selectedSongIds.subList(0, safeCount));
+            Collections.shuffle(candidateNodes, random);
+            if (candidateNodes.size() > safeCount) {
+                candidateNodes = new ArrayList<>(candidateNodes.subList(0, safeCount));
             }
 
-            List<CompletableFuture<TrackInfo>> futures = selectedSongIds.stream()
-                    .map(this::resolveSong)
+            List<CompletableFuture<TrackInfo>> futures = candidateNodes.stream()
+                    .map(this::resolveSongFromNode)
                     .collect(Collectors.toList());
             CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
 
@@ -519,6 +546,62 @@ public final class NeteaseApiClient {
         return entries;
     }
 
+    private List<JsonNode> fetchAllPlaylistSongsRawSync(String playlistId) {
+        List<JsonNode> songs = new ArrayList<>();
+        int offset = 0;
+
+        while (true) {
+            JsonNode root = executeJson(baseRequest(
+                    baseUrl() + "/playlist/track/all",
+                    new String[]{"id", playlistId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
+                    "application/json,text/plain,*/*"
+            ));
+            JsonNode page = root.path("songs");
+            if (!page.isArray() || page.isEmpty()) {
+                break;
+            }
+            for (JsonNode song : page) {
+                songs.add(song);
+            }
+            if (page.size() < DETAIL_FETCH_BATCH_SIZE) {
+                break;
+            }
+            offset += page.size();
+        }
+
+        return songs;
+    }
+
+    private CompletableFuture<TrackInfo> resolveSongFromNode(JsonNode songNode) {
+        String id = songNode.path("id").asText("");
+        if (id.isBlank()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        String title = songNode.path("name").asText("");
+        String artist = firstArtistName(songNode);
+        String artistId = firstArtistId(songNode);
+        String coverUrl = songCoverUrl(songNode);
+        long duration = songNode.path("dt").asLong(0L);
+        return songUrls(id).thenApply(urls -> new TrackInfo(id, title, artist, artistId, coverUrl, urls, duration));
+    }
+
+    private static CompletableFuture<List<TrackInfo>> collectResults(List<CompletableFuture<TrackInfo>> futures) {
+        return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+                .thenApply(nil -> {
+                    List<TrackInfo> tracks = new ArrayList<>();
+                    for (CompletableFuture<TrackInfo> future : futures) {
+                        try {
+                            TrackInfo track = future.join();
+                            if (track != null && track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
+                                tracks.add(track);
+                            }
+                        } catch (Exception ex) {
+                        }
+                    }
+                    return tracks;
+                });
+    }
+
     private List<SearchEntry> fetchAllPlaylistTracksSync(String playlistId) {
         List<SearchEntry> tracks = new ArrayList<>();
         int offset = 0;
@@ -581,7 +664,7 @@ public final class NeteaseApiClient {
     }
 
     private JsonNode executeJson(Request request) {
-        OkHttpClient client = HttpClientFactory.create();
+        OkHttpClient client = HttpClientFactory.createApiClient();
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 throw new IOException("HTTP " + response.code());
@@ -595,7 +678,7 @@ public final class NeteaseApiClient {
     }
 
     private String executeText(Request request) {
-        OkHttpClient client = HttpClientFactory.create();
+        OkHttpClient client = HttpClientFactory.createApiClient();
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 throw new IOException("HTTP " + response.code());

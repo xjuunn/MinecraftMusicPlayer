@@ -7,6 +7,9 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.model.TrackInfo;
+import com.junhsiun.musicplayer.platform.ArtistTopSongSource;
+import com.junhsiun.musicplayer.platform.HotPlaylistRandomSource;
+import com.junhsiun.musicplayer.platform.RandomSongSource;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -17,7 +20,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.RandomizableContainer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -37,19 +39,46 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class LootMusicDiscService {
     private static final ObjectMapper MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
     private static final TypeReference<Set<String>> STRING_SET = new TypeReference<>() {
     };
-    private static final int POOL_TARGET = 5;
-    private static final int POOL_REFILL_THRESHOLD = 3;
+    private static final TypeReference<List<TrackInfo>> TRACK_LIST = new TypeReference<>() {
+    };
+    private static final int POOL_CAPACITY = 20;
+    private static final int REFILL_BATCH = 5;
+    private static final int REFILL_THRESHOLD = POOL_CAPACITY - REFILL_BATCH;
+    private static final long PER_SOURCE_TIMEOUT_SECONDS = 60;
 
     private final Set<String> processedContainers = new HashSet<>();
     private final Queue<TrackInfo> trackPool = new ConcurrentLinkedQueue<>();
     private final AtomicBoolean poolRefilling = new AtomicBoolean(false);
     private final Set<UUID> pendingPlayers = new HashSet<>();
+    private final List<RandomSongSource> sources = new ArrayList<>();
+    private final AtomicInteger sourceIndex = new AtomicInteger(0);
     private boolean loaded;
+    private MinecraftServer server;
+
+    public LootMusicDiscService() {
+    }
+
+    public void start() {
+        sources.add(new HotPlaylistRandomSource(MusicPlayerMod.netease()));
+        sources.add(new ArtistTopSongSource(MusicPlayerMod.netease()));
+        if (server != null) {
+            loadCache();
+        }
+        refillPool();
+    }
+
+    public void setServer(MinecraftServer server) {
+        this.server = server;
+        if (isStarted()) {
+            loadCache();
+        }
+    }
 
     public InteractionResult tryInjectOnOpen(ServerPlayer player, Level world, BlockPos pos) {
         if (world.isClientSide()) {
@@ -82,10 +111,6 @@ public final class LootMusicDiscService {
         );
     }
 
-    public void start() {
-        refillPool();
-    }
-
     public void useRandomDisc(ServerPlayer player, InteractionHand hand) {
         ItemStack held = player.getItemInHand(hand);
         if (!MusicDiscHelper.isPendingDisc(held)) {
@@ -113,14 +138,12 @@ public final class LootMusicDiscService {
             return;
         }
 
-        fetchOneTrack().whenComplete((track, throwable) -> {
-            MinecraftServer server = player.level().getServer();
-            if (server == null) {
-                return;
-            }
-            server.execute(() -> {
+        consumeTracks(1).whenComplete((tracks, throwable) -> {
+            MinecraftServer srv = player.level().getServer();
+            if (srv == null) return;
+            srv.execute(() -> {
                 pendingPlayers.remove(player.getUUID());
-                if (throwable != null || track == null) {
+                if (throwable != null || tracks == null || tracks.isEmpty()) {
                     MusicPlayerMod.LOGGER.warn("Failed to generate random music disc for player {}", player.getScoreboardName(), throwable);
                     ItemStack returned = baseDisc.copyWithCount(1);
                     if (!player.getInventory().add(returned)) {
@@ -129,16 +152,58 @@ public final class LootMusicDiscService {
                     player.sendSystemMessage(Component.literal("生成失败，唱片已归还").withStyle(ChatFormatting.RED));
                     return;
                 }
-                giveBurnedDisc(player, baseDisc, track);
+                giveBurnedDisc(player, baseDisc, tracks.getFirst());
                 refillPool();
             });
         });
     }
 
-    private CompletableFuture<TrackInfo> fetchOneTrack() {
-        return MusicPlayerMod.netease().randomHotTracks(1)
-                .orTimeout(30, TimeUnit.SECONDS)
-                .thenApply(tracks -> tracks == null || tracks.isEmpty() ? null : tracks.getFirst());
+    public CompletableFuture<List<TrackInfo>> consumeTracks(int count) {
+        List<TrackInfo> cached = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            TrackInfo track = trackPool.poll();
+            if (track == null) break;
+            cached.add(track);
+        }
+        if (cached.size() >= count) {
+            saveCache();
+            refillPool();
+            return CompletableFuture.completedFuture(cached);
+        }
+        int remaining = count - cached.size();
+        return fetchTracks(remaining).thenApply(fetched -> {
+            cached.addAll(fetched);
+            saveCache();
+            refillPool();
+            return cached;
+        });
+    }
+
+    private CompletableFuture<List<TrackInfo>> fetchTracks(int count) {
+        if (sources.isEmpty()) {
+            return CompletableFuture.completedFuture(List.of());
+        }
+        CompletableFuture<List<TrackInfo>> fallback = CompletableFuture.completedFuture(List.of());
+        for (int i = 0; i < sources.size(); i++) {
+            int index = sourceIndex.getAndIncrement() % sources.size();
+            RandomSongSource source = sources.get(index);
+            fallback = fallback.thenCompose(prev -> {
+                if (!prev.isEmpty()) {
+                    return CompletableFuture.completedFuture(prev);
+                }
+                return source.fetchRandomTracks(count)
+                        .orTimeout(PER_SOURCE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                        .exceptionally(ex -> {
+                            MusicPlayerMod.LOGGER.warn("Random source {} failed, trying next", source.getClass().getSimpleName(), ex);
+                            return List.of();
+                        });
+            });
+        }
+        return fallback;
+    }
+
+    private boolean isStarted() {
+        return !sources.isEmpty();
     }
 
     private void giveBurnedDisc(ServerPlayer player, ItemStack baseDisc, TrackInfo track) {
@@ -153,19 +218,39 @@ public final class LootMusicDiscService {
     }
 
     private void refillPool() {
-        if (trackPool.size() >= POOL_REFILL_THRESHOLD || !poolRefilling.compareAndSet(false, true)) {
+        if (trackPool.size() >= REFILL_THRESHOLD || !poolRefilling.compareAndSet(false, true)) {
             return;
         }
-        MusicPlayerMod.netease().randomHotTracks(POOL_TARGET)
-                .orTimeout(30, TimeUnit.SECONDS)
-                .whenComplete((tracks, throwable) -> {
-                    poolRefilling.set(false);
-                    if (throwable != null || tracks == null) {
-                        return;
-                    }
-                    trackPool.addAll(tracks);
-                    MusicPlayerMod.LOGGER.info("Refilled random track pool with {} tracks (pool size: {})", tracks.size(), trackPool.size());
-                });
+        int deficit = POOL_CAPACITY - trackPool.size();
+        int batchSize = Math.max(REFILL_BATCH, deficit);
+        CompletableFuture<List<TrackInfo>> combined = CompletableFuture.completedFuture(List.of());
+        for (int i = 0; i < sources.size(); i++) {
+            int index = sourceIndex.getAndIncrement() % sources.size();
+            RandomSongSource source = sources.get(index);
+            combined = combined.thenCompose(prev -> {
+                if (!prev.isEmpty()) {
+                    return CompletableFuture.completedFuture(prev);
+                }
+                return source.fetchRandomTracks(batchSize)
+                        .orTimeout(PER_SOURCE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                        .exceptionally(ex -> {
+                            MusicPlayerMod.LOGGER.warn("Refill source {} failed, trying next", source.getClass().getSimpleName(), ex);
+                            return List.of();
+                        });
+            });
+        }
+        combined.whenComplete((tracks, throwable) -> {
+            poolRefilling.set(false);
+            if (throwable != null || tracks == null || tracks.isEmpty()) {
+                return;
+            }
+            trackPool.addAll(tracks);
+            while (trackPool.size() > POOL_CAPACITY) {
+                trackPool.poll();
+            }
+            saveCache();
+            MusicPlayerMod.LOGGER.info("Refilled random track pool with {} tracks (pool size: {})", tracks.size(), trackPool.size());
+        });
     }
 
     private InteractionResult tryInjectOnOpen(
@@ -178,15 +263,15 @@ public final class LootMusicDiscService {
             return InteractionResult.PASS;
         }
 
-        MinecraftServer server = player.level().getServer();
-        if (server == null) {
+        MinecraftServer srv = player.level().getServer();
+        if (srv == null) {
             return InteractionResult.PASS;
         }
-        load(server);
+        load(srv);
         if (!processedContainers.add(containerKey)) {
             return InteractionResult.PASS;
         }
-        save(server);
+        save(srv);
 
         if (!MusicPlayerConfigManager.get().enableLootMusicDiscs) {
             return InteractionResult.PASS;
@@ -216,6 +301,9 @@ public final class LootMusicDiscService {
             }
         }
         int toInsert = Math.min(maxCount, emptySlots.size());
+        if (toInsert == 0) {
+            return 0;
+        }
         for (int i = 0; i < toInsert; i++) {
             int pick = random.nextInt(emptySlots.size());
             int slot = emptySlots.remove(pick);
@@ -229,12 +317,12 @@ public final class LootMusicDiscService {
         return toInsert;
     }
 
-    private void load(MinecraftServer server) {
+    private void load(MinecraftServer srv) {
         if (loaded) {
             return;
         }
         loaded = true;
-        Path path = storePath(server);
+        Path path = storePath(srv);
         if (Files.notExists(path)) {
             return;
         }
@@ -246,8 +334,8 @@ public final class LootMusicDiscService {
         }
     }
 
-    private void save(MinecraftServer server) {
-        Path path = storePath(server);
+    private void save(MinecraftServer srv) {
+        Path path = storePath(srv);
         try {
             Files.createDirectories(path.getParent());
             MAPPER.writeValue(path.toFile(), processedContainers);
@@ -256,10 +344,45 @@ public final class LootMusicDiscService {
         }
     }
 
-    private static Path storePath(MinecraftServer server) {
-        return server.getWorldPath(LevelResource.ROOT)
+    private void loadCache() {
+        if (server == null) return;
+        Path path = cachePath(server);
+        if (Files.notExists(path)) return;
+        try {
+            List<TrackInfo> loaded = MAPPER.readValue(path.toFile(), TRACK_LIST);
+            trackPool.clear();
+            trackPool.addAll(loaded);
+            while (trackPool.size() > POOL_CAPACITY) {
+                trackPool.poll();
+            }
+            MusicPlayerMod.LOGGER.info("Loaded {} cached random tracks", trackPool.size());
+        } catch (IOException exception) {
+            MusicPlayerMod.LOGGER.warn("Failed to read random track cache.", exception);
+        }
+    }
+
+    private void saveCache() {
+        if (server == null) return;
+        Path path = cachePath(server);
+        try {
+            Files.createDirectories(path.getParent());
+            List<TrackInfo> snapshot = new ArrayList<>(trackPool);
+            MAPPER.writeValue(path.toFile(), snapshot);
+        } catch (IOException exception) {
+            MusicPlayerMod.LOGGER.warn("Failed to save random track cache.", exception);
+        }
+    }
+
+    private static Path storePath(MinecraftServer srv) {
+        return srv.getWorldPath(LevelResource.ROOT)
                 .resolve("musicplayer")
                 .resolve("loot-music-disc-containers.json");
+    }
+
+    private static Path cachePath(MinecraftServer srv) {
+        return srv.getWorldPath(LevelResource.ROOT)
+                .resolve("musicplayer")
+                .resolve("random-track-cache.json");
     }
 
     private static String key(Level world, BlockPos pos) {

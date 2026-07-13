@@ -96,7 +96,10 @@ public final class MusicPlayerMod implements ModInitializer {
         );
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> MUSIC_QUEUE_SERVICE.handleJoin(handler.player));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> MUSIC_QUEUE_SERVICE.handleDisconnect(handler.player));
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> LOOT_MUSIC_DISC_SERVICE.start());
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            LOOT_MUSIC_DISC_SERVICE.setServer(server);
+            LOOT_MUSIC_DISC_SERVICE.start();
+        });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             MUSIC_QUEUE_SERVICE.shutdown(server);
             JUKEBOX_PLAYBACK_SERVICE.shutdown(server);
