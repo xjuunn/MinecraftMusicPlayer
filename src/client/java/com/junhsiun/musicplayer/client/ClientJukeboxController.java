@@ -111,6 +111,27 @@ public final class ClientJukeboxController {
         return playbackHandles.containsKey(key) || pendingInsertions.containsKey(key);
     }
 
+    public boolean isPlayerNearAnyActiveJukebox() {
+        if (playbackHandles.isEmpty()) {
+            return false;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        LocalPlayer player = minecraft.player;
+        if (player == null) {
+            return false;
+        }
+        for (Long key : playbackHandles.keySet()) {
+            BlockPos pos = BlockPos.of(key);
+            double dx = player.getX() - (pos.getX() + 0.5D);
+            double dy = player.getY() - (pos.getY() + 0.5D);
+            double dz = player.getZ() - (pos.getZ() + 0.5D);
+            if (dx * dx + dy * dy + dz * dz <= AUDIBLE_RANGE * AUDIBLE_RANGE) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public List<JukeboxVisualState> getVisualStates() {
         List<JukeboxVisualState> states = new ArrayList<>(playbackHandles.size());
         for (Map.Entry<Long, PlaybackHandle> entry : playbackHandles.entrySet()) {

@@ -180,10 +180,14 @@ public final class ClientMusicController {
     }
 
     private static final class BackgroundMusicAudioDevice extends AudioDeviceBase {
+        private static final double FADE_OUT_STEP = 0.1D;
+        private static final double FADE_IN_STEP = 0.02D;
+
         private SourceDataLine sourceLine;
         private AudioFormat audioFormat;
         private byte[] byteBuffer;
         private FloatControl gainControl;
+        private double jukeboxFadeVolume = 1.0D;
 
         private void reset() {
             if (sourceLine != null) {
@@ -194,6 +198,7 @@ public final class ClientMusicController {
             }
             gainControl = null;
             audioFormat = null;
+            jukeboxFadeVolume = 1.0D;
         }
 
         @Override
@@ -276,7 +281,18 @@ public final class ClientMusicController {
             Minecraft minecraft = Minecraft.getInstance();
             float musicVolume = minecraft.options.getSoundSourceVolume(SoundSource.MUSIC);
             float masterVolume = minecraft.options.getSoundSourceVolume(SoundSource.MASTER);
-            double finalVolume = Math.max(0.0D, masterVolume * musicVolume);
+            double baseVolume = Math.max(0.0D, masterVolume * musicVolume);
+            if (baseVolume <= 0.0001D) {
+                gainControl.setValue(gainControl.getMinimum());
+                return;
+            }
+            boolean nearJukebox = ClientJukeboxController.getInstance().isPlayerNearAnyActiveJukebox();
+            if (nearJukebox) {
+                jukeboxFadeVolume = Math.max(0.0D, jukeboxFadeVolume - FADE_OUT_STEP);
+            } else {
+                jukeboxFadeVolume = Math.min(1.0D, jukeboxFadeVolume + FADE_IN_STEP);
+            }
+            double finalVolume = baseVolume * jukeboxFadeVolume;
             if (finalVolume <= 0.0001D) {
                 gainControl.setValue(gainControl.getMinimum());
                 return;
