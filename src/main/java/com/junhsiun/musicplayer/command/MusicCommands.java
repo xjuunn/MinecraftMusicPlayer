@@ -155,7 +155,11 @@ public final class MusicCommands {
             MutableComponent line = Component.literal(order + ". ").withStyle(ChatFormatting.DARK_GRAY)
                     .append(Messages.clickableCommand("[下一首]", "将这首歌调整为下一首播放", "/music queue next " + entry.id(), ChatFormatting.GREEN))
                     .append(Component.literal(" "))
-                    .append(renderEntry(entry, trackActions(source, entry.id(), "[点歌]", "点击重新点播这首歌曲", ChatFormatting.YELLOW), "点击重新点播这首歌曲", "点击查看作者详情"));
+                    .append(clickableText(entry.title(), entry.titleCommand(), "重新播放这首歌曲", ChatFormatting.AQUA));
+            if (entry.subtitle() != null && !entry.subtitle().isBlank()) {
+                line.append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
+                line.append(clickableText(entry.subtitle(), entry.subtitleCommand(), "查看作者详情", ChatFormatting.GRAY));
+            }
             source.sendSuccess(() -> line, false);
         }
         source.sendSuccess(() -> spacer(), false);
