@@ -14,6 +14,6 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           java-version: 26
-          distribution: temurin
+          distribution: oracle
       - run: chmod +x gradlew
       - run: ./gradlew clean build
