@@ -3,8 +3,13 @@ name: Build
 on:
   push:
     branches: [ "**" ]
+    tags:
+      - 'v*'
   pull_request:
     branches: [ "**" ]
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -18,3 +23,12 @@ jobs:
           distribution: oracle
       - run: chmod +x gradlew
       - run: ./gradlew clean build
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            build/libs/*-fabricmc*.jar
+            !build/libs/*-sources.jar
