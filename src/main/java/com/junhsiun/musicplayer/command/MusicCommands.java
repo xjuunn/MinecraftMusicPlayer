@@ -61,7 +61,7 @@ public final class MusicCommands {
     }
 
     private static int sendHelp(CommandSourceStack source) {
-        source.sendSuccess(() -> sectionHeader("Minecraft Music Player", "共享播放、搜索、队列与详情导航"), false);
+        source.sendSuccess(() -> sectionHeader("音乐播放器", "共享播放、搜索、队列与详情导航"), false);
         sendQuickBar(source,
                 Messages.clickableCommand("[当前播放]", "查看当前播放", "/music now", ChatFormatting.AQUA),
                 Messages.clickableCommand("[播放队列]", "查看待播队列", "/music queue", ChatFormatting.YELLOW),

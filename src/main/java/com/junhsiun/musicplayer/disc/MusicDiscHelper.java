@@ -180,7 +180,7 @@ public final class MusicDiscHelper {
 
     private static ItemLore buildLore(TrackInfo track, int sourceCount) {
         List<Component> lines = new ArrayList<>();
-        lines.add(Component.literal("Minecraft Music Player").withStyle(ChatFormatting.GOLD));
+        lines.add(Component.literal("音乐播放器").withStyle(ChatFormatting.GOLD));
         lines.add(Component.literal("歌曲: " + track.title()).withStyle(ChatFormatting.WHITE));
         lines.add(Component.literal("作者: " + track.artist()).withStyle(ChatFormatting.GRAY));
         if (track.artistId() != null && !track.artistId().isBlank()) {
