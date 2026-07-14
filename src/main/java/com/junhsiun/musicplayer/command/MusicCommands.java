@@ -86,8 +86,9 @@ public final class MusicCommands {
                 return 1;
             }
             sendQuickBar(context.getSource(),
-                    Messages.clickableCommand("[播放队列]", "查看当前待播队列", "/music queue", ChatFormatting.YELLOW),
-                    Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.GRAY));
+                    Messages.clickableCommand("[投票跳过]", "投票跳过当前歌曲", "/music vote next", ChatFormatting.YELLOW),
+                    Messages.clickableCommand("[播放队列]", "查看当前待播队列", "/music queue", ChatFormatting.GRAY),
+                    Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.DARK_GRAY));
             context.getSource().sendSuccess(() -> renderCurrentTrack(context.getSource(), track), false);
             return 1;
         });

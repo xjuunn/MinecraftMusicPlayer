@@ -206,7 +206,9 @@ public final class MusicQueueService {
                 List<SearchEntry> selectedTracks = new ArrayList<>(playlist.tracks().subList(0, playableCount));
                 SearchEntry firstTrack = selectedTracks.getFirst();
 
-                stop(server, "");
+                currentPlayback = null;
+                voteSkipPlayers.clear();
+                server.getPlayerList().getPlayers().forEach(player -> sendStop(player, ""));
                 queue.clear();
                 for (int index = 1; index < selectedTracks.size(); index++) {
                     SearchEntry entry = selectedTracks.get(index);
@@ -233,9 +235,7 @@ public final class MusicQueueService {
                         return;
                     }
 
-                    startTrack(server, track);
-                    source.sendSuccess(() -> Component.literal("Playlist mode enabled: [" + playlist.title() + "] starts from the first track.")
-                            .withStyle(ChatFormatting.GREEN), false);
+                    startTrack(server, track, requester.getUUID(), requester.getGameProfile().name());
                     if (omittedCount > 0) {
                         source.sendSuccess(() -> Component.literal("Some tracks were skipped due to queue limits: " + omittedCount)
                                 .withStyle(ChatFormatting.YELLOW), false);
@@ -249,6 +249,10 @@ public final class MusicQueueService {
     public void voteSkip(MinecraftServer server, ServerPlayer voter) {
         if (currentPlayback == null) {
             voter.sendSystemMessage(Component.literal("No track is currently playing.").withStyle(ChatFormatting.RED));
+            return;
+        }
+        if (voter.getUUID().equals(currentPlayback.requesterId())) {
+            advance(server, "Requester skipped their own track.");
             return;
         }
         if (!voteSkipPlayers.add(voter.getUUID())) {
@@ -277,6 +281,9 @@ public final class MusicQueueService {
         voteSkipPlayers.clear();
         refreshTrackCache();
         server.getPlayerList().getPlayers().forEach(player -> sendStop(player, reason));
+        if (reason != null && !reason.isBlank()) {
+            broadcast(server, Component.literal(reason).withStyle(ChatFormatting.YELLOW));
+        }
     }
 
     public void clearQueue(CommandSourceStack source) {
@@ -355,8 +362,7 @@ public final class MusicQueueService {
             return;
         }
         if (currentPlayback == null) {
-            startTrack(server, track);
-            source.sendSuccess(() -> Component.literal("Now playing [" + track.title() + "].").withStyle(ChatFormatting.GREEN), false);
+            startTrack(server, track, requester.getUUID(), requester.getGameProfile().name());
             return;
         }
         queue.addLast(new QueuedTrack(
@@ -368,7 +374,6 @@ public final class MusicQueueService {
                 requester.getGameProfile().name()
         ));
         refreshTrackCache();
-        source.sendSuccess(() -> Component.literal("Queued: " + track.title()).withStyle(ChatFormatting.GREEN), false);
         if (MusicPlayerConfigManager.get().announceQueueChanges) {
             broadcast(server, Component.literal(requester.getGameProfile().name() + " queued: ").withStyle(ChatFormatting.GOLD)
                     .append(Messages.clickableCommand(track.title(), "Replay this track", "/music play song " + track.id(), ChatFormatting.AQUA))
@@ -376,10 +381,14 @@ public final class MusicQueueService {
                     .append(track.artistId() != null && !track.artistId().isBlank()
                             ? Messages.clickableCommand(track.artist(), "View artist details", "/music view artist " + track.artistId(), ChatFormatting.GRAY)
                             : Component.literal(track.artist()).withStyle(ChatFormatting.GRAY)));
+        } else {
+            source.sendSuccess(() -> Component.literal("Queued: ").withStyle(ChatFormatting.GRAY)
+                    .append(Messages.clickableCommand(track.title(), "Replay this track", "/music play song " + track.id(), ChatFormatting.AQUA)), false);
         }
     }
 
     private void advance(MinecraftServer server, String reason) {
+        currentPlayback = null;
         voteSkipPlayers.clear();
         if (queue.isEmpty()) {
             stop(server, reason == null ? "Playback queue finished." : reason);
@@ -388,6 +397,9 @@ public final class MusicQueueService {
         QueuedTrack next = queue.removeFirst();
         refreshTrackCache();
         resolveTrack(next.songId()).whenComplete((track, throwable) -> server.execute(() -> {
+            if (!server.isRunning()) {
+                return;
+            }
             if (throwable != null) {
                 broadcast(server, Component.literal("Skipped an unplayable track: " + next.title()).withStyle(ChatFormatting.RED));
                 advance(server, null);
@@ -396,16 +408,21 @@ public final class MusicQueueService {
             if (reason != null && !reason.isBlank()) {
                 broadcast(server, Component.literal(reason).withStyle(ChatFormatting.YELLOW));
             }
-            startTrack(server, track);
+            try {
+                startTrack(server, track, next.requesterId(), next.requesterName());
+            } catch (Exception e) {
+                MusicPlayerMod.LOGGER.error("Failed to start track: {}", track.title(), e);
+                advance(server, "Failed to start track. Skipping to the next one.");
+            }
         }));
     }
 
-    private void startTrack(MinecraftServer server, TrackInfo track) {
+    private void startTrack(MinecraftServer server, TrackInfo track, UUID requesterId, String requesterName) {
         long now = System.currentTimeMillis();
-        long fallbackDuration = track.durationMillis() > 0L
-                ? track.durationMillis() + 60_000L
+        long timeout = track.durationMillis() > 0L
+                ? Math.min(FALLBACK_TRACK_TIMEOUT_MS, track.durationMillis() + 60_000L)
                 : FALLBACK_TRACK_TIMEOUT_MS;
-        currentPlayback = new CurrentPlayback(track, now, now + Math.max(FALLBACK_TRACK_TIMEOUT_MS, fallbackDuration));
+        currentPlayback = new CurrentPlayback(track, now, now + timeout, requesterId, requesterName);
         voteSkipPlayers.clear();
         refreshTrackCache();
         server.getPlayerList().getPlayers().stream()
@@ -413,6 +430,7 @@ public final class MusicQueueService {
                 .sorted(Comparator.comparing(player -> player.getGameProfile().name()))
                 .forEach(player -> sendPlay(player, track, 0L));
         broadcast(server, renderNowPlayingBroadcast(track));
+        broadcast(server, renderNowPlayingActions(track));
     }
 
     private int activeListeners(MinecraftServer server) {
@@ -460,6 +478,16 @@ public final class MusicQueueService {
             line.append(Component.literal(" "));
             line.append(Messages.clickableUrl("[Download]", "Open the direct track URL in your browser", track.sourceUrls().getFirst(), ChatFormatting.GREEN));
         }
+        return line;
+    }
+
+    private Component renderNowPlayingActions(TrackInfo track) {
+        MutableComponent line = Component.literal("");
+        line.append(Messages.clickableCommand("[Vote Skip]", "Vote to skip to the next track", "/music vote next", ChatFormatting.YELLOW));
+        line.append(Component.literal(" · ").withStyle(ChatFormatting.DARK_GRAY));
+        line.append(Messages.clickableCommand("[Queue]", "View the playback queue", "/music queue", ChatFormatting.GRAY));
+        line.append(Component.literal(" · ").withStyle(ChatFormatting.DARK_GRAY));
+        line.append(Messages.clickableCommand("[Replay]", "Replay this track", "/music play song " + track.id(), ChatFormatting.AQUA));
         return line;
     }
 
@@ -558,7 +586,7 @@ public final class MusicQueueService {
         return current.getMessage() == null ? current.toString() : current.getMessage();
     }
 
-    private record CurrentPlayback(TrackInfo track, long startedAt, long expectedEndAt) {
+    private record CurrentPlayback(TrackInfo track, long startedAt, long expectedEndAt, UUID requesterId, String requesterName) {
     }
 
     private record QueuedTrack(String songId, String title, String artist, String artistCommand, UUID requesterId, String requesterName) {
