@@ -1,7 +1,11 @@
 package com.junhsiun.musicplayer.platform;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
@@ -31,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 public final class NeteaseApiClient {
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Gson GSON = new GsonBuilder().create();
     private static final int DETAIL_FETCH_BATCH_SIZE = 100;
     private static final int HOT_PLAYLIST_FETCH_SIZE = 30;
     private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(4, runnable -> {
@@ -80,12 +84,12 @@ public final class NeteaseApiClient {
 
     public CompletableFuture<PlaylistInfo> playlistDetail(String id) {
         return getJson("/playlist/detail", "id", id).thenCompose(root -> {
-            JsonNode playlist = root.path("playlist");
+            JsonObject playlist = obj(root, "playlist");
             return fetchAllPlaylistTracks(id).thenApply(tracks -> new PlaylistInfo(
-                    playlist.path("id").asText(),
-                    playlist.path("name").asText(),
-                    playlist.path("creator").path("userId").asText(),
-                    playlist.path("creator").path("nickname").asText(),
+                    str(playlist, "id"),
+                    str(playlist, "name"),
+                    str(obj(playlist, "creator"), "userId"),
+                    str(obj(playlist, "creator"), "nickname"),
                     tracks
             ));
         });
@@ -100,27 +104,28 @@ public final class NeteaseApiClient {
             int offset = 0;
 
             while (true) {
-                JsonNode root = executeJson(baseRequest(
+                JsonObject root = executeJson(baseRequest(
                         baseUrl() + "/user/playlist",
                         new String[]{"uid", userId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
                         "application/json,text/plain,*/*"
                 ));
-                JsonNode playlists = root.path("playlist");
-                if (!playlists.isArray() || playlists.isEmpty()) {
+                JsonArray playlists = arr(root, "playlist");
+                if (playlists == null || playlists.isEmpty()) {
                     break;
                 }
-                for (JsonNode playlist : playlists) {
-                    JsonNode creator = playlist.path("creator");
+                for (JsonElement elem : playlists) {
+                    JsonObject playlist = elem.getAsJsonObject();
+                    JsonObject creator = obj(playlist, "creator");
                     if (nickname.isBlank()) {
-                        resolvedUserId = creator.path("userId").asText(userId);
-                        nickname = creator.path("nickname").asText("");
-                        signature = creator.path("signature").asText("");
+                        resolvedUserId = str(creator, "userId", userId);
+                        nickname = str(creator, "nickname");
+                        signature = str(creator, "signature");
                     }
-                    String playlistId = playlist.path("id").asText();
+                    String playlistId = str(playlist, "id");
                     entries.add(new SearchEntry(
                             playlistId,
-                            playlist.path("name").asText(),
-                            "共 " + playlist.path("trackCount").asInt() + " 首",
+                            str(playlist, "name"),
+                            "共 " + intVal(playlist, "trackCount") + " 首",
                             viewPlaylistCommand(playlistId),
                             ""
                     ));
@@ -137,13 +142,13 @@ public final class NeteaseApiClient {
 
     public CompletableFuture<List<TrackInfo>> artistTopSongs(String artistId) {
         return getJson("/artist/top/song", "id", artistId).thenCompose(root -> {
-            JsonNode songs = root.path("songs");
-            if (!songs.isArray() || songs.isEmpty()) {
+            JsonArray songs = arr(root, "songs");
+            if (songs == null || songs.isEmpty()) {
                 return CompletableFuture.completedFuture(List.of());
             }
             List<CompletableFuture<TrackInfo>> futures = new ArrayList<>();
-            for (JsonNode song : songs) {
-                futures.add(resolveSongFromNode(song));
+            for (JsonElement elem : songs) {
+                futures.add(resolveSongFromNode(elem.getAsJsonObject()));
             }
             return collectResults(futures);
         });
@@ -153,13 +158,14 @@ public final class NeteaseApiClient {
         return getJson("/top/artists", "limit", Integer.toString(limit), "offset", Integer.toString(offset))
                 .thenApply(root -> {
                     List<SearchEntry> entries = new ArrayList<>();
-                    JsonNode artists = root.path("artists");
-                    if (!artists.isArray()) return entries;
-                    for (JsonNode artist : artists) {
-                        String artistId = artist.path("id").asText();
+                    JsonArray artists = arr(root, "artists");
+                    if (artists == null) return entries;
+                    for (JsonElement elem : artists) {
+                        JsonObject artist = elem.getAsJsonObject();
+                        String artistId = str(artist, "id");
                         entries.add(new SearchEntry(
                                 artistId,
-                                artist.path("name").asText(),
+                                str(artist, "name"),
                                 "作者",
                                 viewArtistCommand(artistId),
                                 ""
@@ -171,11 +177,11 @@ public final class NeteaseApiClient {
 
     public CompletableFuture<ArtistInfo> artistDetail(String artistId) {
         return getJson("/artists", "id", artistId).thenCompose(root -> {
-            JsonNode artist = root.path("artist");
+            JsonObject artist = obj(root, "artist");
             return fetchAllArtistSongs(artistId).thenApply(tracks -> new ArtistInfo(
-                    artist.path("id").asText(),
-                    artist.path("name").asText(),
-                    artist.path("briefDesc").asText(""),
+                    str(artist, "id"),
+                    str(artist, "name"),
+                    str(artist, "briefDesc"),
                     tracks
             ));
         });
@@ -199,11 +205,11 @@ public final class NeteaseApiClient {
             }
 
             Collections.shuffle(playlists, random);
-            List<JsonNode> candidateNodes = new ArrayList<>();
+            List<JsonObject> candidateNodes = new ArrayList<>();
             int playlistProbeCount = Math.min(playlists.size(), 8);
             for (int index = 0; index < playlistProbeCount && candidateNodes.size() < safeCount * 4; index++) {
                 SearchEntry playlist = playlists.get(index);
-                List<JsonNode> songNodes = fetchAllPlaylistSongsRawSync(playlist.id());
+                List<JsonObject> songNodes = fetchAllPlaylistSongsRawSync(playlist.id());
                 if (songNodes.isEmpty()) {
                     continue;
                 }
@@ -257,54 +263,55 @@ public final class NeteaseApiClient {
                 "keywords", keyword
         ).thenApply(root -> {
             List<SearchEntry> entries = new ArrayList<>();
-            JsonNode result = root.path("result");
-            JsonNode list = switch (type) {
-                case 1 -> result.path("songs");
-                case 100 -> result.path("artists");
-                case 1000 -> result.path("playlists");
-                case 1002 -> result.path("userprofiles");
-                default -> MAPPER.createArrayNode();
+            JsonObject result = obj(root, "result");
+            JsonArray list = switch (type) {
+                case 1 -> arr(result, "songs");
+                case 100 -> arr(result, "artists");
+                case 1000 -> arr(result, "playlists");
+                case 1002 -> arr(result, "userprofiles");
+                default -> new JsonArray();
             };
-            if (!list.isArray()) {
+            if (list == null) {
                 return entries;
             }
 
-            for (JsonNode node : list) {
+            for (JsonElement elem : list) {
+                JsonObject node = elem.getAsJsonObject();
                 if (type == 1) {
-                    String songId = node.path("id").asText();
+                    String songId = str(node, "id");
                     String artistId = firstArtistId(node);
                     entries.add(new SearchEntry(
                             songId,
-                            node.path("name").asText(),
+                            str(node, "name"),
                             firstArtistName(node),
                             playSongCommand(songId),
                             artistId.isBlank() ? "" : viewArtistCommand(artistId)
                     ));
                 } else if (type == 100) {
-                    String artistId = node.path("id").asText();
+                    String artistId = str(node, "id");
                     entries.add(new SearchEntry(
                             artistId,
-                            node.path("name").asText(),
+                            str(node, "name"),
                             "作者",
                             viewArtistCommand(artistId),
                             ""
                     ));
                 } else if (type == 1000) {
-                    String playlistId = node.path("id").asText();
-                    String ownerId = node.path("creator").path("userId").asText("");
+                    String playlistId = str(node, "id");
+                    String ownerId = str(obj(node, "creator"), "userId");
                     entries.add(new SearchEntry(
                             playlistId,
-                            node.path("name").asText(),
-                            node.path("creator").path("nickname").asText(""),
+                            str(node, "name"),
+                            str(obj(node, "creator"), "nickname"),
                             viewPlaylistCommand(playlistId),
                             ownerId.isBlank() ? "" : viewUserCommand(ownerId)
                     ));
                 } else if (type == 1002) {
-                    String foundUserId = node.path("userId").asText();
+                    String foundUserId = str(node, "userId");
                     entries.add(new SearchEntry(
                             foundUserId,
-                            node.path("nickname").asText(),
-                            node.path("signature").asText(""),
+                            str(node, "nickname"),
+                            str(node, "signature"),
                             viewUserCommand(foundUserId),
                             ""
                     ));
@@ -316,15 +323,19 @@ public final class NeteaseApiClient {
 
     private CompletableFuture<TrackInfo> songDetail(String id) {
         return getJson("/song/detail", "ids", id).thenApply(root -> {
-            JsonNode song = root.path("songs").get(0);
+            JsonArray songs = arr(root, "songs");
+            JsonObject song = songs != null && !songs.isEmpty() ? songs.get(0).getAsJsonObject() : null;
+            if (song == null) {
+                return new TrackInfo(id, "", "", "", "", List.of(), 0L);
+            }
             return new TrackInfo(
-                    song.path("id").asText(),
-                    song.path("name").asText(),
+                    str(song, "id"),
+                    str(song, "name"),
                     firstArtistName(song),
                     firstArtistId(song),
                     songCoverUrl(song),
                     List.of(),
-                    song.path("dt").asLong(0L)
+                    lng(song, "dt")
             );
         });
     }
@@ -385,8 +396,8 @@ public final class NeteaseApiClient {
         for (String quality : VKEYS_QUALITIES) {
             try {
                 Request request = baseRequest(VKEYS_URL, new String[]{"id", id, "quality", quality}, "application/json,text/plain,*/*");
-                JsonNode root = executeJson(request);
-                String url = root.path("data").path("url").asText(null);
+                JsonObject root = executeJson(request);
+                String url = str(obj(root, "data"), "url");
                 if (isValidUrl(url)) {
                     return url.trim();
                 }
@@ -427,8 +438,8 @@ public final class NeteaseApiClient {
         for (String level : new String[]{"lossless", "exhigh", "higher", "standard"}) {
             try {
                 Request request = baseRequest(base + "/song/url/v1", new String[]{"id", id, "level", level}, "application/json,text/plain,*/*");
-                JsonNode root = executeJson(request);
-                String url = firstUrl(root.path("data"));
+                JsonObject root = executeJson(request);
+                String url = firstUrl(arr(root, "data"));
                 if (isValidUrl(url)) {
                     return url.trim();
                 }
@@ -437,8 +448,8 @@ public final class NeteaseApiClient {
         }
         try {
             Request request = baseRequest(base + "/song/url", new String[]{"id", id}, "application/json,text/plain,*/*");
-            JsonNode root = executeJson(request);
-            String url = firstUrl(root.path("data"));
+            JsonObject root = executeJson(request);
+            String url = firstUrl(arr(root, "data"));
             if (isValidUrl(url)) {
                 return url.trim();
             }
@@ -451,7 +462,7 @@ public final class NeteaseApiClient {
         return url != null && !url.isBlank() && !"null".equalsIgnoreCase(url.trim());
     }
 
-    private CompletableFuture<JsonNode> getJson(String path, String... queryPairs) {
+    private CompletableFuture<JsonObject> getJson(String path, String... queryPairs) {
         return getJsonFromAbsoluteUrl(baseUrl() + path, queryPairs);
     }
 
@@ -465,21 +476,22 @@ public final class NeteaseApiClient {
             int offset = 0;
 
             while (true) {
-                JsonNode root = executeJson(baseRequest(
+                JsonObject root = executeJson(baseRequest(
                         baseUrl() + "/artist/songs",
                         new String[]{"id", artistId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
                         "application/json,text/plain,*/*"
                 ));
-                JsonNode songs = root.path("songs");
-                if (!songs.isArray() || songs.isEmpty()) {
+                JsonArray songs = arr(root, "songs");
+                if (songs == null || songs.isEmpty()) {
                     break;
                 }
-                for (JsonNode song : songs) {
-                    String songId = song.path("id").asText();
+                for (JsonElement elem : songs) {
+                    JsonObject song = elem.getAsJsonObject();
+                    String songId = str(song, "id");
                     tracks.add(new SearchEntry(
                             songId,
-                            song.path("name").asText(),
-                            song.path("al").path("name").asText(""),
+                            str(song, "name"),
+                            str(obj(song, "al"), "name"),
                             playSongCommand(songId),
                             ""
                     ));
@@ -495,16 +507,16 @@ public final class NeteaseApiClient {
     }
 
     private List<String> fetchHotPlaylistCategories() {
-        JsonNode root = executeJson(baseRequest(
+        JsonObject root = executeJson(baseRequest(
                 baseUrl() + "/playlist/hot",
                 new String[0],
                 "application/json,text/plain,*/*"
         ));
-        JsonNode tags = root.path("tags");
+        JsonArray tags = arr(root, "tags");
         List<String> categories = new ArrayList<>();
-        if (tags.isArray()) {
-            for (JsonNode tag : tags) {
-                String name = tag.path("name").asText("");
+        if (tags != null) {
+            for (JsonElement tag : tags) {
+                String name = str(tag.getAsJsonObject(), "name");
                 if (!name.isBlank()) {
                     categories.add(name);
                 }
@@ -517,7 +529,7 @@ public final class NeteaseApiClient {
     }
 
     private List<SearchEntry> fetchTopPlaylists(String category, int limit, int offset) {
-        JsonNode root = executeJson(baseRequest(
+        JsonObject root = executeJson(baseRequest(
                 baseUrl() + "/top/playlist",
                 new String[]{
                         "order", "hot",
@@ -527,18 +539,19 @@ public final class NeteaseApiClient {
                 },
                 "application/json,text/plain,*/*"
         ));
-        JsonNode playlists = root.path("playlists");
+        JsonArray playlists = arr(root, "playlists");
         List<SearchEntry> entries = new ArrayList<>();
-        if (!playlists.isArray()) {
+        if (playlists == null) {
             return entries;
         }
-        for (JsonNode playlist : playlists) {
-            String playlistId = playlist.path("id").asText();
-            String ownerId = playlist.path("creator").path("userId").asText("");
+        for (JsonElement elem : playlists) {
+            JsonObject playlist = elem.getAsJsonObject();
+            String playlistId = str(playlist, "id");
+            String ownerId = str(obj(playlist, "creator"), "userId");
             entries.add(new SearchEntry(
                     playlistId,
-                    playlist.path("name").asText(""),
-                    playlist.path("creator").path("nickname").asText(""),
+                    str(playlist, "name"),
+                    str(obj(playlist, "creator"), "nickname"),
                     viewPlaylistCommand(playlistId),
                     ownerId.isBlank() ? "" : viewUserCommand(ownerId)
             ));
@@ -546,22 +559,22 @@ public final class NeteaseApiClient {
         return entries;
     }
 
-    private List<JsonNode> fetchAllPlaylistSongsRawSync(String playlistId) {
-        List<JsonNode> songs = new ArrayList<>();
+    private List<JsonObject> fetchAllPlaylistSongsRawSync(String playlistId) {
+        List<JsonObject> songs = new ArrayList<>();
         int offset = 0;
 
         while (true) {
-            JsonNode root = executeJson(baseRequest(
+            JsonObject root = executeJson(baseRequest(
                     baseUrl() + "/playlist/track/all",
                     new String[]{"id", playlistId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
                     "application/json,text/plain,*/*"
             ));
-            JsonNode page = root.path("songs");
-            if (!page.isArray() || page.isEmpty()) {
+            JsonArray page = arr(root, "songs");
+            if (page == null || page.isEmpty()) {
                 break;
             }
-            for (JsonNode song : page) {
-                songs.add(song);
+            for (JsonElement elem : page) {
+                songs.add(elem.getAsJsonObject());
             }
             if (page.size() < DETAIL_FETCH_BATCH_SIZE) {
                 break;
@@ -572,16 +585,16 @@ public final class NeteaseApiClient {
         return songs;
     }
 
-    private CompletableFuture<TrackInfo> resolveSongFromNode(JsonNode songNode) {
-        String id = songNode.path("id").asText("");
+    private CompletableFuture<TrackInfo> resolveSongFromNode(JsonObject songNode) {
+        String id = str(songNode, "id");
         if (id.isBlank()) {
             return CompletableFuture.completedFuture(null);
         }
-        String title = songNode.path("name").asText("");
+        String title = str(songNode, "name");
         String artist = firstArtistName(songNode);
         String artistId = firstArtistId(songNode);
         String coverUrl = songCoverUrl(songNode);
-        long duration = songNode.path("dt").asLong(0L);
+        long duration = lng(songNode, "dt");
         return songUrls(id).thenApply(urls -> new TrackInfo(id, title, artist, artistId, coverUrl, urls, duration));
     }
 
@@ -607,21 +620,22 @@ public final class NeteaseApiClient {
         int offset = 0;
 
         while (true) {
-            JsonNode root = executeJson(baseRequest(
+            JsonObject root = executeJson(baseRequest(
                     baseUrl() + "/playlist/track/all",
                     new String[]{"id", playlistId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
                     "application/json,text/plain,*/*"
             ));
-            JsonNode songs = root.path("songs");
-            if (!songs.isArray() || songs.isEmpty()) {
+            JsonArray songs = arr(root, "songs");
+            if (songs == null || songs.isEmpty()) {
                 break;
             }
-            for (JsonNode song : songs) {
-                String songId = song.path("id").asText();
+            for (JsonElement elem : songs) {
+                JsonObject song = elem.getAsJsonObject();
+                String songId = str(song, "id");
                 String artistId = firstArtistId(song);
                 tracks.add(new SearchEntry(
                         songId,
-                        song.path("name").asText(),
+                        str(song, "name"),
                         firstArtistName(song),
                         playSongCommand(songId),
                         artistId.isBlank() ? "" : viewArtistCommand(artistId)
@@ -636,7 +650,7 @@ public final class NeteaseApiClient {
         return tracks;
     }
 
-    private CompletableFuture<JsonNode> getJsonFromAbsoluteUrl(String absoluteUrl, String... queryPairs) {
+    private CompletableFuture<JsonObject> getJsonFromAbsoluteUrl(String absoluteUrl, String... queryPairs) {
         return CompletableFuture.supplyAsync(() -> {
             Request request = baseRequest(absoluteUrl, queryPairs, "application/json,text/plain,*/*");
             return executeJson(request);
@@ -663,14 +677,14 @@ public final class NeteaseApiClient {
                 .build();
     }
 
-    private JsonNode executeJson(Request request) {
+    private JsonObject executeJson(Request request) {
         OkHttpClient client = HttpClientFactory.createApiClient();
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 throw new IOException("HTTP " + response.code());
             }
             String body = Objects.requireNonNull(response.body()).string();
-            return MAPPER.readTree(body);
+            return JsonParser.parseString(body).getAsJsonObject();
         } catch (Exception exception) {
             MusicPlayerMod.LOGGER.warn("请求音乐接口失败: {}", request.url(), exception);
             throw new RuntimeException(exception);
@@ -714,43 +728,43 @@ public final class NeteaseApiClient {
         urls.add(normalized);
     }
 
-    private static String firstArtistName(JsonNode songNode) {
-        JsonNode artists = songNode.path("ar");
-        if (artists.isArray() && !artists.isEmpty()) {
-            return artists.get(0).path("name").asText("");
+    private static String firstArtistName(JsonObject songNode) {
+        JsonArray artists = arr(songNode, "ar");
+        if (artists != null && !artists.isEmpty()) {
+            return str(artists.get(0).getAsJsonObject(), "name");
         }
-        JsonNode artistsAlt = songNode.path("artists");
-        if (artistsAlt.isArray() && !artistsAlt.isEmpty()) {
-            return artistsAlt.get(0).path("name").asText("");
-        }
-        return "";
-    }
-
-    private static String firstArtistId(JsonNode songNode) {
-        JsonNode artists = songNode.path("ar");
-        if (artists.isArray() && !artists.isEmpty()) {
-            return artists.get(0).path("id").asText("");
-        }
-        JsonNode artistsAlt = songNode.path("artists");
-        if (artistsAlt.isArray() && !artistsAlt.isEmpty()) {
-            return artistsAlt.get(0).path("id").asText("");
+        JsonArray artistsAlt = arr(songNode, "artists");
+        if (artistsAlt != null && !artistsAlt.isEmpty()) {
+            return str(artistsAlt.get(0).getAsJsonObject(), "name");
         }
         return "";
     }
 
-    private static String firstUrl(JsonNode data) {
-        if (data.isArray() && !data.isEmpty()) {
-            return data.get(0).path("url").asText(null);
+    private static String firstArtistId(JsonObject songNode) {
+        JsonArray artists = arr(songNode, "ar");
+        if (artists != null && !artists.isEmpty()) {
+            return str(artists.get(0).getAsJsonObject(), "id");
+        }
+        JsonArray artistsAlt = arr(songNode, "artists");
+        if (artistsAlt != null && !artistsAlt.isEmpty()) {
+            return str(artistsAlt.get(0).getAsJsonObject(), "id");
+        }
+        return "";
+    }
+
+    private static String firstUrl(JsonArray data) {
+        if (data != null && !data.isEmpty()) {
+            return str(data.get(0).getAsJsonObject(), "url");
         }
         return null;
     }
 
-    private static String songCoverUrl(JsonNode songNode) {
-        String albumCover = songNode.path("al").path("picUrl").asText("");
+    private static String songCoverUrl(JsonObject songNode) {
+        String albumCover = str(obj(songNode, "al"), "picUrl");
         if (!albumCover.isBlank()) {
             return albumCover;
         }
-        String albumCoverAlt = songNode.path("album").path("picUrl").asText("");
+        String albumCoverAlt = str(obj(songNode, "album"), "picUrl");
         if (!albumCoverAlt.isBlank()) {
             return albumCoverAlt;
         }
@@ -771,5 +785,43 @@ public final class NeteaseApiClient {
 
     private static String viewUserCommand(String userId) {
         return "/music view user " + userId;
+    }
+
+    // --- null-safe Gson helpers matching Jackson's path() behavior ---
+
+    private static JsonObject obj(JsonObject parent, String key) {
+        if (parent == null) return null;
+        JsonElement el = parent.get(key);
+        return el != null && el.isJsonObject() ? el.getAsJsonObject() : null;
+    }
+
+    private static JsonArray arr(JsonObject parent, String key) {
+        if (parent == null) return null;
+        JsonElement el = parent.get(key);
+        return el != null && el.isJsonArray() ? el.getAsJsonArray() : null;
+    }
+
+    private static String str(JsonObject parent, String key) {
+        if (parent == null) return "";
+        JsonElement el = parent.get(key);
+        return el != null && el.isJsonPrimitive() ? el.getAsString() : "";
+    }
+
+    private static String str(JsonObject parent, String key, String def) {
+        if (parent == null) return def;
+        JsonElement el = parent.get(key);
+        return el != null && el.isJsonPrimitive() ? el.getAsString() : def;
+    }
+
+    private static long lng(JsonObject parent, String key) {
+        if (parent == null) return 0L;
+        JsonElement el = parent.get(key);
+        return el != null && el.isJsonPrimitive() && el.getAsJsonPrimitive().isNumber() ? el.getAsLong() : 0L;
+    }
+
+    private static int intVal(JsonObject parent, String key) {
+        if (parent == null) return 0;
+        JsonElement el = parent.get(key);
+        return el != null && el.isJsonPrimitive() && el.getAsJsonPrimitive().isNumber() ? el.getAsInt() : 0;
     }
 }

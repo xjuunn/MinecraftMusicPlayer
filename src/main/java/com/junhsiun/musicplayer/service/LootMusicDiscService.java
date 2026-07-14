@@ -1,8 +1,8 @@
 package com.junhsiun.musicplayer.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
@@ -42,11 +42,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class LootMusicDiscService {
-    private static final ObjectMapper MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
-    private static final TypeReference<Set<String>> STRING_SET = new TypeReference<>() {
-    };
-    private static final TypeReference<List<TrackInfo>> TRACK_LIST = new TypeReference<>() {
-    };
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final java.lang.reflect.Type STRING_SET = new TypeToken<Set<String>>(){}.getType();
+    private static final java.lang.reflect.Type TRACK_LIST = new TypeToken<List<TrackInfo>>(){}.getType();
     private static final int POOL_CAPACITY = 20;
     private static final int REFILL_BATCH = 5;
     private static final int REFILL_THRESHOLD = POOL_CAPACITY - REFILL_BATCH;
@@ -328,7 +326,10 @@ public final class LootMusicDiscService {
         }
         try {
             processedContainers.clear();
-            processedContainers.addAll(MAPPER.readValue(path.toFile(), STRING_SET));
+            Set<String> loaded = GSON.fromJson(Files.newBufferedReader(path), STRING_SET);
+            if (loaded != null) {
+                processedContainers.addAll(loaded);
+            }
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.warn("Failed to read loot music disc injection state.", exception);
         }
@@ -338,7 +339,7 @@ public final class LootMusicDiscService {
         Path path = storePath(srv);
         try {
             Files.createDirectories(path.getParent());
-            MAPPER.writeValue(path.toFile(), processedContainers);
+            Files.writeString(path, GSON.toJson(processedContainers));
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.warn("Failed to save loot music disc injection state.", exception);
         }
@@ -349,9 +350,11 @@ public final class LootMusicDiscService {
         Path path = cachePath(server);
         if (Files.notExists(path)) return;
         try {
-            List<TrackInfo> loaded = MAPPER.readValue(path.toFile(), TRACK_LIST);
-            trackPool.clear();
-            trackPool.addAll(loaded);
+            List<TrackInfo> loaded = GSON.fromJson(Files.newBufferedReader(path), TRACK_LIST);
+            if (loaded != null) {
+                trackPool.clear();
+                trackPool.addAll(loaded);
+            }
             while (trackPool.size() > POOL_CAPACITY) {
                 trackPool.poll();
             }
@@ -367,7 +370,7 @@ public final class LootMusicDiscService {
         try {
             Files.createDirectories(path.getParent());
             List<TrackInfo> snapshot = new ArrayList<>(trackPool);
-            MAPPER.writeValue(path.toFile(), snapshot);
+            Files.writeString(path, GSON.toJson(snapshot));
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.warn("Failed to save random track cache.", exception);
         }

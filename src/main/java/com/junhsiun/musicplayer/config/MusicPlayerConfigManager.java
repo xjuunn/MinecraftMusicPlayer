@@ -1,20 +1,20 @@
 package com.junhsiun.musicplayer.config;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 public final class MusicPlayerConfigManager {
-    private static final ObjectMapper MAPPER = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .enable(SerializationFeature.INDENT_OUTPUT);
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("minecraft-music-player.json");
     private static final Path LEGACY_CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("music-player-config.json");
 
@@ -29,7 +29,12 @@ public final class MusicPlayerConfigManager {
                 Files.createDirectories(CONFIG_PATH.getParent());
             }
             if (Files.exists(CONFIG_PATH)) {
-                config = MAPPER.readValue(CONFIG_PATH.toFile(), MusicPlayerConfig.class);
+                try (Reader reader = Files.newBufferedReader(CONFIG_PATH)) {
+                    config = GSON.fromJson(reader, MusicPlayerConfig.class);
+                }
+                if (config == null) {
+                    config = new MusicPlayerConfig();
+                }
             } else {
                 config = new MusicPlayerConfig();
             }
@@ -45,7 +50,8 @@ public final class MusicPlayerConfigManager {
 
     public static void save() {
         try {
-            MAPPER.writeValue(CONFIG_PATH.toFile(), config);
+            Files.createDirectories(CONFIG_PATH.getParent());
+            Files.writeString(CONFIG_PATH, GSON.toJson(config));
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.error("保存配置失败。", exception);
         }
@@ -87,17 +93,20 @@ public final class MusicPlayerConfigManager {
         if (!Files.exists(LEGACY_CONFIG_PATH)) {
             return;
         }
-        try {
-            JsonNode root = MAPPER.readTree(LEGACY_CONFIG_PATH.toFile());
-            String legacyProxy = root.path("proxy").asText("");
-            if ((config.proxy == null || config.proxy.isBlank()) && legacyProxy != null && !legacyProxy.isBlank()) {
-                config.proxy = legacyProxy.trim();
+        try (Reader reader = Files.newBufferedReader(LEGACY_CONFIG_PATH)) {
+            JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
+            JsonElement legacyProxy = root.get("proxy");
+            if (legacyProxy != null && legacyProxy.isJsonPrimitive()) {
+                String proxyValue = legacyProxy.getAsString();
+                if ((config.proxy == null || config.proxy.isBlank()) && proxyValue != null && !proxyValue.isBlank()) {
+                    config.proxy = proxyValue.trim();
+                }
             }
 
-            JsonNode platformBaseUrl = root.path("platformBaseUrl");
-            if (platformBaseUrl.isObject()) {
-                platformBaseUrl.fields().forEachRemaining(entry -> {
-                    String value = entry.getValue().asText("");
+            JsonElement platformBaseUrl = root.get("platformBaseUrl");
+            if (platformBaseUrl != null && platformBaseUrl.isJsonObject()) {
+                for (var entry : platformBaseUrl.getAsJsonObject().entrySet()) {
+                    String value = entry.getValue().getAsString();
                     if ((config.neteaseBaseUrl == null
                             || config.neteaseBaseUrl.isBlank()
                             || MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL.equals(config.neteaseBaseUrl)
@@ -105,10 +114,12 @@ public final class MusicPlayerConfigManager {
                             && value != null && !value.isBlank()) {
                         config.neteaseBaseUrl = value.trim();
                     }
-                });
+                }
             }
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.warn("读取旧版配置失败，将继续使用当前配置。", exception);
+        } catch (IllegalStateException | ClassCastException exception) {
+            MusicPlayerMod.LOGGER.warn("旧版配置文件格式无效，已跳过。", exception);
         }
     }
 }

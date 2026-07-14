@@ -34,13 +34,9 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
     implementation(include('javazoom:jlayer:1.0.1'))
-    implementation(include('com.squareup.okhttp3:okhttp:4.12.0'))
-    implementation(include('com.squareup.okio:okio-jvm:3.6.0'))
-    implementation(include('org.jetbrains.kotlin:kotlin-stdlib:1.9.10'))
-    implementation(include('com.fasterxml.jackson.core:jackson-databind:2.18.2'))
-    implementation(include('com.fasterxml.jackson.core:jackson-core:2.18.2'))
-    implementation(include('com.fasterxml.jackson.core:jackson-annotations:2.18.2'))
-    implementation(include('com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2'))
+    implementation(include('com.squareup.okhttp3:okhttp:3.14.9'))
+    implementation(include('com.squareup.okio:okio:2.10.0'))
+    compileOnly('com.google.code.gson:gson:2.11.0')
 }
 
 processResources {
