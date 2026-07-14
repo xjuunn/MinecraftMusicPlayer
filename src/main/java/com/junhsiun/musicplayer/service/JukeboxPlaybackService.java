@@ -92,6 +92,13 @@ public final class JukeboxPlaybackService {
                 expiredKeys.add(active.key());
                 continue;
             }
+            long duration = active.discData().durationMillis();
+            if (duration > 0L && System.currentTimeMillis() - active.startedAtMillis() >= duration) {
+                MusicPlayerMod.LOGGER.info("Jukebox track ended at {}: duration {}ms", active.pos(), duration);
+                stopPlayback(server, active);
+                expiredKeys.add(active.key());
+                continue;
+            }
             syncListeners(level, active);
         }
 
