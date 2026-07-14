@@ -505,8 +505,6 @@ public final class MusicQueueService {
         }
         line.append(Component.literal(" · ").withStyle(ChatFormatting.DARK_GRAY));
         line.append(Messages.clickableCommand("[队列]", "查看播放队列", "/music queue", ChatFormatting.GRAY));
-        line.append(Component.literal(" · ").withStyle(ChatFormatting.DARK_GRAY));
-        line.append(Messages.clickableCommand("[重播]", "重新播放这首歌曲", "/music play song " + track.id(), ChatFormatting.AQUA));
         return line;
     }
 
