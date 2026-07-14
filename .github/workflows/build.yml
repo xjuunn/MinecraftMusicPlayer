@@ -1,9 +1,10 @@
 name: Build
 
 on:
+  push:
+    branches: [ "**" ]
   pull_request:
     branches: [ "**" ]
-  workflow_call:
 
 jobs:
   build:
@@ -17,8 +18,3 @@ jobs:
           distribution: oracle
       - run: chmod +x gradlew
       - run: ./gradlew clean build
-      - uses: actions/upload-artifact@v4
-        if: github.event_name == 'workflow_call'
-        with:
-          name: build-artifacts
-          path: build/libs/*-fabricmc*.jar
