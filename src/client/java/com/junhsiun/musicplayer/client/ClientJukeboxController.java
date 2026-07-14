@@ -201,7 +201,6 @@ public final class ClientJukeboxController {
             );
             playbackThread.setDaemon(true);
             handle.thread = playbackThread;
-            handle.startedAtMillis = System.currentTimeMillis();
             playbackThread.start();
         }
     }
