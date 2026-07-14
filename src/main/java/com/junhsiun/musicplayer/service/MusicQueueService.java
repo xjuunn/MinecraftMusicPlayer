@@ -440,9 +440,12 @@ public final class MusicQueueService {
         server.getPlayerList().getPlayers().stream()
                 .filter(player -> !optedOutPlayers.contains(player.getUUID()))
                 .sorted(Comparator.comparing(player -> player.getGameProfile().name()))
-                .forEach(player -> sendPlay(player, track, 0L));
+                .forEach(player -> {
+                    sendPlay(player, track, 0L);
+                    boolean isRequester = player.getUUID().equals(requesterId);
+                    player.sendSystemMessage(renderNowPlayingActions(track, isRequester));
+                });
         broadcast(server, renderNowPlayingBroadcast(track));
-        broadcast(server, renderNowPlayingActions(track));
     }
 
     private int activeListeners(MinecraftServer server) {
@@ -493,9 +496,13 @@ public final class MusicQueueService {
         return line;
     }
 
-    private Component renderNowPlayingActions(TrackInfo track) {
+    private Component renderNowPlayingActions(TrackInfo track, boolean isRequester) {
         MutableComponent line = Component.literal("");
-        line.append(Messages.clickableCommand("[投票跳过]", "投票跳过当前歌曲", "/music vote next", ChatFormatting.YELLOW));
+        if (isRequester) {
+            line.append(Messages.clickableCommand("[跳过]", "直接跳过当前歌曲", "/music vote next", ChatFormatting.YELLOW));
+        } else {
+            line.append(Messages.clickableCommand("[投票跳过]", "投票跳过当前歌曲", "/music vote next", ChatFormatting.YELLOW));
+        }
         line.append(Component.literal(" · ").withStyle(ChatFormatting.DARK_GRAY));
         line.append(Messages.clickableCommand("[队列]", "查看播放队列", "/music queue", ChatFormatting.GRAY));
         line.append(Component.literal(" · ").withStyle(ChatFormatting.DARK_GRAY));
