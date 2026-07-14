@@ -49,12 +49,12 @@ jobs:
         if: github.event_name == 'push'
         shell: bash
         run: |
-          if gh release view "${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
-            echo "Release ${{ steps.version.outputs.version }} already exists"
+          TAG="${{ steps.version.outputs.version }}"
+          JARS=$(find build/libs -name '*-fabricmc*.jar' ! -name '*-sources.jar')
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" --clobber $JARS
           else
-            gh release create "${{ steps.version.outputs.version }}" \
-              --generate-notes \
-              $(find build/libs -name '*-fabricmc*.jar' ! -name '*-sources.jar')
+            gh release create "$TAG" --generate-notes $JARS
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
