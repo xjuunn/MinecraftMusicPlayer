@@ -6,7 +6,7 @@
 
 - 服务端负责命令、队列、同步与管理配置
 - 客户端负责接收播放控制并执行本地音频播放
-- 默认适配 Minecraft `26.2`、Java `25`、Mojang 官方映射
+- 默认适配 Minecraft `26.2`、Java `26`、Mojang 官方映射
 
 ## 通用规则
 
@@ -50,6 +50,6 @@
 
 如果增加 GitHub Actions 或发布流程，还应确保：
 
-- `build.yml` 使用 Java 25
+- `build.yml` 使用 Java 26
 - `release.yml` 支持基于 git tag 的正式发布
 - Release 只上传当前版本的 remap 主 jar，避免带上旧产物
