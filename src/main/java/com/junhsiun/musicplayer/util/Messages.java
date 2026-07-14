@@ -14,6 +14,13 @@ public final class Messages {
     private Messages() {
     }
 
+    public static String formatDuration(long durationMillis) {
+        long totalSeconds = Math.max(0L, durationMillis / 1000L);
+        long minutes = totalSeconds / 60L;
+        long seconds = totalSeconds % 60L;
+        return String.format("%d:%02d", minutes, seconds);
+    }
+
     public static void info(CommandSourceStack source, String text) {
         info(source, text, false);
     }

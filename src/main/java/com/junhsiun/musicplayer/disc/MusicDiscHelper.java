@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.disc;
 
 import com.junhsiun.musicplayer.model.TrackInfo;
+import com.junhsiun.musicplayer.util.Messages;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
@@ -189,17 +190,10 @@ public final class MusicDiscHelper {
             lines.add(Component.literal("歌曲 ID: " + track.id()).withStyle(ChatFormatting.DARK_GRAY));
         }
         if (track.durationMillis() > 0L) {
-            lines.add(Component.literal("时长: " + formatDuration(track.durationMillis())).withStyle(ChatFormatting.DARK_AQUA));
+            lines.add(Component.literal("时长: " + Messages.formatDuration(track.durationMillis())).withStyle(ChatFormatting.DARK_AQUA));
         }
         lines.add(Component.literal("音源数量: " + sourceCount).withStyle(ChatFormatting.DARK_AQUA));
         return new ItemLore(lines);
-    }
-
-    private static String formatDuration(long durationMillis) {
-        long totalSeconds = Math.max(0L, durationMillis / 1000L);
-        long minutes = totalSeconds / 60L;
-        long seconds = totalSeconds % 60L;
-        return String.format("%d:%02d", minutes, seconds);
     }
 
     private static String safe(String value) {

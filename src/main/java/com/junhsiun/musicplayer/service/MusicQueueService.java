@@ -53,6 +53,18 @@ public final class MusicQueueService {
         return currentPlayback == null ? null : currentPlayback.track();
     }
 
+    public long playbackElapsedMillis() {
+        return currentPlayback == null ? 0L : Math.max(0L, System.currentTimeMillis() - currentPlayback.startedAt());
+    }
+
+    public long playbackDurationMillis() {
+        return currentPlayback == null ? 0L : currentPlayback.track().durationMillis();
+    }
+
+    public String currentRequesterName() {
+        return currentPlayback == null ? "" : currentPlayback.requesterName();
+    }
+
     public List<SearchEntry> queuedEntries(int page, int pageSize) {
         if (queue.isEmpty()) {
             return List.of();

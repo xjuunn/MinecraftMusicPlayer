@@ -85,11 +85,17 @@ public final class MusicCommands {
                 context.getSource().sendSuccess(MusicPlayerMod.queueService()::describeNowPlaying, false);
                 return 1;
             }
-            sendQuickBar(context.getSource(),
-                    Messages.clickableCommand("[投票跳过]", "投票跳过当前歌曲", "/music vote next", ChatFormatting.YELLOW),
-                    Messages.clickableCommand("[播放队列]", "查看当前待播队列", "/music queue", ChatFormatting.GRAY),
-                    Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.DARK_GRAY));
-            context.getSource().sendSuccess(() -> renderCurrentTrack(context.getSource(), track), false);
+        sendQuickBar(context.getSource(),
+                Messages.clickableCommand("[投票跳过]", "投票跳过当前歌曲", "/music vote next", ChatFormatting.YELLOW),
+                Messages.clickableCommand("[播放队列]", "查看当前待播队列", "/music queue", ChatFormatting.GRAY),
+                Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.DARK_GRAY));
+        long elapsedMs = MusicPlayerMod.queueService().playbackElapsedMillis();
+        long durationMs = MusicPlayerMod.queueService().playbackDurationMillis();
+        String requesterName = MusicPlayerMod.queueService().currentRequesterName();
+        String elapsed = Messages.formatDuration(elapsedMs);
+        String duration = durationMs > 0L ? Messages.formatDuration(durationMs) : "";
+        context.getSource().sendSuccess(() -> renderCurrentTrack(context.getSource(), track, elapsed, duration, requesterName), false);
+        context.getSource().sendSuccess(() -> renderProgressLine(elapsed, duration, requesterName), false);
             return 1;
         });
     }
@@ -122,7 +128,13 @@ public final class MusicCommands {
         if (currentTrack == null) {
             source.sendSuccess(() -> Component.literal("当前没有歌曲在播放。").withStyle(ChatFormatting.GRAY), false);
         } else {
-            source.sendSuccess(() -> renderCurrentTrack(source, currentTrack), false);
+            long elapsedMs = MusicPlayerMod.queueService().playbackElapsedMillis();
+            long durationMs = MusicPlayerMod.queueService().playbackDurationMillis();
+            String requesterName = MusicPlayerMod.queueService().currentRequesterName();
+            String elapsed = Messages.formatDuration(elapsedMs);
+            String duration = durationMs > 0L ? Messages.formatDuration(durationMs) : "";
+            source.sendSuccess(() -> renderCurrentTrack(source, currentTrack, elapsed, duration, requesterName), false);
+            source.sendSuccess(() -> renderProgressLine(elapsed, duration, requesterName), false);
         }
         if (totalEntries == 0) {
             source.sendSuccess(() -> Component.literal("队列为空。").withStyle(ChatFormatting.GRAY), false);
@@ -627,7 +639,7 @@ public final class MusicCommands {
         return line;
     }
 
-    private static MutableComponent renderCurrentTrack(CommandSourceStack source, TrackInfo track) {
+    private static MutableComponent renderCurrentTrack(CommandSourceStack source, TrackInfo track, String elapsed, String duration, String requesterName) {
         MutableComponent line = Component.literal("当前播放: ").withStyle(ChatFormatting.GOLD)
                 .append(clickableText(track.title(), "/music play song " + track.id(), "点击重新点播这首歌曲", ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
@@ -640,6 +652,19 @@ public final class MusicCommands {
         if (!track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
             line.append(Messages.clickableUrl("[打开直链]", "点击在浏览器中打开当前歌曲直链", track.sourceUrls().getFirst(), ChatFormatting.GREEN));
+        }
+        return line;
+    }
+
+    private static Component renderProgressLine(String elapsed, String duration, String requesterName) {
+        String progress = duration != null && !duration.isEmpty()
+                ? elapsed + " / " + duration
+                : elapsed;
+        MutableComponent line = Component.literal(progress).withStyle(ChatFormatting.WHITE);
+        if (requesterName != null && !requesterName.isEmpty()) {
+            line.append(Component.literal("  ·  ").withStyle(ChatFormatting.DARK_GRAY));
+            line.append(Component.literal("点歌: ").withStyle(ChatFormatting.GRAY));
+            line.append(Component.literal(requesterName).withStyle(ChatFormatting.AQUA));
         }
         return line;
     }
