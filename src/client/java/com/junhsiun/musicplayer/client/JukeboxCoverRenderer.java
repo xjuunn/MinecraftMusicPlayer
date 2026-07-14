@@ -56,12 +56,17 @@ public final class JukeboxCoverRenderer {
                 }
             }
 
-            renderForJukebox(collector, camera, state.pos(), coverTexture, now, state.startedAtMillis());
+            renderForJukebox(collector, camera, state.pos(), coverTexture, now, state.startedAtMillis(), state.finished(), state.finishedAtMillis());
         }
     }
 
-    private static void renderForJukebox(SubmitNodeCollector collector, Vec3 camera, BlockPos pos, Identifier coverTexture, long now, long startedAtMillis) {
-        float sideSpin = Math.max(0L, now - startedAtMillis) / 1000.0F * 18.0F;
+    private static void renderForJukebox(SubmitNodeCollector collector, Vec3 camera, BlockPos pos, Identifier coverTexture, long now, long startedAtMillis, boolean finished, long finishedAtMillis) {
+        float sideSpin;
+        if (finished && now >= finishedAtMillis) {
+            sideSpin = 0.0F;
+        } else {
+            sideSpin = Math.max(0L, now - startedAtMillis) / 1000.0F * 18.0F;
+        }
         int light = 0xF000F0;
 
         double baseX = pos.getX() + 0.5D - camera.x;

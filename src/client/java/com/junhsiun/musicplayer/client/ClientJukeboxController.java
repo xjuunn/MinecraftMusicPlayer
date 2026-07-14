@@ -91,13 +91,19 @@ public final class ClientJukeboxController {
         pendingInsertions.entrySet().removeIf(entry -> now - entry.getValue() > PENDING_TIMEOUT_MILLIS);
 
         for (Long jukeboxPos : List.copyOf(playbackHandles.keySet())) {
+            PlaybackHandle handle = playbackHandles.get(jukeboxPos);
+            if (handle == null) continue;
+            if (handle.finishedAtMillis > 0L) {
+                continue;
+            }
             silenceVanillaJukeboxSound(jukeboxPos, "tick suppression");
             String invalidReason = getInvalidStateReason(client.level, jukeboxPos);
             if (invalidReason == null) {
                 continue;
             }
             MusicPlayerMod.LOGGER.info("Stopping custom jukebox playback locally because jukebox state is invalid at {}: {}", BlockPos.of(jukeboxPos), invalidReason);
-            stop(jukeboxPos);
+            playbackHandles.remove(jukeboxPos, handle);
+            stopPlaybackOnly(handle);
         }
 
         if (!playbackHandles.isEmpty() && isPlayerNearAnyActiveJukebox()) {
@@ -142,10 +148,9 @@ public final class ClientJukeboxController {
         List<JukeboxVisualState> states = new ArrayList<>(playbackHandles.size());
         for (Map.Entry<Long, PlaybackHandle> entry : playbackHandles.entrySet()) {
             PlaybackHandle handle = entry.getValue();
-            if (handle == null || handle.coverUrl == null || handle.coverUrl.isBlank()) {
-                continue;
-            }
-            states.add(new JukeboxVisualState(BlockPos.of(entry.getKey()), handle.coverUrl, handle.startedAtMillis));
+            if (handle == null) continue;
+            boolean finished = handle.finishedAtMillis > 0L;
+            states.add(new JukeboxVisualState(BlockPos.of(entry.getKey()), handle.coverUrl, handle.startedAtMillis, finished, finished ? handle.finishedAtMillis : 0L));
         }
         return states;
     }
@@ -154,6 +159,7 @@ public final class ClientJukeboxController {
         pendingInsertions.remove(jukeboxPos);
         PlaybackHandle handle = playbackHandles.computeIfAbsent(jukeboxPos, ignored -> new PlaybackHandle());
         stopPlaybackOnly(handle);
+        handle.finishedAtMillis = 0L;
         handle.urls = urls == null ? List.of() : List.copyOf(urls);
         handle.title = title == null ? "" : title;
         handle.subtitle = subtitle == null ? "" : subtitle;
@@ -261,6 +267,7 @@ public final class ClientJukeboxController {
             }
             try {
                 playSingle(jukeboxPos, handle, url, title, subtitle, startOffset);
+                handle.finishedAtMillis = completionTime(handle.startedAtMillis);
                 handle.thread = null;
                 handle.player = null;
                 handle.currentCall = null;
@@ -316,6 +323,14 @@ public final class ClientJukeboxController {
         }
     }
 
+    private static long completionTime(long startedAtMillis) {
+        long elapsed = System.currentTimeMillis() - startedAtMillis;
+        float degrees = Math.max(0L, elapsed) / 1000.0F * 18.0F;
+        float remaining = 360.0F - (degrees % 360.0F);
+        if (remaining < 0.001F) remaining = 360.0F;
+        return System.currentTimeMillis() + (long) (remaining / 18.0F * 1000.0F);
+    }
+
     private static final class PlaybackHandle {
         private volatile Player player;
         private volatile Thread thread;
@@ -325,9 +340,10 @@ public final class ClientJukeboxController {
         private volatile String subtitle = "";
         private volatile String coverUrl = "";
         private volatile long startedAtMillis;
+        private volatile long finishedAtMillis;
     }
 
-    public record JukeboxVisualState(BlockPos pos, String coverUrl, long startedAtMillis) {
+    public record JukeboxVisualState(BlockPos pos, String coverUrl, long startedAtMillis, boolean finished, long finishedAtMillis) {
     }
 
     private void logSourceFallback(String url, Exception exception) {
