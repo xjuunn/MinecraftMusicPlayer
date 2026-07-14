@@ -23,12 +23,13 @@ jobs:
           distribution: oracle
       - run: chmod +x gradlew
       - run: ./gradlew clean build
-      - uses: softprops/action-gh-release@v2
+
+      - name: Create Release
         if: startsWith(github.ref, 'refs/tags/v')
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          generate_release_notes: true
-          files: |
-            build/libs/*-fabricmc*.jar
-            !build/libs/*-sources.jar
+        shell: bash
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --generate-notes \
+            $(find build/libs -name '*-fabricmc*.jar' ! -name '*-sources.jar')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
