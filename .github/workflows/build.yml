@@ -15,4 +15,5 @@ jobs:
         with:
           java-version: 26
           distribution: temurin
+      - run: chmod +x gradlew
       - run: ./gradlew clean build
