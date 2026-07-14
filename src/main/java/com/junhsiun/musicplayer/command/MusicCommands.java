@@ -38,7 +38,7 @@ public final class MusicCommands {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext context, Commands.CommandSelection selection) {
         dispatcher.register(Commands.literal("music")
-                .executes(commandContext -> sendHelp(commandContext.getSource()))
+                .executes(commandContext -> sendHelpOverview(commandContext.getSource()))
                 .then(help())
                 .then(now())
                 .then(queue())
@@ -57,27 +57,130 @@ public final class MusicCommands {
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> help() {
-        return Commands.literal("help").executes(context -> sendHelp(context.getSource()));
+        return Commands.literal("help")
+                .executes(context -> sendHelpOverview(context.getSource()))
+                .then(Commands.argument("subcommand", StringArgumentType.word()).executes(context -> {
+                    String sub = StringArgumentType.getString(context, "subcommand");
+                    return sendHelpFor(context.getSource(), sub);
+                }));
     }
 
-    private static int sendHelp(CommandSourceStack source) {
+    private static int sendHelpOverview(CommandSourceStack source) {
         sendHeader(source);
-        sendQuickBar(source,
-                Messages.clickableCommand("[当前播放]", "查看当前播放", "/music now", ChatFormatting.AQUA),
-                Messages.clickableCommand("[播放队列]", "查看待播队列", "/music queue", ChatFormatting.YELLOW),
-                Messages.clickableCommand("[搜索歌曲]", "搜索歌曲", "/music search song ", ChatFormatting.GREEN));
-        source.sendSuccess(() -> spacer(), false);
-        source.sendSuccess(() -> helpLine("/music now", "查看当前播放与下载入口", "/music now"), false);
-        source.sendSuccess(() -> helpLine("/music queue [page]", "查看待播列表与下一首操作", "/music queue"), false);
-        source.sendSuccess(() -> helpLine("/music play song <歌曲ID>", "直接点播单曲", "/music play song "), false);
-        source.sendSuccess(() -> helpLine("/music play playlist <歌单ID>", "切换到歌单播放模式", "/music play playlist "), false);
-        source.sendSuccess(() -> helpLine("/music search song page <页码> <关键词>", "分页搜索歌曲", "/music search song "), false);
-        source.sendSuccess(() -> helpLine("/music view playlist page <页码> <歌单ID>", "查看歌单详情分页", "/music view playlist "), false);
-        source.sendSuccess(() -> helpLine("/music view artist page <页码> <作者ID>", "查看作者详情分页", "/music view artist "), false);
-        source.sendSuccess(() -> helpLine("/music view user page <页码> <用户ID>", "查看用户歌单分页", "/music view user "), false);
-        source.sendSuccess(() -> helpLine("/music random", "生成 10 首随机热门音乐", "/music random"), false);
+        source.sendSuccess(() -> sectionHeader("音乐播放器", null), false);
+        helpEntry(source, "now", "查看当前播放与进度");
+        helpEntry(source, "queue", "查看待播队列与操作");
+        helpEntry(source, "play", "点播单曲或歌单");
+        helpEntry(source, "search", "搜索歌曲、作者、歌单或用户");
+        helpEntry(source, "view", "查看歌单、作者或用户详情");
+        helpEntry(source, "vote", "投票跳过当前歌曲");
+        helpEntry(source, "join", "加入当前播放");
+        helpEntry(source, "leave", "退出当前播放");
+        helpEntry(source, "mute", "暂时静音当前歌曲");
+        helpEntry(source, "burn", "将歌曲刻录到唱片");
+        helpEntry(source, "random", "随机生成热门音乐");
+        helpEntry(source, "help", "显示本帮助页面");
+        helpEntry(source, "next", "管理员 - 跳过当前歌曲");
+        helpEntry(source, "stop", "管理员 - 停止播放");
+        helpEntry(source, "admin", "管理员 - 配置与管理");
         source.sendSuccess(() -> spacer(), false);
         return 1;
+    }
+
+    private static void helpEntry(CommandSourceStack source, String command, String description) {
+        MutableComponent line = Messages.clickableCommand(command, "查看 " + command + " 的详细用法", "/music help " + command, ChatFormatting.GOLD);
+        line.append(Component.literal("  ").withStyle(ChatFormatting.DARK_GRAY));
+        line.append(Component.literal(description).withStyle(ChatFormatting.GRAY));
+        source.sendSuccess(() -> line, false);
+    }
+
+    private static int sendHelpFor(CommandSourceStack source, String subcommand) {
+        sendHeader(source);
+        switch (subcommand) {
+            case "now" -> {
+                source.sendSuccess(() -> sectionHeader("now", null), false);
+                detailLine(source, "/music now", "查看正在播放的歌曲、播放进度和点歌人");
+            }
+            case "queue" -> {
+                source.sendSuccess(() -> sectionHeader("queue", null), false);
+                detailLine(source, "/music queue [页码]", "查看待播歌曲列表，可调整歌曲到下一首播放");
+                detailLine(source, "/music queue next <歌曲ID>", "将指定歌曲提升到队列顶部，下一首播放");
+            }
+            case "play" -> {
+                source.sendSuccess(() -> sectionHeader("play", null), false);
+                detailLine(source, "/music play song <歌曲ID>", "直接点播一首单曲，自动加入队列或立即播放");
+                detailLine(source, "/music play playlist <歌单ID>", "切换到歌单播放模式，从第一首开始顺序播放");
+            }
+            case "search" -> {
+                source.sendSuccess(() -> sectionHeader("search", null), false);
+                detailLine(source, "/music search song <关键词>", "搜索歌曲");
+                detailLine(source, "/music search artist <关键词>", "搜索作者");
+                detailLine(source, "/music search playlist <关键词>", "搜索歌单");
+                detailLine(source, "/music search user <关键词>", "搜索用户");
+            }
+            case "view" -> {
+                source.sendSuccess(() -> sectionHeader("view", null), false);
+                detailLine(source, "/music view playlist <歌单ID>", "查看歌单详情与曲目列表");
+                detailLine(source, "/music view artist <作者ID>", "查看作者详情与热门歌曲");
+                detailLine(source, "/music view user <用户ID>", "查看用户创建的歌单");
+            }
+            case "vote" -> {
+                source.sendSuccess(() -> sectionHeader("vote", null), false);
+                detailLine(source, "/music vote next", "投票跳过当前歌曲");
+            }
+            case "join" -> {
+                source.sendSuccess(() -> sectionHeader("join", null), false);
+                detailLine(source, "/music join", "加入当前播放，开始接收音乐");
+            }
+            case "leave" -> {
+                source.sendSuccess(() -> sectionHeader("leave", null), false);
+                detailLine(source, "/music leave", "退出当前播放，不再接收音乐");
+            }
+            case "mute" -> {
+                source.sendSuccess(() -> sectionHeader("mute", null), false);
+                detailLine(source, "/music mute once", "暂时静音当前歌曲，可用 /music join 重新加入");
+            }
+            case "burn" -> {
+                source.sendSuccess(() -> sectionHeader("burn", null), false);
+                detailLine(source, "/music burn song <歌曲ID>", "将歌曲刻录到主手持有的空白唱片");
+            }
+            case "random" -> {
+                source.sendSuccess(() -> sectionHeader("random", null), false);
+                detailLine(source, "/music random", "随机生成 10 首热门音乐，可直接点播");
+            }
+            case "help" -> {
+                return sendHelpOverview(source);
+            }
+            case "next" -> {
+                source.sendSuccess(() -> sectionHeader("next", null), false);
+                detailLine(source, "/music next", "直接跳过当前歌曲，无需投票");
+            }
+            case "stop" -> {
+                source.sendSuccess(() -> sectionHeader("stop", null), false);
+                detailLine(source, "/music stop", "停止所有播放并清空当前播放状态");
+            }
+            case "admin" -> {
+                source.sendSuccess(() -> sectionHeader("admin", null), false);
+                detailLine(source, "/music admin reload", "重新加载配置文件");
+                detailLine(source, "/music admin status", "查看当前配置状态");
+                detailLine(source, "/music admin clearqueue", "清空待播队列");
+                detailLine(source, "/music admin set <配置项> <值>", "修改配置项");
+            }
+            default -> {
+                source.sendSuccess(() -> Component.literal("未知子命令: " + subcommand).withStyle(ChatFormatting.RED), false);
+                source.sendSuccess(() -> spacer(), false);
+                return sendHelpOverview(source);
+            }
+        }
+        source.sendSuccess(() -> spacer(), false);
+        return 1;
+    }
+
+    private static void detailLine(CommandSourceStack source, String command, String description) {
+        MutableComponent line = Component.literal(command).withStyle(ChatFormatting.GOLD);
+        line.append(Component.literal("  ").withStyle(ChatFormatting.DARK_GRAY));
+        line.append(Component.literal(description).withStyle(ChatFormatting.GRAY));
+        source.sendSuccess(() -> line, false);
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> now() {
@@ -828,17 +931,12 @@ public final class MusicCommands {
     }
 
     private static MutableComponent sectionHeader(String title, String subtitle) {
-        MutableComponent line = Component.literal("◆ ").withStyle(ChatFormatting.DARK_AQUA)
-                .append(Component.literal(title).withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD));
+        MutableComponent line = Component.literal("◆ ").withStyle(ChatFormatting.GOLD)
+                .append(Component.literal(title).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
         if (subtitle != null && !subtitle.isBlank()) {
             line.append(Component.literal("  " + subtitle).withStyle(ChatFormatting.DARK_GRAY));
         }
         return line;
-    }
-
-    private static MutableComponent helpLine(String command, String description, String suggestCommand) {
-        return Messages.clickableCommand(command, "点击填入命令", suggestCommand, ChatFormatting.GRAY)
-                .append(Component.literal("  " + description).withStyle(ChatFormatting.DARK_GRAY));
     }
 
     private static <T> List<T> slicePage(List<T> entries, PageWindow page) {
