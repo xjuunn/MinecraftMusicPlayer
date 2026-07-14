@@ -192,7 +192,7 @@ public final class ClientJukeboxController {
         if (subtitle != null && !subtitle.isBlank()) {
             handle.subtitle = subtitle;
         }
-        if (coverUrl != null && !coverUrl.isBlank() && !coverUrl.equals(handle.coverUrl)) {
+        if (coverUrl != null && !coverUrl.isBlank() && handle.coverUrl.isBlank()) {
             handle.coverUrl = coverUrl;
             CoverArtTextureCache.getInstance().request(coverUrl);
         }
