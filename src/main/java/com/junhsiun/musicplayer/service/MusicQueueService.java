@@ -58,7 +58,7 @@ public final class MusicQueueService {
     private final Map<UUID, String> playerJukeboxLastLyric = new HashMap<>();
     private final Map<UUID, String> playerJukeboxSentLyricText = new HashMap<>();
     private final Map<UUID, Integer> playerJukeboxRefresh = new HashMap<>();
-    private final Set<UUID> lyricsEnabledPlayers = new HashSet<>();
+    private final Map<UUID, Boolean> lyricsPreference = new HashMap<>();
     private LyricsPreferenceState lyricsPreferenceState;
 
     private String playlistId = "";
@@ -156,7 +156,7 @@ public final class MusicQueueService {
                 advance(server, "");
                 return;
             }
-            if (config.showLyrics && currentLyrics.isEmpty() && !lyricFetchAttempted) {
+            if (currentLyrics.isEmpty() && !lyricFetchAttempted) {
                 lyricFetchAttempted = true;
                 lyricService.fetchLyrics(currentPlayback.track().id()).thenAccept(lines -> {
                     if (!lines.isEmpty()) {
@@ -169,8 +169,15 @@ public final class MusicQueueService {
 
         for (ServerPlayer player : List.copyOf(server.getPlayerList().getPlayers())) {
             if (optedOutPlayers.contains(player.getUUID())) continue;
-            if (!lyricsEnabledPlayers.contains(player.getUUID())
-                    && !(config.showLyrics && currentPlayback != null)) continue;
+            Boolean pref = lyricsPreference.get(player.getUUID());
+            boolean playerWantsLyrics;
+            if (pref != null) {
+                playerWantsLyrics = pref;
+            } else {
+                playerWantsLyrics = currentPlayback != null
+                        || MusicPlayerMod.jukeboxService().isPlayerListening(player);
+            }
+            if (!playerWantsLyrics) continue;
 
             boolean nearJukebox = MusicPlayerMod.jukeboxService().isPlayerListening(player);
             String overlayText = "";
@@ -219,7 +226,10 @@ public final class MusicQueueService {
                 playerJukeboxSentLyricText.remove(player.getUUID());
                 playerJukeboxRefresh.remove(player.getUUID());
 
-                if (currentPlayback == null || currentLyrics.isEmpty()) continue;
+                if (currentPlayback == null || currentLyrics.isEmpty()) {
+                    player.sendOverlayMessage(Component.literal(""));
+                    continue;
+                }
 
                 long elapsed = getElapsedMillis();
                 LyricLine line = LyricService.findCurrentLine(currentLyrics, elapsed);
@@ -258,14 +268,15 @@ public final class MusicQueueService {
     }
 
     public boolean isLyricsEnabled(ServerPlayer player) {
-        return lyricsEnabledPlayers.contains(player.getUUID());
+        Boolean pref = lyricsPreference.get(player.getUUID());
+        return pref != null ? pref : false;
     }
 
     public void toggleLyrics(ServerPlayer player, boolean enabled) {
         if (enabled) {
-            lyricsEnabledPlayers.add(player.getUUID());
+            lyricsPreference.put(player.getUUID(), true);
         } else {
-            lyricsEnabledPlayers.remove(player.getUUID());
+            lyricsPreference.put(player.getUUID(), false);
             player.sendOverlayMessage(Component.literal(""));
         }
         if (lyricsPreferenceState != null) {
@@ -274,15 +285,16 @@ public final class MusicQueueService {
     }
 
     public boolean toggleLyrics(ServerPlayer player) {
-        if (lyricsEnabledPlayers.contains(player.getUUID())) {
-            lyricsEnabledPlayers.remove(player.getUUID());
+        Boolean current = lyricsPreference.get(player.getUUID());
+        if (current != null && current) {
+            lyricsPreference.put(player.getUUID(), false);
             player.sendOverlayMessage(Component.literal(""));
             if (lyricsPreferenceState != null) {
                 lyricsPreferenceState.setEnabled(player.getUUID(), false);
             }
             return false;
         } else {
-            lyricsEnabledPlayers.add(player.getUUID());
+            lyricsPreference.put(player.getUUID(), true);
             if (lyricsPreferenceState != null) {
                 lyricsPreferenceState.setEnabled(player.getUUID(), true);
             }
@@ -312,7 +324,7 @@ public final class MusicQueueService {
 
     public void handleJoin(ServerPlayer player) {
         if (lyricsPreferenceState != null && lyricsPreferenceState.isEnabled(player.getUUID())) {
-            lyricsEnabledPlayers.add(player.getUUID());
+            lyricsPreference.put(player.getUUID(), true);
         }
         if (currentPlayback != null && !optedOutPlayers.contains(player.getUUID())) {
             long offset = Math.max(0L, System.currentTimeMillis() - currentPlayback.startedAt());
@@ -812,14 +824,12 @@ public final class MusicQueueService {
         globalLastLyric = "";
         globalLyricRefreshCounter = 0;
         lyricFetchAttempted = false;
-        if (MusicPlayerConfigManager.get().showLyrics) {
-            lyricService.fetchLyrics(track.id()).thenAccept(lines -> {
-                if (!lines.isEmpty()) {
-                    currentLyrics = lines;
-                    MusicPlayerMod.LOGGER.info("歌词已加载: {} 行", lines.size());
-                }
-            });
-        }
+        lyricService.fetchLyrics(track.id()).thenAccept(lines -> {
+            if (!lines.isEmpty()) {
+                currentLyrics = lines;
+                MusicPlayerMod.LOGGER.info("歌词已加载: {} 行", lines.size());
+            }
+        });
     }
 
     private void clearLyrics(MinecraftServer server) {
