@@ -14,6 +14,8 @@ public final class Messages {
     private Messages() {
     }
 
+    public static final String NETEASE_SONG_URL = "https://music.163.com/#/song?id=";
+
     public static String formatDuration(long durationMillis) {
         long totalSeconds = Math.max(0L, durationMillis / 1000L);
         long minutes = totalSeconds / 60L;
@@ -57,6 +59,14 @@ public final class Messages {
         return Component.literal(label).setStyle(
                 Style.EMPTY.withColor(color)
                         .withClickEvent(new ClickEvent.OpenUrl(URI.create(url)))
+                        .withHoverEvent(new HoverEvent.ShowText(Component.literal(hover)))
+        );
+    }
+
+    public static MutableComponent suggestable(String label, String hover, String command, ChatFormatting color) {
+        return Component.literal(label).setStyle(
+                Style.EMPTY.withColor(color)
+                        .withClickEvent(new ClickEvent.SuggestCommand(command))
                         .withHoverEvent(new HoverEvent.ShowText(Component.literal(hover)))
         );
     }

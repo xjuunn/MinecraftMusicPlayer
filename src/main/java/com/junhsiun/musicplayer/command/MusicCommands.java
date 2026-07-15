@@ -794,7 +794,6 @@ public final class MusicCommands {
                 .append(Component.literal(" "))
                 .append(Messages.clickableCommand("[播放歌单]", "切换到歌单播放模式，并从第一首开始顺序播放", "/music play playlist " + playlist.id(), ChatFormatting.GREEN)), false);
         sendQuickBar(source,
-                Messages.clickableCommand("[创建者详情]", "查看创建者信息", "/music view user " + playlist.ownerId(), ChatFormatting.YELLOW),
                 Messages.clickableCommand("[当前播放]", "查看当前播放", "/music now", ChatFormatting.AQUA),
                 Messages.clickableCommand("[单点队列]", "查看单点队列", "/music queue", ChatFormatting.GRAY));
         source.sendSuccess(() -> spacer(), false);
@@ -820,7 +819,6 @@ public final class MusicCommands {
         source.sendSuccess(() -> Component.literal("用户: ").withStyle(ChatFormatting.GOLD)
                 .append(clickableText(user.name(), "/music view user " + user.id(), "查看用户歌单", ChatFormatting.AQUA)), false);
         sendQuickBar(source,
-                Messages.clickableCommand("[刷新用户歌单]", "重新查看该用户的歌单列表", "/music view user " + user.id(), ChatFormatting.YELLOW),
                 Messages.clickableCommand("[当前播放]", "查看当前播放", "/music now", ChatFormatting.AQUA),
                 Messages.clickableCommand("[单点队列]", "查看单点队列", "/music queue", ChatFormatting.GRAY));
         if (user.signature() != null && !user.signature().isBlank()) {
@@ -854,7 +852,6 @@ public final class MusicCommands {
         source.sendSuccess(() -> Component.literal("作者: ").withStyle(ChatFormatting.GOLD)
                 .append(clickableText(artist.name(), "/music view " + literal + " " + artist.id(), "查看作者详情", ChatFormatting.AQUA)), false);
         sendQuickBar(source,
-                Messages.clickableCommand("[刷新作者详情]", "重新查看该作者详情", "/music view " + literal + " " + artist.id(), ChatFormatting.YELLOW),
                 Messages.clickableCommand("[当前播放]", "查看当前播放", "/music now", ChatFormatting.AQUA),
                 Messages.clickableCommand("[单点队列]", "查看单点队列", "/music queue", ChatFormatting.GRAY));
         if (artist.description() != null && !artist.description().isBlank()) {

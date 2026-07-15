@@ -46,7 +46,13 @@ public record MusicControlPayload(String action, String trackId, List<String> ur
     }
 
     public static MusicControlPayload play(String trackId, List<String> urls, String title, String subtitle, long offsetMillis) {
-        return new MusicControlPayload("play", trackId == null ? "" : trackId, List.copyOf(urls), title, subtitle, "", offsetMillis);
+        List<String> valid = urls.stream()
+                .filter(url -> url != null && url.startsWith("http") && url.length() < 30000)
+                .toList();
+        if (valid.isEmpty() && !urls.isEmpty()) {
+            MusicPlayerMod.LOGGER.warn("所有播放源 URL 均无效，trackId={}, urls={}", trackId, urls.size());
+        }
+        return new MusicControlPayload("play", trackId == null ? "" : trackId, valid, title, subtitle, "", offsetMillis);
     }
 
     public static MusicControlPayload stop(String message) {

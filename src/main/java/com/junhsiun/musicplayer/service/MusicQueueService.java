@@ -681,7 +681,7 @@ public final class MusicQueueService {
 
     private Component renderNowPlayingBroadcast(TrackInfo track) {
         MutableComponent line = Component.literal("正在播放: ").withStyle(ChatFormatting.GOLD)
-                .append(Messages.clickableCommand(track.title(), "重新播放这首歌曲", "/music play song " + track.id(), ChatFormatting.AQUA))
+                .append(Messages.clickableUrl(track.title(), "在浏览器中打开", Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
         if (track.artistId() != null && !track.artistId().isBlank()) {
             line.append(Messages.clickableCommand(track.artist(), "查看作者详情", "/music view artist " + track.artistId(), ChatFormatting.GRAY));
@@ -709,7 +709,7 @@ public final class MusicQueueService {
 
     private Component renderCurrentTrackLine(TrackInfo track) {
         MutableComponent line = Component.literal("当前播放: ").withStyle(ChatFormatting.GOLD)
-                .append(Messages.clickableCommand(track.title(), "重新播放这首歌曲", "/music play song " + track.id(), ChatFormatting.AQUA))
+                .append(Messages.clickableUrl(track.title(), "在浏览器中打开", Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
         if (track.artistId() != null && !track.artistId().isBlank()) {
             line.append(Messages.clickableCommand(track.artist(), "查看作者详情", "/music view artist " + track.artistId(), ChatFormatting.GRAY));
