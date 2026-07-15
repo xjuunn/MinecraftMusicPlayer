@@ -15,6 +15,8 @@ The server handles commands, queue, sync, and jukebox control. The client handle
 - Skip: requester/admin skips instantly, others vote
 - Click song titles to open in browser
 - Burn custom music discs, play URL-based music in jukeboxes
+- Jukebox music switches automatically based on distance (leave range → global audio, re-enter → resume jukebox)
+- Real-time lyrics for both global and jukebox music, per-player toggle
 - Loot container random music discs
 - Paginated lists with clickable navigation
 
@@ -55,6 +57,10 @@ Install the mod and Fabric API on both server and clients that need to hear musi
 | `/music burn song <ID>` | Burn disc |
 | `/music join` | Join current playback |
 | `/music leave` | Leave current playback |
+| `/music lyrics` | Toggle real-time lyrics |
+| `/music lyrics on` | Enable lyrics |
+| `/music lyrics off` | Disable lyrics |
+| `/music lyrics status` | Check lyrics status |
 | `/music mute once` | Mute current song |
 | `/music help [subcommand]` | Show help |
 

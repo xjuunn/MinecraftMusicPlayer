@@ -44,8 +44,8 @@ public final class MusicPlayerMod implements ModInitializer {
         PayloadTypeRegistry.serverboundPlay().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
 
         CommandRegistrationCallback.EVENT.register(MusicCommands::register);
-        ServerTickEvents.END_SERVER_TICK.register(MUSIC_QUEUE_SERVICE::tick);
         ServerTickEvents.END_SERVER_TICK.register(JUKEBOX_PLAYBACK_SERVICE::tick);
+        ServerTickEvents.END_SERVER_TICK.register(MUSIC_QUEUE_SERVICE::tick);
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             ItemStack heldStack = player.getItemInHand(hand);
 
@@ -97,6 +97,7 @@ public final class MusicPlayerMod implements ModInitializer {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> MUSIC_QUEUE_SERVICE.handleJoin(handler.player));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> MUSIC_QUEUE_SERVICE.handleDisconnect(handler.player));
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            MUSIC_QUEUE_SERVICE.initLyricsState(server);
             LOOT_MUSIC_DISC_SERVICE.setServer(server);
             LOOT_MUSIC_DISC_SERVICE.start();
         });

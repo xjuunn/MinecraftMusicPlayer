@@ -36,6 +36,7 @@ public final class ClientMusicController {
     private Thread playbackThread;
     private String currentTrackId = "";
     private volatile boolean backgroundMusicPlaying;
+    private long lastPositionReportTime;
 
     private ClientMusicController() {
     }
@@ -46,6 +47,17 @@ public final class ClientMusicController {
 
     public boolean isBackgroundMusicPlaying() {
         return backgroundMusicPlaying;
+    }
+
+    public void tick() {
+        if (!backgroundMusicPlaying || currentTrackId.isBlank() || player == null) return;
+        long now = System.currentTimeMillis();
+        if (now - lastPositionReportTime < 2000) return;
+        lastPositionReportTime = now;
+        int pos = audioDevice.getPosition();
+        if (pos > 0) {
+            ClientPlayNetworking.send(MusicPlaybackReportPayload.position(pos, currentTrackId));
+        }
     }
 
     public void handle(MusicControlPayload payload) {
@@ -68,6 +80,7 @@ public final class ClientMusicController {
         audioDevice.reset();
         currentTrackId = "";
         backgroundMusicPlaying = false;
+        lastPositionReportTime = 0L;
         if (reason != null && !reason.isBlank()) {
             MusicPlayerMod.LOGGER.info("客户端已停止播放: {}", reason);
         }

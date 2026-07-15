@@ -5,7 +5,9 @@ import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.mixin.client.ClientLevelAccessor;
 import com.junhsiun.musicplayer.mixin.client.LevelEventHandlerAccessor;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
+import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import javazoom.jl.decoder.JavaLayerException;
 import javazoom.jl.player.AudioDeviceBase;
 import javazoom.jl.player.Player;
@@ -51,6 +53,7 @@ public final class ClientJukeboxController {
 
     private final Map<Long, PlaybackHandle> playbackHandles = new ConcurrentHashMap<>();
     private final Map<Long, Long> pendingInsertions = new ConcurrentHashMap<>();
+    private final Map<Long, Long> lastPositionReportTime = new ConcurrentHashMap<>();
 
     private ClientJukeboxController() {
     }
@@ -62,17 +65,34 @@ public final class ClientJukeboxController {
     public void handle(JukeboxMusicPayload payload) {
         MusicPlayerMod.LOGGER.info("Received custom jukebox payload: action={}, pos={}", payload.action(), BlockPos.of(payload.jukeboxPos()));
         switch (payload.action()) {
-            case "play" -> play(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl(), payload.offsetMillis());
-            case "refresh" -> refresh(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl(), payload.offsetMillis());
-            case "update" -> update(payload.jukeboxPos(), payload.title(), payload.subtitle(), payload.coverUrl());
+            case "play" -> {
+                play(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl(), payload.offsetMillis());
+                setTrackId(payload.jukeboxPos(), payload.trackId());
+            }
+            case "refresh" -> {
+                refresh(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl(), payload.offsetMillis());
+                setTrackId(payload.jukeboxPos(), payload.trackId());
+            }
+            case "update" -> {
+                update(payload.jukeboxPos(), payload.title(), payload.subtitle(), payload.coverUrl());
+                setTrackId(payload.jukeboxPos(), payload.trackId());
+            }
             case "stop" -> stop(payload.jukeboxPos());
             default -> MusicPlayerMod.LOGGER.warn("Unknown jukebox action: {}", payload.action());
+        }
+    }
+
+    private void setTrackId(long jukeboxPos, String trackId) {
+        PlaybackHandle handle = playbackHandles.get(jukeboxPos);
+        if (handle != null && trackId != null) {
+            handle.trackId = trackId;
         }
     }
 
     public void stopAll(String reason) {
         playbackHandles.keySet().forEach(this::stop);
         pendingInsertions.clear();
+        lastPositionReportTime.clear();
         if (reason != null && !reason.isBlank()) {
             MusicPlayerMod.LOGGER.info("Stopped all jukebox playback: {}", reason);
         }
@@ -90,6 +110,7 @@ public final class ClientJukeboxController {
         long now = System.currentTimeMillis();
         pendingInsertions.entrySet().removeIf(entry -> now - entry.getValue() > PENDING_TIMEOUT_MILLIS);
 
+        long reportInterval = 2000L;
         for (Long jukeboxPos : List.copyOf(playbackHandles.keySet())) {
             PlaybackHandle handle = playbackHandles.get(jukeboxPos);
             if (handle == null) continue;
@@ -97,6 +118,21 @@ public final class ClientJukeboxController {
                 continue;
             }
             silenceVanillaJukeboxSound(jukeboxPos, "tick suppression");
+
+            if (handle.player != null && !handle.trackId.isBlank()) {
+                Long lastReport = lastPositionReportTime.get(jukeboxPos);
+                if (lastReport == null || now - lastReport >= reportInterval) {
+                    lastPositionReportTime.put(jukeboxPos, now);
+                    try {
+                        int pos = handle.player.getPosition();
+                        if (pos > 0) {
+                            ClientPlayNetworking.send(MusicPlaybackReportPayload.position(pos, handle.trackId));
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+
             String invalidReason = getInvalidStateReason(client.level, jukeboxPos);
             if (invalidReason == null) {
                 continue;
@@ -339,6 +375,7 @@ public final class ClientJukeboxController {
         private volatile String title = "";
         private volatile String subtitle = "";
         private volatile String coverUrl = "";
+        private volatile String trackId = "";
         private volatile long startedAtMillis;
         private volatile long finishedAtMillis;
     }
@@ -422,6 +459,7 @@ public final class ClientJukeboxController {
         private AudioFormat audioFormat;
         private byte[] byteBuffer;
         private FloatControl gainControl;
+        private long baseSeekMillis;
         private long seekPositionMillis;
         private long decodedMillis;
 
@@ -430,6 +468,7 @@ public final class ClientJukeboxController {
         }
 
         private void setSeekPosition(long millis) {
+            this.baseSeekMillis = millis;
             this.seekPositionMillis = millis;
             this.decodedMillis = 0L;
         }
@@ -519,7 +558,10 @@ public final class ClientJukeboxController {
 
         @Override
         public int getPosition() {
-            return sourceLine == null ? 0 : (int) (sourceLine.getMicrosecondPosition() / 1000L);
+            if (seekPositionMillis > 0L) {
+                return (int) baseSeekMillis;
+            }
+            return (int) (baseSeekMillis + (sourceLine != null ? sourceLine.getMicrosecondPosition() / 1000L : 0L));
         }
 
         private byte[] getByteArray(int length) {

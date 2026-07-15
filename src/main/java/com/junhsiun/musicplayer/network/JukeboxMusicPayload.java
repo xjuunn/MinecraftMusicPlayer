@@ -9,13 +9,13 @@ import net.minecraft.resources.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 
-public record JukeboxMusicPayload(String action, long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis) implements CustomPacketPayload {
+public record JukeboxMusicPayload(String action, long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis, String trackId) implements CustomPacketPayload {
     public static final Type<JukeboxMusicPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "jukebox_music"));
     public static final StreamCodec<RegistryFriendlyByteBuf, JukeboxMusicPayload> CODEC =
             CustomPacketPayload.codec(JukeboxMusicPayload::write, JukeboxMusicPayload::new);
 
     public JukeboxMusicPayload(RegistryFriendlyByteBuf buffer) {
-        this(buffer.readUtf(), buffer.readLong(), readUrls(buffer), buffer.readUtf(), buffer.readUtf(), buffer.readUtf(), buffer.readLong());
+        this(buffer.readUtf(), buffer.readLong(), readUrls(buffer), buffer.readUtf(), buffer.readUtf(), buffer.readUtf(), buffer.readLong(), buffer.readUtf());
     }
 
     private void write(RegistryFriendlyByteBuf buffer) {
@@ -29,6 +29,7 @@ public record JukeboxMusicPayload(String action, long jukeboxPos, List<String> u
         buffer.writeUtf(this.subtitle);
         buffer.writeUtf(this.coverUrl);
         buffer.writeLong(this.offsetMillis);
+        buffer.writeUtf(this.trackId);
     }
 
     private static List<String> readUrls(RegistryFriendlyByteBuf buffer) {
@@ -45,19 +46,19 @@ public record JukeboxMusicPayload(String action, long jukeboxPos, List<String> u
         return TYPE;
     }
 
-    public static JukeboxMusicPayload play(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis) {
-        return new JukeboxMusicPayload("play", jukeboxPos, List.copyOf(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, offsetMillis);
+    public static JukeboxMusicPayload play(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis, String trackId) {
+        return new JukeboxMusicPayload("play", jukeboxPos, List.copyOf(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, offsetMillis, trackId == null ? "" : trackId);
     }
 
-    public static JukeboxMusicPayload update(long jukeboxPos, String title, String subtitle, String coverUrl) {
-        return new JukeboxMusicPayload("update", jukeboxPos, List.of(), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, 0L);
+    public static JukeboxMusicPayload update(long jukeboxPos, String title, String subtitle, String coverUrl, String trackId) {
+        return new JukeboxMusicPayload("update", jukeboxPos, List.of(), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, 0L, trackId == null ? "" : trackId);
     }
 
-    public static JukeboxMusicPayload refresh(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis) {
-        return new JukeboxMusicPayload("refresh", jukeboxPos, List.copyOf(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, offsetMillis);
+    public static JukeboxMusicPayload refresh(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis, String trackId) {
+        return new JukeboxMusicPayload("refresh", jukeboxPos, List.copyOf(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, offsetMillis, trackId == null ? "" : trackId);
     }
 
     public static JukeboxMusicPayload stop(long jukeboxPos) {
-        return new JukeboxMusicPayload("stop", jukeboxPos, List.of(), "", "", "", 0L);
+        return new JukeboxMusicPayload("stop", jukeboxPos, List.of(), "", "", "", 0L, "");
     }
 }

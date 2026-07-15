@@ -106,6 +106,7 @@ public final class MusicDiscHelper {
         pendingDisc.set(DataComponents.LORE, new ItemLore(List.of(
                 Component.literal("右键使用以生成随机音乐").withStyle(ChatFormatting.DARK_GRAY)
         )));
+        pendingDisc.remove(DataComponents.JUKEBOX_PLAYABLE);
         return pendingDisc;
     }
 
@@ -131,6 +132,7 @@ public final class MusicDiscHelper {
         CustomData.set(DataComponents.CUSTOM_DATA, burnedDisc, wrapper);
         burnedDisc.set(DataComponents.CUSTOM_NAME, buildDisplayName(track));
         burnedDisc.set(DataComponents.LORE, buildLore(track, urls.size()));
+        burnedDisc.remove(DataComponents.JUKEBOX_PLAYABLE);
         return burnedDisc;
     }
 

@@ -3,10 +3,12 @@ package com.junhsiun.musicplayer.service;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
+import com.junhsiun.musicplayer.model.LyricLine;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
+import com.junhsiun.musicplayer.platform.LyricService;
 import com.junhsiun.musicplayer.util.Messages;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
@@ -20,6 +22,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,6 +45,21 @@ public final class MusicQueueService {
 
     private CurrentPlayback currentPlayback;
     private CompletableFuture<Void> requestPipeline = CompletableFuture.completedFuture(null);
+    private final LyricService lyricService = new LyricService();
+    private List<LyricLine> currentLyrics = List.of();
+    private String globalLastSentLyricText = "";
+    private String globalLastLyric = "";
+    private int globalLyricRefreshCounter = 0;
+    private boolean lyricFetchAttempted = false;
+    private long clientPositionMillis = -1L;
+    private long clientPositionTime = 0L;
+    private final Map<String, List<LyricLine>> jukeboxLyricsCache = new HashMap<>();
+    private final Map<UUID, String> playerJukeboxTrackId = new HashMap<>();
+    private final Map<UUID, String> playerJukeboxLastLyric = new HashMap<>();
+    private final Map<UUID, String> playerJukeboxSentLyricText = new HashMap<>();
+    private final Map<UUID, Integer> playerJukeboxRefresh = new HashMap<>();
+    private final Set<UUID> lyricsEnabledPlayers = new HashSet<>();
+    private LyricsPreferenceState lyricsPreferenceState;
 
     private String playlistId = "";
     private int playlistTrackIndex = 0;
@@ -130,12 +148,145 @@ public final class MusicQueueService {
     // ── Tick / lifecycle ───────────────────────────────────────────────
 
     public void tick(MinecraftServer server) {
-        if (currentPlayback == null) {
-            return;
-        }
         MusicPlayerConfig config = MusicPlayerConfigManager.get();
-        if (config.autoAdvance && System.currentTimeMillis() >= currentPlayback.expectedEndAt()) {
-            advance(server, "");
+        long now = System.currentTimeMillis();
+
+        if (currentPlayback != null) {
+            if (config.autoAdvance && now >= currentPlayback.expectedEndAt()) {
+                advance(server, "");
+                return;
+            }
+            if (config.showLyrics && currentLyrics.isEmpty() && !lyricFetchAttempted) {
+                lyricFetchAttempted = true;
+                lyricService.fetchLyrics(currentPlayback.track().id()).thenAccept(lines -> {
+                    if (!lines.isEmpty()) {
+                        currentLyrics = lines;
+                        MusicPlayerMod.LOGGER.info("歌词已加载: {} 行", lines.size());
+                    }
+                });
+            }
+        }
+
+        for (ServerPlayer player : List.copyOf(server.getPlayerList().getPlayers())) {
+            if (optedOutPlayers.contains(player.getUUID())) continue;
+            if (!lyricsEnabledPlayers.contains(player.getUUID())
+                    && !(config.showLyrics && currentPlayback != null)) continue;
+
+            boolean nearJukebox = MusicPlayerMod.jukeboxService().isPlayerListening(player);
+            String overlayText = "";
+
+            if (nearJukebox) {
+                String jtId = MusicPlayerMod.jukeboxService().getJukeboxTrackIdForPlayer(player);
+                if (!jtId.isBlank()) {
+                    if (!jtId.equals(playerJukeboxTrackId.get(player.getUUID()))) {
+                        playerJukeboxTrackId.put(player.getUUID(), jtId);
+                        if (!jukeboxLyricsCache.containsKey(jtId)) {
+                            lyricService.fetchLyrics(jtId).thenAccept(lines -> {
+                                if (!lines.isEmpty()) jukeboxLyricsCache.put(jtId, lines);
+                            });
+                        }
+                    }
+
+                    List<LyricLine> jLines = jukeboxLyricsCache.get(jtId);
+                    if (jLines != null && !jLines.isEmpty()) {
+                        long jElapsed = MusicPlayerMod.jukeboxService().getJukeboxElapsedMillisForPlayer(player);
+                        LyricLine jLine = LyricService.findCurrentLine(jLines, jElapsed);
+
+                        String jText;
+                        if (jLine != null) {
+                            jText = jLine.text();
+                            playerJukeboxLastLyric.put(player.getUUID(), jText);
+                        } else {
+                            jText = playerJukeboxLastLyric.getOrDefault(player.getUUID(), "");
+                        }
+
+                        String lastSent = playerJukeboxSentLyricText.getOrDefault(player.getUUID(), "");
+                        int counter = playerJukeboxRefresh.merge(player.getUUID(), 0, (old, v) -> old + 1);
+                        if (counter >= 5) {
+                            playerJukeboxRefresh.put(player.getUUID(), 0);
+                            overlayText = jText;
+                        }
+                        if (!jText.equals(lastSent)) {
+                            playerJukeboxSentLyricText.put(player.getUUID(), jText);
+                            playerJukeboxRefresh.put(player.getUUID(), 0);
+                            overlayText = jText;
+                        }
+                    }
+                }
+            } else {
+                playerJukeboxTrackId.remove(player.getUUID());
+                playerJukeboxLastLyric.remove(player.getUUID());
+                playerJukeboxSentLyricText.remove(player.getUUID());
+                playerJukeboxRefresh.remove(player.getUUID());
+
+                if (currentPlayback == null || currentLyrics.isEmpty()) continue;
+
+                long elapsed = getElapsedMillis();
+                LyricLine line = LyricService.findCurrentLine(currentLyrics, elapsed);
+
+                String lyricText;
+                if (line != null) {
+                    lyricText = line.text();
+                    globalLastLyric = lyricText;
+                } else {
+                    lyricText = globalLastLyric;
+                }
+
+                if (++globalLyricRefreshCounter >= 5) {
+                    globalLyricRefreshCounter = 0;
+                    overlayText = lyricText;
+                }
+                if (!lyricText.equals(globalLastSentLyricText)) {
+                    globalLastSentLyricText = lyricText;
+                    globalLyricRefreshCounter = 0;
+                    overlayText = lyricText;
+                    if (!lyricText.isEmpty()) globalLastLyric = lyricText;
+                }
+            }
+
+            if (!overlayText.isEmpty()) {
+                player.sendOverlayMessage(Component.literal("♫ " + overlayText).withStyle(ChatFormatting.AQUA));
+            }
+        }
+    }
+
+    private long getElapsedMillis() {
+        if (clientPositionMillis >= 0) {
+            return clientPositionMillis + (System.currentTimeMillis() - clientPositionTime);
+        }
+        return currentPlayback != null ? System.currentTimeMillis() - currentPlayback.startedAt() : 0L;
+    }
+
+    public boolean isLyricsEnabled(ServerPlayer player) {
+        return lyricsEnabledPlayers.contains(player.getUUID());
+    }
+
+    public void toggleLyrics(ServerPlayer player, boolean enabled) {
+        if (enabled) {
+            lyricsEnabledPlayers.add(player.getUUID());
+        } else {
+            lyricsEnabledPlayers.remove(player.getUUID());
+            player.sendOverlayMessage(Component.literal(""));
+        }
+        if (lyricsPreferenceState != null) {
+            lyricsPreferenceState.setEnabled(player.getUUID(), enabled);
+        }
+    }
+
+    public boolean toggleLyrics(ServerPlayer player) {
+        if (lyricsEnabledPlayers.contains(player.getUUID())) {
+            lyricsEnabledPlayers.remove(player.getUUID());
+            player.sendOverlayMessage(Component.literal(""));
+            if (lyricsPreferenceState != null) {
+                lyricsPreferenceState.setEnabled(player.getUUID(), false);
+            }
+            return false;
+        } else {
+            lyricsEnabledPlayers.add(player.getUUID());
+            if (lyricsPreferenceState != null) {
+                lyricsPreferenceState.setEnabled(player.getUUID(), true);
+            }
+            return true;
         }
     }
 
@@ -152,9 +303,17 @@ public final class MusicQueueService {
         }
     }
 
+    public void initLyricsState(MinecraftServer server) {
+        lyricsPreferenceState = server.overworld().getDataStorage()
+                .computeIfAbsent(LyricsPreferenceState.TYPE);
+    }
+
     // ── Player join / leave / report ─────────────────────────────────
 
     public void handleJoin(ServerPlayer player) {
+        if (lyricsPreferenceState != null && lyricsPreferenceState.isEnabled(player.getUUID())) {
+            lyricsEnabledPlayers.add(player.getUUID());
+        }
         if (currentPlayback != null && !optedOutPlayers.contains(player.getUUID())) {
             long offset = Math.max(0L, System.currentTimeMillis() - currentPlayback.startedAt());
             sendPlay(player, currentPlayback.track(), offset);
@@ -171,16 +330,23 @@ public final class MusicQueueService {
     }
 
     public void handlePlaybackReport(MinecraftServer server, ServerPlayer player, MusicPlaybackReportPayload payload) {
-        if (payload == null || currentPlayback == null) {
-            return;
-        }
-        if (optedOutPlayers.contains(player.getUUID())) {
+        if (payload == null || optedOutPlayers.contains(player.getUUID())) {
             return;
         }
         if (payload.trackId() == null || payload.trackId().isBlank()) {
             return;
         }
-        if (!payload.trackId().equals(currentPlayback.track().id())) {
+
+        if (currentPlayback == null || !payload.trackId().equals(currentPlayback.track().id())) {
+            if ("position".equals(payload.action())) {
+                try {
+                    long pos = Long.parseLong(payload.message());
+                    if (pos >= 0) {
+                        MusicPlayerMod.jukeboxService().handlePositionReport(player, payload.trackId(), pos);
+                    }
+                } catch (NumberFormatException ignored) {
+                }
+            }
             return;
         }
 
@@ -193,6 +359,16 @@ public final class MusicQueueService {
                     ? "当前歌曲播放失败，正在切换到下一首。"
                     : "当前歌曲播放失败，正在切换到下一首。原因: " + payload.message();
             advance(server, message);
+        }
+        if ("position".equals(payload.action())) {
+            try {
+                long pos = Long.parseLong(payload.message());
+                if (pos >= 0) {
+                    clientPositionMillis = pos;
+                    clientPositionTime = System.currentTimeMillis();
+                }
+            } catch (NumberFormatException ignored) {
+            }
         }
     }
 
@@ -416,6 +592,7 @@ public final class MusicQueueService {
     public void stop(MinecraftServer server, String reason) {
         currentPlayback = null;
         voteSkipPlayers.clear();
+        clearLyrics(server);
         playlistQueue.clear();
         resetPlaylistState();
         refreshTrackCache();
@@ -561,6 +738,7 @@ public final class MusicQueueService {
     private void advance(MinecraftServer server, String reason) {
         currentPlayback = null;
         voteSkipPlayers.clear();
+        clearLyrics(server);
 
         // Priority 1: normal queue (high-priority "macro" tasks)
         if (!queue.isEmpty()) {
@@ -628,6 +806,39 @@ public final class MusicQueueService {
                     sendPlay(player, track, 0L);
                 });
         broadcast(server, renderNowPlayingBroadcast(track));
+
+        currentLyrics = List.of();
+        globalLastSentLyricText = "";
+        globalLastLyric = "";
+        globalLyricRefreshCounter = 0;
+        lyricFetchAttempted = false;
+        if (MusicPlayerConfigManager.get().showLyrics) {
+            lyricService.fetchLyrics(track.id()).thenAccept(lines -> {
+                if (!lines.isEmpty()) {
+                    currentLyrics = lines;
+                    MusicPlayerMod.LOGGER.info("歌词已加载: {} 行", lines.size());
+                }
+            });
+        }
+    }
+
+    private void clearLyrics(MinecraftServer server) {
+        currentLyrics = List.of();
+        globalLastSentLyricText = "";
+        globalLastLyric = "";
+        globalLyricRefreshCounter = 0;
+        lyricFetchAttempted = false;
+        clientPositionMillis = -1L;
+        clientPositionTime = 0L;
+        jukeboxLyricsCache.clear();
+        playerJukeboxTrackId.clear();
+        playerJukeboxLastLyric.clear();
+        playerJukeboxSentLyricText.clear();
+        playerJukeboxRefresh.clear();
+        Component empty = Component.literal("");
+        server.getPlayerList().getPlayers().stream()
+                .filter(p -> !optedOutPlayers.contains(p.getUUID()))
+                .forEach(p -> p.sendOverlayMessage(empty));
     }
 
     private int activeListeners(MinecraftServer server) {

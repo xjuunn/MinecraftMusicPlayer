@@ -28,7 +28,10 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
                 context.client().execute(() -> ClientJukeboxController.getInstance().handle(payload))
         );
         LevelRenderEvents.COLLECT_SUBMITS.register(JukeboxCoverRenderer::render);
-        ClientTickEvents.END_CLIENT_TICK.register(client -> ClientJukeboxController.getInstance().tick(client));
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            ClientJukeboxController.getInstance().tick(client);
+            ClientMusicController.getInstance().tick();
+        });
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             if (!world.isClientSide()) {
                 return InteractionResult.PASS;

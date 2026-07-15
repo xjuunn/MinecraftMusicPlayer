@@ -51,9 +51,10 @@ public final class MusicCommands {
                 .then(muteOnce())
                 .then(burn())
                 .then(random())
+                .then(lyrics())
                 .then(search())
                 .then(view())
-                .then(admin()));
+                .then(config()));
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> help() {
@@ -81,8 +82,9 @@ public final class MusicCommands {
         helpEntry(source, "mute", "暂时静音当前歌曲");
         helpEntry(source, "burn", "将歌曲刻录到唱片");
         helpEntry(source, "random", "随机生成热门音乐");
+        helpEntry(source, "lyrics", "切换实时歌词显示");
         helpEntry(source, "help", "显示本帮助页面");
-        helpEntry(source, "admin", "管理员 - 配置与管理");
+        helpEntry(source, "config", "管理员 - 配置与管理");
         source.sendSuccess(() -> spacer(), false);
         return 1;
     }
@@ -162,16 +164,23 @@ public final class MusicCommands {
             case "help" -> {
                 return sendHelpOverview(source);
             }
+            case "lyrics" -> {
+                source.sendSuccess(() -> sectionHeader("lyrics", null), false);
+                detailLine(source, "/music lyrics", "切换实时歌词显示");
+                detailLine(source, "/music lyrics on", "开启歌词显示");
+                detailLine(source, "/music lyrics off", "关闭歌词显示");
+                detailLine(source, "/music lyrics status", "查看当前歌词显示状态");
+            }
             case "stop" -> {
                 source.sendSuccess(() -> sectionHeader("stop", null), false);
                 detailLine(source, "/music stop", "停止所有播放并清空当前播放状态");
             }
-            case "admin" -> {
-                source.sendSuccess(() -> sectionHeader("admin", null), false);
-                detailLine(source, "/music admin reload", "重新加载配置文件");
-                detailLine(source, "/music admin status", "查看当前配置状态");
-                detailLine(source, "/music admin clearqueue", "清空单点队列");
-                detailLine(source, "/music admin set <配置项> <值>", "修改配置项");
+            case "config" -> {
+                source.sendSuccess(() -> sectionHeader("config", null), false);
+                detailLine(source, "/music config reload", "重新加载配置文件");
+                detailLine(source, "/music config status", "查看当前配置状态");
+                detailLine(source, "/music config clearqueue", "清空单点队列");
+                detailLine(source, "/music config set <配置项> <值>", "修改配置项");
             }
             default -> {
                 source.sendSuccess(() -> Component.literal("未知子命令: " + subcommand).withStyle(ChatFormatting.RED), false);
@@ -383,6 +392,34 @@ public final class MusicCommands {
         return 1;
     }
 
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> lyrics() {
+        return Commands.literal("lyrics")
+                .executes(context -> {
+                    ServerPlayer player = context.getSource().getPlayerOrException();
+                    boolean now = MusicPlayerMod.queueService().toggleLyrics(player);
+                    Messages.success(context.getSource(), now ? "歌词已开启。" : "歌词已关闭。", false);
+                    return 1;
+                })
+                .then(Commands.literal("on").executes(context -> {
+                    ServerPlayer player = context.getSource().getPlayerOrException();
+                    MusicPlayerMod.queueService().toggleLyrics(player, true);
+                    Messages.success(context.getSource(), "歌词已开启。", false);
+                    return 1;
+                }))
+                .then(Commands.literal("off").executes(context -> {
+                    ServerPlayer player = context.getSource().getPlayerOrException();
+                    MusicPlayerMod.queueService().toggleLyrics(player, false);
+                    Messages.success(context.getSource(), "歌词已关闭。", false);
+                    return 1;
+                }))
+                .then(Commands.literal("status").executes(context -> {
+                    ServerPlayer player = context.getSource().getPlayerOrException();
+                    boolean on = MusicPlayerMod.queueService().isLyricsEnabled(player);
+                    Messages.info(context.getSource(), "歌词显示: " + (on ? "开启" : "关闭"), false);
+                    return 1;
+                }));
+    }
+
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> join() {
         return Commands.literal("join").executes(context -> {
             ServerPlayer player = context.getSource().getPlayerOrException();
@@ -535,8 +572,8 @@ public final class MusicCommands {
                 });
     }
 
-    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> admin() {
-        return Commands.literal("admin")
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> config() {
+        return Commands.literal("config")
                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                 .then(Commands.literal("reload").executes(context -> {
                     MusicPlayerConfigManager.load();
@@ -548,6 +585,7 @@ public final class MusicCommands {
                     Messages.info(context.getSource(), "当前音乐服务地址: " + config.neteaseBaseUrl, false);
                     Messages.info(context.getSource(), "歌曲点播: " + yesNo(config.allowSongRequest) + "，歌单点播: " + yesNo(config.allowPlaylistRequest), false);
                     Messages.info(context.getSource(), "自动切歌: " + yesNo(config.autoAdvance) + "，加载提示: " + yesNo(config.showLoadingHints), false);
+                    Messages.info(context.getSource(), "实时歌词: " + yesNo(config.showLyrics), false);
                     Messages.info(context.getSource(), "代理模式: " + (!config.proxy.isBlank() ? ("手动代理 " + config.proxy) : (config.useSystemProxy ? "自动系统代理" : "直连")), false);
                     Messages.info(context.getSource(), "IPv4 优先: " + yesNo(config.preferIpv4) + "，连接超时: " + config.connectTimeoutSeconds + "s，读取超时: " + config.readTimeoutSeconds + "s", false);
                     Messages.info(context.getSource(), "搜索上限: " + config.searchLimit + "，队列上限: " + config.maxQueueSize + "，歌单导入上限: " + config.playlistQueueLimit + "，预缓存数量: " + config.queueCacheSize, false);
@@ -578,6 +616,7 @@ public final class MusicCommands {
                         .then(boolSetting("autoAdvance", value -> MusicPlayerConfigManager.get().autoAdvance = value))
                         .then(boolSetting("announceQueueChanges", value -> MusicPlayerConfigManager.get().announceQueueChanges = value))
                         .then(boolSetting("showLoadingHints", value -> MusicPlayerConfigManager.get().showLoadingHints = value))
+                        .then(boolSetting("showLyrics", value -> MusicPlayerConfigManager.get().showLyrics = value))
                         .then(boolSetting("useSystemProxy", value -> MusicPlayerConfigManager.get().useSystemProxy = value))
                         .then(boolSetting("preferIpv4", value -> MusicPlayerConfigManager.get().preferIpv4 = value))
                         .then(Commands.literal("proxy").then(Commands.argument("value", StringArgumentType.greedyString()).executes(context -> {

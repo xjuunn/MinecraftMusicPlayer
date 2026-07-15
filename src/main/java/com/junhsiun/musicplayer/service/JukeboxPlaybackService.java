@@ -31,6 +31,8 @@ public final class JukeboxPlaybackService {
     private static final double AUDIBLE_RANGE_SQR = 64.0D * 64.0D;
 
     private final Map<Long, ActiveJukebox> activeJukeboxes = new HashMap<>();
+    private final Map<UUID, Long> playerPositionMillis = new HashMap<>();
+    private final Map<UUID, Long> playerPositionTime = new HashMap<>();
 
     public InteractionResult tryInsertCustomDisc(ServerPlayer player, Level level, InteractionHand hand, BlockHitResult hitResult) {
         if (!(level instanceof ServerLevel serverLevel)) {
@@ -190,12 +192,14 @@ public final class JukeboxPlaybackService {
             if (player.distanceToSqr(centerX, centerY, centerZ) > AUDIBLE_RANGE_SQR) {
                 if (active.listeners().remove(player.getUUID())) {
                     sendStop(player, active.key());
+                    clearPlayerPosition(player.getUUID());
                 }
                 continue;
             }
 
             stillListening.add(player.getUUID());
             if (active.listeners().add(player.getUUID())) {
+                clearPlayerPosition(player.getUUID());
                 sendPlay(player, active);
             }
         }
@@ -208,6 +212,7 @@ public final class JukeboxPlaybackService {
             if (player != null) {
                 sendStop(player, active.key());
             }
+            clearPlayerPosition(uuid);
             return true;
         });
     }
@@ -218,6 +223,7 @@ public final class JukeboxPlaybackService {
             if (player != null) {
                 sendStop(player, active.key());
             }
+            clearPlayerPosition(listener);
         }
     }
 
@@ -236,7 +242,8 @@ public final class JukeboxPlaybackService {
                     active.discData().title(),
                     active.discData().artist(),
                     active.discData().coverUrl(),
-                    offset
+                    offset,
+                    active.discData().trackId()
             ));
         }
     }
@@ -262,19 +269,83 @@ public final class JukeboxPlaybackService {
                             active.discData().title(),
                             active.discData().artist(),
                             active.discData().coverUrl(),
-                            0L
+                            0L,
+                            active.discData().trackId()
                     ));
                 } else {
                     ServerPlayNetworking.send(player, JukeboxMusicPayload.update(
                             active.key(),
                             active.discData().title(),
                             active.discData().artist(),
-                            active.discData().coverUrl()
+                            active.discData().coverUrl(),
+                            active.discData().trackId()
                     ));
                 }
             }
         }
     }
+    public boolean isPlayerListening(ServerPlayer player) {
+        return activeJukeboxes.values().stream().anyMatch(aj -> aj.listeners().contains(player.getUUID()));
+    }
+
+    public String getJukeboxTrackIdForPlayer(ServerPlayer player) {
+        return activeJukeboxes.values().stream()
+                .filter(aj -> aj.listeners().contains(player.getUUID()))
+                .findFirst()
+                .map(aj -> aj.discData().trackId())
+                .orElse("");
+    }
+
+    public long getJukeboxElapsedMillisForPlayer(ServerPlayer player) {
+        UUID uuid = player.getUUID();
+        Long pos = playerPositionMillis.get(uuid);
+        Long time = playerPositionTime.get(uuid);
+        if (pos != null && time != null) {
+            return pos + (System.currentTimeMillis() - time);
+        }
+        return activeJukeboxes.values().stream()
+                .filter(aj -> aj.listeners().contains(uuid))
+                .findFirst()
+                .map(aj -> System.currentTimeMillis() - aj.startedAtMillis())
+                .orElse(0L);
+    }
+
+    public void handlePositionReport(ServerPlayer player, String trackId, long positionMillis) {
+        activeJukeboxes.values().stream()
+                .filter(aj -> aj.listeners().contains(player.getUUID()))
+                .filter(aj -> aj.discData().trackId().equals(trackId))
+                .findFirst()
+                .ifPresent(aj -> {
+                    playerPositionMillis.put(player.getUUID(), positionMillis);
+                    playerPositionTime.put(player.getUUID(), System.currentTimeMillis());
+                });
+    }
+
+    public void clearPlayerPosition(UUID playerId) {
+        playerPositionMillis.remove(playerId);
+        playerPositionTime.remove(playerId);
+    }
+
+    public String getJukeboxTitleForPlayer(ServerPlayer player) {
+        return activeJukeboxes.values().stream()
+                .filter(aj -> aj.listeners().contains(player.getUUID()))
+                .findFirst()
+                .map(aj -> aj.discData().title())
+                .orElse("");
+    }
+
+    public String getJukeboxArtistForPlayer(ServerPlayer player) {
+        return activeJukeboxes.values().stream()
+                .filter(aj -> aj.listeners().contains(player.getUUID()))
+                .findFirst()
+                .map(aj -> aj.discData().artist())
+                .orElse("");
+    }
+
+    private boolean isJukeboxListener(UUID playerId, ActiveJukebox aj) {
+        return aj.listeners().contains(playerId);
+    }
+
     private static final class ActiveJukebox {
         private final long key;
         private final ResourceKey<Level> dimension;

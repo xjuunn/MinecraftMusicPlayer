@@ -33,4 +33,8 @@ public record MusicPlaybackReportPayload(String action, String trackId, String m
     public static MusicPlaybackReportPayload failed(String trackId, String message) {
         return new MusicPlaybackReportPayload("failed", trackId == null ? "" : trackId, message == null ? "" : message);
     }
+
+    public static MusicPlaybackReportPayload position(long positionMillis, String trackId) {
+        return new MusicPlaybackReportPayload("position", trackId == null ? "" : trackId, Long.toString(positionMillis));
+    }
 }

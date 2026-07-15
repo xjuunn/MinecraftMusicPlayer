@@ -13,6 +13,7 @@ public class MusicPlayerConfig {
     public boolean autoAdvance = true;
     public boolean announceQueueChanges = true;
     public boolean showLoadingHints = true;
+    public boolean showLyrics = false;
     public int connectTimeoutSeconds = 10;
     public int readTimeoutSeconds = 20;
     public int searchLimit = 8;
