@@ -83,15 +83,34 @@ public final class NeteaseApiClient {
     }
 
     public CompletableFuture<PlaylistInfo> playlistDetail(String id) {
-        return getJson("/playlist/detail", "id", id).thenCompose(root -> {
-            JsonObject playlist = obj(root, "playlist");
-            return fetchAllPlaylistTracks(id).thenApply(tracks -> new PlaylistInfo(
-                    str(playlist, "id"),
-                    str(playlist, "name"),
-                    str(obj(playlist, "creator"), "userId"),
-                    str(obj(playlist, "creator"), "nickname"),
-                    tracks
-            ));
+        return getJson("/playlist/detail", "id", id).thenApply(root -> {
+            JsonObject p = obj(root, "playlist");
+            MusicPlayerMod.LOGGER.info("歌单详情: id={}, trackCount={}", id, intVal(p, "trackCount"));
+            return new PlaylistInfo(
+                    str(p, "id"), str(p, "name"),
+                    str(obj(p, "creator"), "userId"),
+                    str(obj(p, "creator"), "nickname"),
+                    List.of(), intVal(p, "trackCount"));
+        });
+    }
+
+    public CompletableFuture<List<SearchEntry>> playlistTracksPage(String playlistId, int offset, int limit) {
+        return getJson("/playlist/track/all", "id", playlistId,
+                "limit", Integer.toString(limit),
+                "offset", Integer.toString(offset)).thenApply(root -> {
+            JsonArray songs = arr(root, "songs");
+            if (songs == null || songs.isEmpty()) return List.of();
+            List<SearchEntry> tracks = new ArrayList<>();
+            for (JsonElement elem : songs) {
+                JsonObject song = elem.getAsJsonObject();
+                String songId = str(song, "id");
+                String artistId = firstArtistId(song);
+                tracks.add(new SearchEntry(songId, str(song, "name"), firstArtistName(song),
+                        playSongCommand(songId), artistId.isBlank() ? "" : viewArtistCommand(artistId)));
+            }
+            MusicPlayerMod.LOGGER.info("歌单曲目分页: id={}, offset={}, limit={}, 返回={}",
+                    playlistId, offset, limit, tracks.size());
+            return tracks;
         });
     }
 
@@ -466,10 +485,6 @@ public final class NeteaseApiClient {
         return getJsonFromAbsoluteUrl(baseUrl() + path, queryPairs);
     }
 
-    private CompletableFuture<List<SearchEntry>> fetchAllPlaylistTracks(String playlistId) {
-        return CompletableFuture.supplyAsync(() -> fetchAllPlaylistTracksSync(playlistId), EXECUTOR);
-    }
-
     private CompletableFuture<List<SearchEntry>> fetchAllArtistSongs(String artistId) {
         return CompletableFuture.supplyAsync(() -> {
             List<SearchEntry> tracks = new ArrayList<>();
@@ -613,41 +628,6 @@ public final class NeteaseApiClient {
                     }
                     return tracks;
                 });
-    }
-
-    private List<SearchEntry> fetchAllPlaylistTracksSync(String playlistId) {
-        List<SearchEntry> tracks = new ArrayList<>();
-        int offset = 0;
-
-        while (true) {
-            JsonObject root = executeJson(baseRequest(
-                    baseUrl() + "/playlist/track/all",
-                    new String[]{"id", playlistId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
-                    "application/json,text/plain,*/*"
-            ));
-            JsonArray songs = arr(root, "songs");
-            if (songs == null || songs.isEmpty()) {
-                break;
-            }
-            for (JsonElement elem : songs) {
-                JsonObject song = elem.getAsJsonObject();
-                String songId = str(song, "id");
-                String artistId = firstArtistId(song);
-                tracks.add(new SearchEntry(
-                        songId,
-                        str(song, "name"),
-                        firstArtistName(song),
-                        playSongCommand(songId),
-                        artistId.isBlank() ? "" : viewArtistCommand(artistId)
-                ));
-            }
-            if (songs.size() < DETAIL_FETCH_BATCH_SIZE) {
-                break;
-            }
-            offset += songs.size();
-        }
-
-        return tracks;
     }
 
     private CompletableFuture<JsonObject> getJsonFromAbsoluteUrl(String absoluteUrl, String... queryPairs) {

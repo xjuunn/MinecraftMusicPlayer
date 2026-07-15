@@ -48,9 +48,9 @@ Install the mod and Fabric API on both server and clients that need to hear musi
 | `/music search artist <keyword>` | Search artists |
 | `/music search playlist <keyword>` | Search playlists |
 | `/music search user <keyword>` | Search users |
-| `/music view playlist <ID>` | View playlist details |
-| `/music view artist <ID>` | View artist details |
-| `/music view user <ID>` | View user playlists |
+| `/music view playlist <ID>` | View playlist details, `<ID> page <N>` for page |
+| `/music view artist <ID>` | View artist details, `<ID> page <N>` for page |
+| `/music view user <ID>` | View user playlists, `<ID> page <N>` for page |
 | `/music random` | Generate 10 random hot songs |
 | `/music burn song <ID>` | Burn disc |
 | `/music join` | Join current playback |

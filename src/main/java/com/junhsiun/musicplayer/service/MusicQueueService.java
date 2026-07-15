@@ -43,7 +43,7 @@ public final class MusicQueueService {
     private CurrentPlayback currentPlayback;
     private CompletableFuture<Void> requestPipeline = CompletableFuture.completedFuture(null);
 
-    private List<String> playlistTrackIds = List.of();
+    private String playlistId = "";
     private int playlistTrackIndex = 0;
     private int playlistTotalTracks = 0;
     private UUID playlistRequesterId = null;
@@ -250,7 +250,7 @@ public final class MusicQueueService {
                     source.sendFailure(Component.literal("加载歌单失败: " + rootMessage(throwable)));
                     return;
                 }
-                if (playlist.tracks().isEmpty()) {
+                if (playlist.trackCount() <= 0) {
                     source.sendFailure(Component.literal("该歌单没有可播放的歌曲。"));
                     return;
                 }
@@ -262,8 +262,8 @@ public final class MusicQueueService {
                 resetPlaylistState();
 
                 // Setup playlist mode
-                playlistTrackIds = new ArrayList<>(playlist.tracks().stream().map(SearchEntry::id).toList());
-                playlistTotalTracks = playlist.tracks().size();
+                this.playlistId = playlistId;
+                playlistTotalTracks = playlist.trackCount();
                 playlistTrackIndex = 0;
                 playlistRequesterId = requester.getUUID();
                 playlistRequesterName = requester.getGameProfile().name();
@@ -272,14 +272,12 @@ public final class MusicQueueService {
                 MusicPlayerMod.LOGGER.info("歌单模式启动: [{}] ID={}, 共 {} 首",
                         playlist.title(), playlistId, playlistTotalTracks);
 
-                // Load initial batch and start playback
-                loadPlaylistBatch(server, () -> {
+                // Load first track and start playing
+                loadPlaylistBatch(server, 1, () -> {
                     if (!playlistQueue.isEmpty()) {
                         QueuedTrack first = playlistQueue.removeFirst();
-                        MusicPlayerMod.LOGGER.info("歌单开始播放首曲: {} - {} (歌单进度: {}/{})",
-                                first.title(), first.artist(),
-                                playlistTrackIndex - playlistQueue.size(),
-                                playlistTotalTracks);
+                        MusicPlayerMod.LOGGER.info("歌单首曲开始播放: {} - {} (1/{})",
+                                first.title(), first.artist(), playlistTotalTracks);
                         resolveTrack(first.songId()).whenComplete((track, trackThrowable) -> server.execute(() -> {
                             if (trackThrowable != null) {
                                 MusicPlayerMod.LOGGER.warn("歌单首曲加载失败: {}", rootMessage(trackThrowable));
@@ -289,6 +287,9 @@ public final class MusicQueueService {
                             startTrack(server, track, first.requesterId(), first.requesterName());
                             source.sendSuccess(() -> Component.literal("歌单模式已启动: [" + playlist.title() + "]，共 " + playlistTotalTracks + " 首")
                                     .withStyle(ChatFormatting.GREEN), false);
+
+                            // Load remaining batch in background
+                            loadPlaylistBatch(server, PLAYLIST_BATCH_SIZE, null);
                         }));
                     }
                 });
@@ -297,91 +298,82 @@ public final class MusicQueueService {
         }));
     }
 
-    private void loadPlaylistBatch(MinecraftServer server, Runnable onComplete) {
-        int count = Math.min(PLAYLIST_BATCH_SIZE, playlistTotalTracks - playlistTrackIndex);
-        MusicPlayerMod.LOGGER.info("歌单批量加载 {} 首 (当前索引: {}/{})", count, playlistTrackIndex, playlistTotalTracks);
-
-        if (count <= 0) {
-            if (onComplete != null) {
-                server.execute(onComplete);
-            }
+    private void loadPlaylistBatch(MinecraftServer server, int count, Runnable onComplete) {
+        int batchSize = Math.min(count, playlistTotalTracks - playlistTrackIndex);
+        if (batchSize <= 0) {
+            if (onComplete != null) server.execute(onComplete);
             return;
         }
 
-        // Pre-allocate ordered slots so tracks stay in playlist order
-        @SuppressWarnings("unchecked")
-        CompletableFuture<Void>[] futures = new CompletableFuture[count];
-        QueuedTrack[] slots = new QueuedTrack[count];
-        int batchStartIndex = playlistTrackIndex;
-        playlistTrackIndex += count;
+        int startIndex = playlistTrackIndex;
+        playlistTrackIndex += batchSize;
+        MusicPlayerMod.LOGGER.info("歌单批量加载 {} 首 ({}:{}/{})", batchSize, startIndex + 1, playlistTrackIndex, playlistTotalTracks);
 
-        for (int i = 0; i < count; i++) {
-            int slotIndex = i;
-            String songId = playlistTrackIds.get(batchStartIndex + i);
-            int trackNumber = batchStartIndex + i + 1;
-            futures[i] = resolveTrack(songId).thenAccept(track -> {
-                if (track == null) return;
-                slots[slotIndex] = new QueuedTrack(
-                        track.id(), track.title(), track.artist(),
-                        track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
-                        playlistRequesterId, playlistRequesterName
-                );
-                MusicPlayerMod.LOGGER.info("歌单加载: {}/{} - {} - {}",
-                        trackNumber, playlistTotalTracks, track.title(), track.artist());
-            }).exceptionally(throwable -> {
-                MusicPlayerMod.LOGGER.warn("歌单加载失败: [{}/{}] songId={}, 原因: {}",
-                        trackNumber, playlistTotalTracks, songId, rootMessage(throwable));
-                return null;
-            });
-        }
-
-        CompletableFuture.allOf(futures).whenComplete((v, t) -> {
-            // Add to queue in correct order
-            for (QueuedTrack qt : slots) {
-                if (qt != null) {
-                    playlistQueue.addLast(qt);
-                }
-            }
-            MusicPlayerMod.LOGGER.info("歌单批量加载完成，当前队列 {} 首，剩余 {} 首",
-                    playlistQueue.size(), playlistTotalTracks - playlistTrackIndex);
-            if (onComplete != null) {
-                server.execute(onComplete);
-            }
-        });
+        MusicPlayerMod.netease().playlistTracksPage(playlistId, startIndex, batchSize)
+                .whenComplete((tracks, t) -> server.execute(() -> {
+                    if (t != null) {
+                        MusicPlayerMod.LOGGER.warn("歌单加载失败: {}", rootMessage(t));
+                        if (onComplete != null) onComplete.run();
+                        return;
+                    }
+                    @SuppressWarnings("unchecked")
+                    CompletableFuture<Void>[] futures = new CompletableFuture[tracks.size()];
+                    for (int i = 0; i < tracks.size(); i++) {
+                        SearchEntry entry = tracks.get(i);
+                        int trackNumber = startIndex + i + 1;
+                        futures[i] = resolveTrack(entry.id()).thenAccept(track -> {
+                            playlistQueue.addLast(new QueuedTrack(
+                                    track.id(), track.title(), track.artist(),
+                                    track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
+                                    playlistRequesterId, playlistRequesterName
+                            ));
+                            MusicPlayerMod.LOGGER.info("歌单加载: {}/{} - {} - {}",
+                                    trackNumber, playlistTotalTracks, track.title(), track.artist());
+                        }).exceptionally(throwable -> {
+                            MusicPlayerMod.LOGGER.warn("歌单加载失败: [{}/{}] - {}, 原因: {}",
+                                    trackNumber, playlistTotalTracks, entry.title(), rootMessage(throwable));
+                            return null;
+                        });
+                    }
+                    CompletableFuture.allOf(futures).whenComplete((v, ex) -> {
+                        MusicPlayerMod.LOGGER.info("歌单批量加载完成，当前队列 {} 首，剩余 {} 首",
+                                playlistQueue.size(), playlistTotalTracks - playlistTrackIndex);
+                        if (onComplete != null) server.execute(onComplete);
+                    });
+                }));
     }
 
     private void loadNextPlaylistTrack(MinecraftServer server) {
         if (!playlistMode || playlistTrackIndex >= playlistTotalTracks) {
-            if (playlistMode && playlistQueue.isEmpty()) {
-                MusicPlayerMod.LOGGER.info("歌单已全部播放完毕，共 {} 首", playlistTotalTracks);
-                playlistMode = false;
-            }
             return;
         }
 
-        String songId = playlistTrackIds.get(playlistTrackIndex);
+        int index = playlistTrackIndex;
         playlistTrackIndex++;
-        int trackNumber = playlistTrackIndex;
-
-        resolveTrack(songId).whenComplete((track, throwable) -> server.execute(() -> {
-            if (throwable != null) {
-                MusicPlayerMod.LOGGER.warn("歌单预载失败: [{}/{}] songId={}, 原因: {}",
-                        trackNumber, playlistTotalTracks, songId, rootMessage(throwable));
-                return;
-            }
-            if (track == null) return;
-            playlistQueue.addLast(new QueuedTrack(
-                    track.id(), track.title(), track.artist(),
-                    track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
-                    playlistRequesterId, playlistRequesterName
-            ));
-            MusicPlayerMod.LOGGER.info("歌单预载: {}/{} - {} - {}",
-                    trackNumber, playlistTotalTracks, track.title(), track.artist());
-        }));
+        MusicPlayerMod.netease().playlistTracksPage(playlistId, index, 1)
+                .whenComplete((tracks, t) -> server.execute(() -> {
+                    if (t != null || tracks.isEmpty()) return;
+                    SearchEntry entry = tracks.getFirst();
+                    int trackNumber = index + 1;
+                    resolveTrack(entry.id()).whenComplete((track, rt) -> server.execute(() -> {
+                        if (rt != null) {
+                            MusicPlayerMod.LOGGER.warn("歌单预载失败: [{}/{}] - {}, 原因: {}",
+                                    trackNumber, playlistTotalTracks, entry.title(), rootMessage(rt));
+                            return;
+                        }
+                        playlistQueue.addLast(new QueuedTrack(
+                                track.id(), track.title(), track.artist(),
+                                track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
+                                playlistRequesterId, playlistRequesterName
+                        ));
+                        MusicPlayerMod.LOGGER.info("歌单预载: {}/{} - {} - {}",
+                                trackNumber, playlistTotalTracks, track.title(), track.artist());
+                    }));
+                }));
     }
 
     private void resetPlaylistState() {
-        playlistTrackIds = List.of();
+        playlistId = "";
         playlistTrackIndex = 0;
         playlistTotalTracks = 0;
         playlistRequesterId = null;
@@ -634,8 +626,6 @@ public final class MusicQueueService {
                 .sorted(Comparator.comparing(player -> player.getGameProfile().name()))
                 .forEach(player -> {
                     sendPlay(player, track, 0L);
-                    boolean isRequester = player.getUUID().equals(requesterId);
-                    player.sendSystemMessage(renderNowPlayingActions(track, isRequester));
                 });
         broadcast(server, renderNowPlayingBroadcast(track));
     }
@@ -688,22 +678,15 @@ public final class MusicQueueService {
         } else {
             line.append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY));
         }
+        line.append(Component.literal("\n"));
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
             line.append(Messages.clickableUrl("[下载]", "在浏览器中打开歌曲直链", track.sourceUrls().getFirst(), ChatFormatting.GREEN));
         }
-        return line;
-    }
-
-    private Component renderNowPlayingActions(TrackInfo track, boolean isRequester) {
-        MutableComponent line = Component.literal("");
-        if (isRequester) {
-            line.append(Messages.clickableCommand("[跳过]", "直接跳过当前歌曲", "/music skip", ChatFormatting.YELLOW));
-        } else {
-            line.append(Messages.clickableCommand("[跳过]", "投票跳过当前歌曲", "/music skip", ChatFormatting.YELLOW));
-        }
-        line.append(Component.literal(" · ").withStyle(ChatFormatting.DARK_GRAY));
-        line.append(Messages.clickableCommand("[单点队列]", "查看单点队列", "/music queue", ChatFormatting.GRAY));
+        line.append(Component.literal(" "));
+        line.append(Messages.clickableCommand("[跳过]", "投票跳过当前歌曲", "/music skip", ChatFormatting.YELLOW));
+        line.append(Component.literal(" "));
+        line.append(Messages.clickableCommand("[队列]", "查看播放队列", "/music queue", ChatFormatting.GRAY));
         return line;
     }
 
