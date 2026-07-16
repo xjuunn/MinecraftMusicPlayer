@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 public final class MusicQueueService {
@@ -46,14 +47,14 @@ public final class MusicQueueService {
     private CurrentPlayback currentPlayback;
     private CompletableFuture<Void> requestPipeline = CompletableFuture.completedFuture(null);
     private final LyricService lyricService = new LyricService();
-    private List<LyricLine> currentLyrics = List.of();
+    private volatile List<LyricLine> currentLyrics = List.of();
     private String globalLastSentLyricText = "";
     private String globalLastLyric = "";
     private int globalLyricRefreshCounter = 0;
     private boolean lyricFetchAttempted = false;
     private long clientPositionMillis = -1L;
     private long clientPositionTime = 0L;
-    private final Map<String, List<LyricLine>> jukeboxLyricsCache = new HashMap<>();
+    private final Map<String, List<LyricLine>> jukeboxLyricsCache = new ConcurrentHashMap<>();
     private final Map<UUID, String> playerJukeboxTrackId = new HashMap<>();
     private final Map<UUID, String> playerJukeboxLastLyric = new HashMap<>();
     private final Map<UUID, String> playerJukeboxSentLyricText = new HashMap<>();
@@ -279,10 +280,14 @@ public final class MusicQueueService {
     }
 
     private long getElapsedMillis() {
-        if (clientPositionMillis >= 0) {
-            return clientPositionMillis + (System.currentTimeMillis() - clientPositionTime);
+        long monotonic = currentPlayback != null
+                ? System.currentTimeMillis() - currentPlayback.startedAt()
+                : 0L;
+        if (clientPositionMillis < 0) {
+            return monotonic;
         }
-        return currentPlayback != null ? System.currentTimeMillis() - currentPlayback.startedAt() : 0L;
+        long clientBased = clientPositionMillis + (System.currentTimeMillis() - clientPositionTime);
+        return Math.max(monotonic, clientBased);
     }
 
     public boolean isLyricsEnabled(ServerPlayer player) {
@@ -841,16 +846,17 @@ public final class MusicQueueService {
         globalLastSentLyricText = "";
         globalLastLyric = "";
         globalLyricRefreshCounter = 0;
-        lyricFetchAttempted = false;
+        lyricFetchAttempted = true;
         lyricService.fetchLyrics(track.id())
-                .thenAccept(lines -> {
+                .thenAccept(lines -> server.execute(() -> {
                     if (!lines.isEmpty()) {
                         currentLyrics = lines;
                         MusicPlayerMod.LOGGER.info("歌词已加载: {} 行", lines.size());
                     }
-                })
+                }))
                 .exceptionally(ex -> {
                     MusicPlayerMod.LOGGER.warn("歌词获取失败: {}", track.id(), ex);
+                    server.execute(() -> lyricFetchAttempted = false);
                     return null;
                 });
     }
