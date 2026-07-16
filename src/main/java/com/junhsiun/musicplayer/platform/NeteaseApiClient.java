@@ -478,7 +478,7 @@ public final class NeteaseApiClient {
     }
 
     private static boolean isValidUrl(String url) {
-        return url != null && !url.isBlank() && !"null".equalsIgnoreCase(url.trim());
+        return url != null && (url.startsWith("http://") || url.startsWith("https://"));
     }
 
     private CompletableFuture<JsonObject> getJson(String path, String... queryPairs) {

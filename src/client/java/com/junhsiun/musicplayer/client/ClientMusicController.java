@@ -4,6 +4,7 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
+import com.junhsiun.musicplayer.util.Messages;
 import javazoom.jl.decoder.JavaLayerException;
 import javazoom.jl.player.AudioDeviceBase;
 import javazoom.jl.player.Player;
@@ -54,9 +55,12 @@ public final class ClientMusicController {
         long now = System.currentTimeMillis();
         if (now - lastPositionReportTime < 2000) return;
         lastPositionReportTime = now;
-        int pos = audioDevice.getPosition();
-        if (pos > 0) {
-            ClientPlayNetworking.send(MusicPlaybackReportPayload.position(pos, currentTrackId));
+        try {
+            int pos = audioDevice.getPosition();
+            if (pos > 0) {
+                ClientPlayNetworking.send(MusicPlaybackReportPayload.position(pos, currentTrackId));
+            }
+        } catch (Exception ignored) {
         }
     }
 
@@ -115,18 +119,18 @@ public final class ClientMusicController {
 
             String url = urls.get(index);
             try {
-                MusicPlayerMod.LOGGER.info("开始尝试播放源 {}/{}: {} - {}", index + 1, urls.size(), title, url);
+                MusicPlayerMod.LOGGER.info("开始尝试播放源 {}/{}: {} - {}", index + 1, urls.size(), title, Messages.sanitizeForLog(url));
                 playSingle(url, title, subtitle);
                 if (!Thread.currentThread().isInterrupted()) {
                     reportEnded(trackId);
                 }
                 return;
-            } catch (IOException | JavaLayerException exception) {
+            } catch (Exception exception) {
                 if (Thread.currentThread().isInterrupted() || exception instanceof InterruptedIOException) {
                     return;
                 }
                 lastException = exception;
-                MusicPlayerMod.LOGGER.warn("播放源失败，尝试下一个源: {}", url, exception);
+                MusicPlayerMod.LOGGER.warn("播放源失败，尝试下一个源: {}", Messages.sanitizeForLog(url), exception);
             }
         }
 

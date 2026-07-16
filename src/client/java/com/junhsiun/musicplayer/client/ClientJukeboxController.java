@@ -7,6 +7,7 @@ import com.junhsiun.musicplayer.mixin.client.LevelEventHandlerAccessor;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
+import com.junhsiun.musicplayer.util.Messages;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import javazoom.jl.decoder.JavaLayerException;
 import javazoom.jl.player.AudioDeviceBase;
@@ -308,7 +309,7 @@ public final class ClientJukeboxController {
                 handle.player = null;
                 handle.currentCall = null;
                 return;
-            } catch (IOException | JavaLayerException exception) {
+            } catch (Exception exception) {
                 if (Thread.currentThread().isInterrupted() || exception instanceof InterruptedIOException) {
                     handle.thread = null;
                     handle.player = null;
@@ -386,14 +387,14 @@ public final class ClientJukeboxController {
     private void logSourceFallback(String url, Exception exception) {
         String message = exception.getMessage();
         if (message != null && (message.contains("HTTP 403") || message.contains("HTTP 404"))) {
-            MusicPlayerMod.LOGGER.info("Jukebox source rejected, trying next source: {}", url);
+            MusicPlayerMod.LOGGER.info("Jukebox source rejected, trying next source: {}", Messages.sanitizeForLog(url));
             return;
         }
         if (exception instanceof SocketTimeoutException) {
-            MusicPlayerMod.LOGGER.info("Jukebox source timed out, trying next source: {}", url);
+            MusicPlayerMod.LOGGER.info("Jukebox source timed out, trying next source: {}", Messages.sanitizeForLog(url));
             return;
         }
-        MusicPlayerMod.LOGGER.warn("Jukebox source failed, trying next source: {}", url, exception);
+        MusicPlayerMod.LOGGER.warn("Jukebox source failed, trying next source: {}", Messages.sanitizeForLog(url), exception);
     }
 
     private void stopVanillaBackgroundMusic() {

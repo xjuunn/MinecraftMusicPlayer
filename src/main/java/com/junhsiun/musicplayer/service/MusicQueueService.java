@@ -148,6 +148,14 @@ public final class MusicQueueService {
     // ── Tick / lifecycle ───────────────────────────────────────────────
 
     public void tick(MinecraftServer server) {
+        try {
+            tickInner(server);
+        } catch (Exception e) {
+            MusicPlayerMod.LOGGER.error("MusicQueueService tick 异常", e);
+        }
+    }
+
+    private void tickInner(MinecraftServer server) {
         MusicPlayerConfig config = MusicPlayerConfigManager.get();
         long now = System.currentTimeMillis();
 
@@ -158,12 +166,17 @@ public final class MusicQueueService {
             }
             if (currentLyrics.isEmpty() && !lyricFetchAttempted) {
                 lyricFetchAttempted = true;
-                lyricService.fetchLyrics(currentPlayback.track().id()).thenAccept(lines -> {
-                    if (!lines.isEmpty()) {
-                        currentLyrics = lines;
-                        MusicPlayerMod.LOGGER.info("歌词已加载: {} 行", lines.size());
-                    }
-                });
+                lyricService.fetchLyrics(currentPlayback.track().id())
+                        .thenAccept(lines -> {
+                            if (!lines.isEmpty()) {
+                                currentLyrics = lines;
+                                MusicPlayerMod.LOGGER.info("歌词已加载: {} 行", lines.size());
+                            }
+                        })
+                        .exceptionally(ex -> {
+                            MusicPlayerMod.LOGGER.warn("歌词获取失败: {}", currentPlayback.track().id(), ex);
+                            return null;
+                        });
             }
         }
 
@@ -188,9 +201,14 @@ public final class MusicQueueService {
                     if (!jtId.equals(playerJukeboxTrackId.get(player.getUUID()))) {
                         playerJukeboxTrackId.put(player.getUUID(), jtId);
                         if (!jukeboxLyricsCache.containsKey(jtId)) {
-                            lyricService.fetchLyrics(jtId).thenAccept(lines -> {
-                                if (!lines.isEmpty()) jukeboxLyricsCache.put(jtId, lines);
-                            });
+                            lyricService.fetchLyrics(jtId)
+                                    .thenAccept(lines -> {
+                                        if (!lines.isEmpty()) jukeboxLyricsCache.put(jtId, lines);
+                                    })
+                                    .exceptionally(ex -> {
+                                        MusicPlayerMod.LOGGER.warn("唱片机歌词获取失败: {}", jtId, ex);
+                                        return null;
+                                    });
                         }
                     }
 
@@ -824,12 +842,17 @@ public final class MusicQueueService {
         globalLastLyric = "";
         globalLyricRefreshCounter = 0;
         lyricFetchAttempted = false;
-        lyricService.fetchLyrics(track.id()).thenAccept(lines -> {
-            if (!lines.isEmpty()) {
-                currentLyrics = lines;
-                MusicPlayerMod.LOGGER.info("歌词已加载: {} 行", lines.size());
-            }
-        });
+        lyricService.fetchLyrics(track.id())
+                .thenAccept(lines -> {
+                    if (!lines.isEmpty()) {
+                        currentLyrics = lines;
+                        MusicPlayerMod.LOGGER.info("歌词已加载: {} 行", lines.size());
+                    }
+                })
+                .exceptionally(ex -> {
+                    MusicPlayerMod.LOGGER.warn("歌词获取失败: {}", track.id(), ex);
+                    return null;
+                });
     }
 
     private void clearLyrics(MinecraftServer server) {
