@@ -45,6 +45,8 @@ public final class MusicQueueService {
     private final Map<String, CompletableFuture<TrackInfo>> trackCache = new LinkedHashMap<>();
 
     private CurrentPlayback currentPlayback;
+    private boolean paused;
+    private long pausedAtMillis;
     private CompletableFuture<Void> requestPipeline = CompletableFuture.completedFuture(null);
     private final LyricService lyricService = new LyricService();
     private volatile List<LyricLine> currentLyrics = List.of();
@@ -96,11 +98,62 @@ public final class MusicQueueService {
     }
 
     public long playbackElapsedMillis() {
-        return currentPlayback == null ? 0L : Math.max(0L, System.currentTimeMillis() - currentPlayback.startedAt());
+        if (currentPlayback == null) return 0L;
+        if (paused) return Math.max(0L, pausedAtMillis);
+        return Math.max(0L, System.currentTimeMillis() - currentPlayback.startedAt());
     }
 
     public long playbackDurationMillis() {
         return currentPlayback == null ? 0L : currentPlayback.track().durationMillis();
+    }
+
+    public boolean isPaused() {
+        return paused;
+    }
+
+    public void seek(MinecraftServer server, int deltaSeconds) {
+        if (currentPlayback == null) return;
+        long duration = playbackDurationMillis();
+        if (duration <= 0L) return;
+        long elapsed = paused ? pausedAtMillis : Math.max(0L, System.currentTimeMillis() - currentPlayback.startedAt());
+        long newElapsed = Math.max(0L, Math.min(duration, elapsed + deltaSeconds * 1000L));
+        long now = System.currentTimeMillis();
+        if (paused) {
+            pausedAtMillis = newElapsed;
+            return;
+        }
+        long timeout = Math.min(currentPlayback.expectedEndAt() - currentPlayback.startedAt() + now - newElapsed, duration + 60_000L);
+        currentPlayback = new CurrentPlayback(currentPlayback.track(), now - newElapsed, now - newElapsed + timeout, currentPlayback.requesterId(), currentPlayback.requesterName());
+        clientPositionMillis = -1L;
+        clientPositionTime = 0L;
+        if (!paused) {
+            server.getPlayerList().getPlayers().stream()
+                    .filter(p -> !optedOutPlayers.contains(p.getUUID()))
+                    .forEach(p -> sendPlay(p, currentPlayback.track(), newElapsed));
+        }
+    }
+
+    public void pause(MinecraftServer server) {
+        if (currentPlayback == null || paused) return;
+        pausedAtMillis = Math.max(0L, System.currentTimeMillis() - currentPlayback.startedAt());
+        paused = true;
+        server.getPlayerList().getPlayers().stream()
+                .filter(p -> !optedOutPlayers.contains(p.getUUID()))
+                .forEach(p -> sendStop(p, "已暂停"));
+    }
+
+    public void resume(MinecraftServer server) {
+        if (currentPlayback == null || !paused) return;
+        long now = System.currentTimeMillis();
+        long offset = pausedAtMillis;
+        currentPlayback = new CurrentPlayback(currentPlayback.track(), now - offset, now - offset + currentPlayback.track().durationMillis() + 60_000L, currentPlayback.requesterId(), currentPlayback.requesterName());
+        paused = false;
+        pausedAtMillis = 0L;
+        clientPositionMillis = -1L;
+        clientPositionTime = 0L;
+        server.getPlayerList().getPlayers().stream()
+                .filter(p -> !optedOutPlayers.contains(p.getUUID()))
+                .forEach(p -> sendPlay(p, currentPlayback.track(), offset));
     }
 
     public String currentRequesterName() {
@@ -161,7 +214,7 @@ public final class MusicQueueService {
         long now = System.currentTimeMillis();
 
         if (currentPlayback != null) {
-            if (config.autoAdvance && now >= currentPlayback.expectedEndAt()) {
+            if (!paused && config.autoAdvance && now >= currentPlayback.expectedEndAt()) {
                 advance(server, "");
                 return;
             }
@@ -827,11 +880,18 @@ public final class MusicQueueService {
     }
 
     private void startTrack(MinecraftServer server, TrackInfo track, UUID requesterId, String requesterName) {
+        if (track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
+            MusicPlayerMod.LOGGER.warn("跳过无播放源的歌曲: {} - {}", track.title(), track.artist());
+            advance(server, "该歌曲没有可用的播放源，已跳过。");
+            return;
+        }
         long now = System.currentTimeMillis();
         long timeout = track.durationMillis() > 0L
                 ? Math.min(FALLBACK_TRACK_TIMEOUT_MS, track.durationMillis() + 60_000L)
                 : FALLBACK_TRACK_TIMEOUT_MS;
         currentPlayback = new CurrentPlayback(track, now, now + timeout, requesterId, requesterName);
+        paused = false;
+        pausedAtMillis = 0L;
         voteSkipPlayers.clear();
         refreshTrackCache();
         server.getPlayerList().getPlayers().stream()
@@ -1027,6 +1087,13 @@ public final class MusicQueueService {
             String firstKey = trackCache.keySet().iterator().next();
             trackCache.remove(firstKey);
         }
+    }
+
+    public void clearTrackCache() {
+        synchronized (trackCache) {
+            trackCache.clear();
+        }
+        MusicPlayerMod.LOGGER.info("音源缓存已清空");
     }
 
     private static String rootMessage(Throwable throwable) {

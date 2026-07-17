@@ -31,7 +31,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public final class NeteaseApiClient {
@@ -359,56 +359,46 @@ public final class NeteaseApiClient {
         });
     }
 
-    private static final int PROVIDER_VKEYS = 0;
-    private static final int PROVIDER_BYFUNS = 1;
-    private static final int PROVIDER_QIJIEYA = 2;
-    private static final int PROVIDER_MYCELIS = 3;
-    private static final int NORMAL_PROVIDER_COUNT = 3;
+    private static final int PROVIDER_TIMEOUT_SECONDS = 5;
+    private static final int PROVIDER_RETRY_COUNT = 2;
     private static final String[] VKEYS_QUALITIES = {"4", "3", "2"};
     private static final String[] BYFUNS_QUALITIES = {"exhigh", "higher", "standard"};
     private static final String QIJIEYA_URL = "https://api.qijieya.cn/meting/";
     private static final String VKEYS_URL = "https://api.vkeys.cn/v2/music/netease";
     private static final String BYFUNS_URL = "https://api.byfuns.top/1/";
 
-    private final AtomicInteger preferredProvider = new AtomicInteger(PROVIDER_VKEYS);
-
     private CompletableFuture<List<String>> songUrls(String id) {
         return CompletableFuture.supplyAsync(() -> {
-            String url = tryProviders(id);
-            if (url != null) {
-                return List.of(url);
-            }
-            String direct = "https://music.163.com/song/media/outer/url?id=" + id + ".mp3";
-            return List.of(direct);
-        }, EXECUTOR);
-    }
+            Set<String> allUrls = new LinkedHashSet<>();
 
-    private String tryProviders(String id) {
-        int preferred = preferredProvider.get();
-        for (int offset = 0; offset < NORMAL_PROVIDER_COUNT; offset++) {
-            int index = (preferred + offset) % NORMAL_PROVIDER_COUNT;
-            String url = fetchFromProvider(index, id);
-            if (url != null) {
-                if (index != preferred) {
-                    preferredProvider.compareAndSet(preferred, index);
+            for (int attempt = 0; attempt < PROVIDER_RETRY_COUNT && allUrls.isEmpty(); attempt++) {
+                List<CompletableFuture<String>> futures = List.of(
+                        CompletableFuture.supplyAsync(() -> fetchVkeysUrl(id), EXECUTOR),
+                        CompletableFuture.supplyAsync(() -> fetchByfunsUrl(id), EXECUTOR),
+                        CompletableFuture.supplyAsync(() -> fetchQijieyaUrl(id), EXECUTOR)
+                );
+                for (CompletableFuture<String> future : futures) {
+                    try {
+                        String url = future.get(PROVIDER_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                        if (url != null) {
+                            allUrls.add(url);
+                        }
+                    } catch (Exception ignored) {
+                    }
                 }
-                return url;
             }
-        }
-        String mycelisUrl = fetchMycelisUrl(id);
-        if (mycelisUrl != null) {
-            return mycelisUrl;
-        }
-        return null;
-    }
 
-    private String fetchFromProvider(int provider, String id) {
-        return switch (provider) {
-            case PROVIDER_VKEYS -> fetchVkeysUrl(id);
-            case PROVIDER_BYFUNS -> fetchByfunsUrl(id);
-            case PROVIDER_QIJIEYA -> fetchQijieyaUrl(id);
-            default -> null;
-        };
+            if (!allUrls.isEmpty()) {
+                return List.copyOf(allUrls);
+            }
+
+            String mycelis = fetchMycelisUrl(id);
+            if (mycelis != null) {
+                return List.of(mycelis);
+            }
+
+            return List.of();
+        }, EXECUTOR);
     }
 
     private String fetchVkeysUrl(String id) {
@@ -444,7 +434,7 @@ public final class NeteaseApiClient {
         try {
             Request request = baseRequest(QIJIEYA_URL, new String[]{"type", "url", "id", id}, "text/plain,*/*");
             String url = executeText(request);
-            if (url != null && !url.isBlank()) {
+            if (isValidUrl(url)) {
                 return url.trim();
             }
         } catch (Exception ignored) {

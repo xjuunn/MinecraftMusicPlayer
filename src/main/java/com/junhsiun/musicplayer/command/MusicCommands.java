@@ -45,6 +45,9 @@ public final class MusicCommands {
                 .executes(commandContext -> sendHelpOverview(commandContext.getSource()))
                 .then(help())
                 .then(now())
+                .then(seek())
+                .then(pause())
+                .then(resume())
                 .then(play())
                 .then(skip())
                 .then(stop())
@@ -182,7 +185,7 @@ public final class MusicCommands {
             }
             case "config" -> {
                 source.sendSuccess(() -> sectionHeader("config", null), false);
-                detailLine(source, "/music config reload", "重新加载配置文件");
+                detailLine(source, "/music config reload", "重新加载配置并清空音源缓存");
                 detailLine(source, "/music config status", "查看当前配置状态");
                 detailLine(source, "/music config clearqueue", "清空单点队列");
                 detailLine(source, "/music config set <配置项> <值>", "修改配置项");
@@ -213,7 +216,14 @@ public final class MusicCommands {
                 return 1;
             }
         sendHeader(context.getSource());
+        boolean isAdmin = context.getSource().permissions().hasPermission(Permissions.COMMANDS_ADMIN);
+        boolean isPaused = MusicPlayerMod.queueService().isPaused();
         sendQuickBar(context.getSource(),
+                Messages.clickableCommand("[快退 5s]", "后退 5 秒", "/music seek -5", ChatFormatting.GRAY),
+                isPaused
+                        ? (isAdmin ? Messages.clickableCommand("[继续]", "继续播放", "/music resume", ChatFormatting.GREEN) : null)
+                        : (isAdmin ? Messages.clickableCommand("[暂停]", "暂停播放", "/music pause", ChatFormatting.YELLOW) : null),
+                Messages.clickableCommand("[快进 5s]", "前进 5 秒", "/music seek 5", ChatFormatting.GRAY),
                 Messages.clickableCommand("[跳过]", "投票或直接跳过当前歌曲", "/music skip", ChatFormatting.YELLOW),
                 Messages.clickableCommand("[队列]", "查看队列", "/music queue", ChatFormatting.GRAY),
                 Messages.clickableCommand("[歌单]", "查看歌单状态", "/music playlist", ChatFormatting.AQUA),
@@ -225,9 +235,40 @@ public final class MusicCommands {
         String elapsed = Messages.formatDuration(elapsedMs);
         String duration = durationMs > 0L ? Messages.formatDuration(durationMs) : "";
         context.getSource().sendSuccess(() -> renderCurrentTrack(context.getSource(), track, elapsed, duration, requesterName), false);
-        context.getSource().sendSuccess(() -> renderProgressLine(elapsed, duration, requesterName), false);
+        context.getSource().sendSuccess(() -> renderProgressLine(elapsed, duration, requesterName, isPaused, durationMs > 0L ? MusicPlayerMod.queueService().playbackElapsedMillis() : 0L, durationMs), false);
             return 1;
         });
+    }
+
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> seek() {
+        return Commands.literal("seek")
+                .then(Commands.argument("delta", IntegerArgumentType.integer()).executes(context -> {
+                    int delta = IntegerArgumentType.getInteger(context, "delta");
+                    MusicPlayerMod.queueService().seek(context.getSource().getServer(), delta);
+                    if (context.getSource().getEntity() instanceof ServerPlayer player) {
+                        String icon = delta >= 0 ? "⏩" : "⏪";
+                        player.sendSystemMessage(Component.literal(icon + "  " + Math.abs(delta) + " 秒").withStyle(ChatFormatting.GRAY));
+                    }
+                    return 1;
+                }));
+    }
+
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> pause() {
+        return Commands.literal("pause")
+                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .executes(context -> {
+                    MusicPlayerMod.queueService().pause(context.getSource().getServer());
+                    return 1;
+                });
+    }
+
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> resume() {
+        return Commands.literal("resume")
+                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .executes(context -> {
+                    MusicPlayerMod.queueService().resume(context.getSource().getServer());
+                    return 1;
+                });
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> queue() {
@@ -282,7 +323,7 @@ public final class MusicCommands {
             String elapsed = Messages.formatDuration(elapsedMs);
             String duration = durationMs > 0L ? Messages.formatDuration(durationMs) : "";
             source.sendSuccess(() -> renderCurrentTrack(source, currentTrack, elapsed, duration, requesterName), false);
-            source.sendSuccess(() -> renderProgressLine(elapsed, duration, requesterName), false);
+            source.sendSuccess(() -> renderProgressLine(elapsed, duration, requesterName, MusicPlayerMod.queueService().isPaused(), elapsedMs, durationMs), false);
         }
         if (totalEntries == 0) {
             source.sendSuccess(() -> Component.literal("队列为空。").withStyle(ChatFormatting.GRAY), false);
@@ -343,7 +384,7 @@ public final class MusicCommands {
             String elapsed = Messages.formatDuration(elapsedMs);
             String duration = durationMs > 0L ? Messages.formatDuration(durationMs) : "";
             source.sendSuccess(() -> renderCurrentTrack(source, currentTrack, elapsed, duration, requesterName), false);
-            source.sendSuccess(() -> renderProgressLine(elapsed, duration, requesterName), false);
+            source.sendSuccess(() -> renderProgressLine(elapsed, duration, requesterName, MusicPlayerMod.queueService().isPaused(), elapsedMs, durationMs), false);
         }
 
         source.sendSuccess(() -> spacer(), false);
@@ -612,7 +653,8 @@ public final class MusicCommands {
                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                 .then(Commands.literal("reload").executes(context -> {
                     MusicPlayerConfigManager.load();
-                    Messages.success(context.getSource(), "配置已重新加载。", false);
+                    MusicPlayerMod.queueService().clearTrackCache();
+                    Messages.success(context.getSource(), "配置已重新加载，音源缓存已清空。", false);
                     return 1;
                 }))
                 .then(Commands.literal("status").executes(context -> {
@@ -1015,11 +1057,28 @@ public final class MusicCommands {
         return line;
     }
 
-    private static Component renderProgressLine(String elapsed, String duration, String requesterName) {
+    private static Component renderProgressLine(String elapsed, String duration, String requesterName, boolean paused, long elapsedMs, long durationMs) {
         String progress = duration != null && !duration.isEmpty()
                 ? elapsed + " / " + duration
                 : elapsed;
-        MutableComponent line = Component.literal(progress).withStyle(ChatFormatting.WHITE);
+        MutableComponent line = Component.literal("");
+
+        if (durationMs > 0L) {
+            int barLen = 20;
+            int filled = (int) (barLen * elapsedMs / Math.max(1L, durationMs));
+            filled = Math.max(0, Math.min(barLen, filled));
+            line.append(Component.literal("[").withStyle(ChatFormatting.DARK_GRAY));
+            line.append(Component.literal("█".repeat(filled)).withStyle(ChatFormatting.GREEN));
+            line.append(Component.literal("░".repeat(barLen - filled)).withStyle(ChatFormatting.DARK_GRAY));
+            line.append(Component.literal("] ").withStyle(ChatFormatting.DARK_GRAY));
+        }
+
+        line.append(Component.literal(progress).withStyle(ChatFormatting.WHITE));
+
+        if (paused) {
+            line.append(Component.literal("  ⏸").withStyle(ChatFormatting.YELLOW));
+        }
+
         if (requesterName != null && !requesterName.isEmpty()) {
             line.append(Component.literal("  ·  ").withStyle(ChatFormatting.DARK_GRAY));
             line.append(Component.literal("点歌: ").withStyle(ChatFormatting.GRAY));
