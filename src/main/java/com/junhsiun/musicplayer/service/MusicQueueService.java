@@ -919,6 +919,33 @@ public final class MusicQueueService {
                     server.execute(() -> lyricFetchAttempted = false);
                     return null;
                 });
+
+        prewarmNextTrack();
+    }
+
+    private void prewarmNextTrack() {
+        String nextId = null;
+        if (!queue.isEmpty()) {
+            nextId = queue.peekFirst().songId();
+        } else if (!playlistQueue.isEmpty()) {
+            nextId = playlistQueue.peekFirst().songId();
+        }
+        if (nextId != null) {
+            String id = nextId;
+            synchronized (trackCache) {
+                if (!trackCache.containsKey(id)) {
+                    CompletableFuture<TrackInfo> future = MusicPlayerMod.netease().resolveSong(id);
+                    trackCache.put(id, future);
+                    future.whenComplete((track, throwable) -> {
+                        if (throwable != null) {
+                            synchronized (trackCache) {
+                                trackCache.remove(id);
+                            }
+                        }
+                    });
+                }
+            }
+        }
     }
 
     private void clearLyrics(MinecraftServer server) {

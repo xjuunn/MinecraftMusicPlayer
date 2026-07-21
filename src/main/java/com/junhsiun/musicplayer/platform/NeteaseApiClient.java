@@ -32,6 +32,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public final class NeteaseApiClient {
@@ -359,8 +360,7 @@ public final class NeteaseApiClient {
         });
     }
 
-    private static final int PROVIDER_TIMEOUT_SECONDS = 5;
-    private static final int PROVIDER_RETRY_COUNT = 2;
+    private static final int PROVIDER_TIMEOUT_SECONDS = 3;
     private static final String[] VKEYS_QUALITIES = {"4", "3", "2"};
     private static final String[] BYFUNS_QUALITIES = {"exhigh", "higher", "standard"};
     private static final String QIJIEYA_URL = "https://api.qijieya.cn/meting/";
@@ -368,37 +368,46 @@ public final class NeteaseApiClient {
     private static final String BYFUNS_URL = "https://api.byfuns.top/1/";
 
     private CompletableFuture<List<String>> songUrls(String id) {
-        return CompletableFuture.supplyAsync(() -> {
-            Set<String> allUrls = new LinkedHashSet<>();
+        return tryThirdParty(id)
+                .thenCompose(urls -> {
+                    if (!urls.isEmpty()) return CompletableFuture.completedFuture(List.copyOf(urls));
+                    return tryThirdParty(id);
+                })
+                .thenCompose(urls -> {
+                    if (!urls.isEmpty()) return CompletableFuture.completedFuture(List.copyOf(urls));
+                    return CompletableFuture.supplyAsync(() -> {
+                        String m = fetchMycelisUrl(id);
+                        return m != null ? List.of(m) : List.of();
+                    }, EXECUTOR);
+                });
+    }
 
-            for (int attempt = 0; attempt < PROVIDER_RETRY_COUNT && allUrls.isEmpty(); attempt++) {
-                List<CompletableFuture<String>> futures = List.of(
-                        CompletableFuture.supplyAsync(() -> fetchVkeysUrl(id), EXECUTOR),
-                        CompletableFuture.supplyAsync(() -> fetchByfunsUrl(id), EXECUTOR),
-                        CompletableFuture.supplyAsync(() -> fetchQijieyaUrl(id), EXECUTOR)
-                );
-                for (CompletableFuture<String> future : futures) {
-                    try {
-                        String url = future.get(PROVIDER_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                        if (url != null) {
-                            allUrls.add(url);
-                        }
-                    } catch (Exception ignored) {
-                    }
-                }
-            }
+    private CompletableFuture<List<String>> tryThirdParty(String id) {
+        CompletableFuture<String> vkeys = supplyWithTimeout(() -> fetchVkeysUrl(id));
+        CompletableFuture<String> byfuns = supplyWithTimeout(() -> fetchByfunsUrl(id));
+        CompletableFuture<String> qijieya = supplyWithTimeout(() -> fetchQijieyaUrl(id));
+        return CompletableFuture.allOf(vkeys, byfuns, qijieya)
+                .thenApply(nil -> {
+                    Set<String> set = new LinkedHashSet<>();
+                    addIfValid(set, vkeys);
+                    addIfValid(set, byfuns);
+                    addIfValid(set, qijieya);
+                    return List.copyOf(set);
+                });
+    }
 
-            if (!allUrls.isEmpty()) {
-                return List.copyOf(allUrls);
-            }
+    private CompletableFuture<String> supplyWithTimeout(Supplier<String> supplier) {
+        return CompletableFuture.supplyAsync(supplier, EXECUTOR)
+                .orTimeout(PROVIDER_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .exceptionally(ex -> null);
+    }
 
-            String mycelis = fetchMycelisUrl(id);
-            if (mycelis != null) {
-                return List.of(mycelis);
-            }
-
-            return List.of();
-        }, EXECUTOR);
+    private static void addIfValid(Set<String> urls, CompletableFuture<String> future) {
+        try {
+            String url = future.get();
+            if (url != null) urls.add(url);
+        } catch (Exception ignored) {
+        }
     }
 
     private String fetchVkeysUrl(String id) {
