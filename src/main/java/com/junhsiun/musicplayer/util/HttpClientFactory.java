@@ -121,6 +121,9 @@ public final class HttpClientFactory {
 
             int port = Integer.parseInt(parts[1]);
             return new Proxy(Proxy.Type.HTTP, new InetSocketAddress(parts[0], port));
+        } catch (NumberFormatException exception) {
+            MusicPlayerMod.LOGGER.warn("代理地址端口号无效: {}", value);
+            return null;
         } catch (IllegalArgumentException exception) {
             return null;
         }

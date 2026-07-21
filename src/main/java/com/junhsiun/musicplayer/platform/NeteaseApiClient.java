@@ -11,6 +11,8 @@ import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.model.ArtistInfo;
 import com.junhsiun.musicplayer.model.PlaylistInfo;
+import com.junhsiun.musicplayer.model.ProgramInfo;
+import com.junhsiun.musicplayer.model.RadioInfo;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.model.UserPlaylistView;
@@ -19,6 +21,7 @@ import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -45,9 +48,23 @@ public final class NeteaseApiClient {
         return thread;
     });
 
+    public static void shutdownExecutor() {
+        EXECUTOR.shutdown();
+    }
+
     public CompletableFuture<TrackInfo> resolveSong(String id) {
         return songDetail(id).thenCompose(detail ->
                 songUrls(id).thenApply(urls -> new TrackInfo(detail.id(), detail.title(), detail.artist(), detail.artistId(), detail.coverUrl(), urls, detail.durationMillis()))
+        );
+    }
+
+    public CompletableFuture<TrackInfo> resolveRadioSong(String id) {
+        return songDetail(id).thenCompose(detail ->
+                CompletableFuture.supplyAsync(() -> {
+                    String url = fetchMycelisUrl(id);
+                    List<String> urls = url != null ? List.of(url) : List.of();
+                    return new TrackInfo(detail.id(), detail.title(), detail.artist(), detail.artistId(), detail.coverUrl(), urls, detail.durationMillis());
+                }, EXECUTOR)
         );
     }
 
@@ -83,10 +100,18 @@ public final class NeteaseApiClient {
         return search(keyword, 1002, page);
     }
 
+    public CompletableFuture<List<SearchEntry>> searchRadios(String keyword) {
+        return searchRadios(keyword, 1);
+    }
+
+    public CompletableFuture<List<SearchEntry>> searchRadios(String keyword, int page) {
+        return search(keyword, 1009, page);
+    }
+
     public CompletableFuture<PlaylistInfo> playlistDetail(String id) {
         return getJson("/playlist/detail", "id", id).thenApply(root -> {
             JsonObject p = obj(root, "playlist");
-            MusicPlayerMod.LOGGER.info("歌单详情: id={}, trackCount={}", id, intVal(p, "trackCount"));
+            MusicPlayerMod.LOGGER.debug("歌单详情: id={}, trackCount={}", id, intVal(p, "trackCount"));
             return new PlaylistInfo(
                     str(p, "id"), str(p, "name"),
                     str(obj(p, "creator"), "userId"),
@@ -109,7 +134,7 @@ public final class NeteaseApiClient {
                 tracks.add(new SearchEntry(songId, str(song, "name"), firstArtistName(song),
                         playSongCommand(songId), artistId.isBlank() ? "" : viewArtistCommand(artistId)));
             }
-            MusicPlayerMod.LOGGER.info("歌单曲目分页: id={}, offset={}, limit={}, 返回={}",
+            MusicPlayerMod.LOGGER.debug("歌单曲目分页: id={}, offset={}, limit={}, 返回={}",
                     playlistId, offset, limit, tracks.size());
             return tracks;
         });
@@ -261,7 +286,8 @@ public final class NeteaseApiClient {
                     if (track != null && track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
                         tracks.add(track);
                     }
-                } catch (Exception ignored) {
+                } catch (Exception ex) {
+                    MusicPlayerMod.LOGGER.trace("随机热门歌曲解析忽略失败的曲目", ex);
                 }
             }
             if (tracks.isEmpty()) {
@@ -289,6 +315,7 @@ public final class NeteaseApiClient {
                 case 100 -> arr(result, "artists");
                 case 1000 -> arr(result, "playlists");
                 case 1002 -> arr(result, "userprofiles");
+                case 1009 -> arr(result, "djRadios");
                 default -> new JsonArray();
             };
             if (list == null) {
@@ -335,6 +362,16 @@ public final class NeteaseApiClient {
                             viewUserCommand(foundUserId),
                             ""
                     ));
+                } else if (type == 1009) {
+                    String rid = str(node, "id");
+                    String rname = str(node, "name");
+                    entries.add(new SearchEntry(
+                            rid,
+                            rname,
+                            "播客",
+                            viewRadioCommand(rid),
+                            playRadioCommand(rid)
+                    ));
                 }
             }
             return entries;
@@ -360,6 +397,132 @@ public final class NeteaseApiClient {
         });
     }
 
+    // ── Radio / Podcast ──────────────────────────────────────────────
+
+    public CompletableFuture<RadioInfo> radioDetail(String rid) {
+        return getJson("/dj/detail", "rid", rid).thenApply(root -> {
+            JsonObject data = obj(root, "data");
+            if (data == null) {
+                throw new RuntimeException("电台详情为空: " + rid);
+            }
+            JsonObject dj = obj(data, "dj");
+            return new RadioInfo(
+                    str(data, "id"),
+                    str(data, "name"),
+                    str(data, "desc"),
+                    str(data, "category"),
+                    str(data, "secondCategory", ""),
+                    str(data, "picUrl"),
+                    intVal(data, "programCount"),
+                    intVal(data, "subCount"),
+                    lng(data, "playCount"),
+                    intVal(data, "radioFeeType")
+            );
+        });
+    }
+
+    public CompletableFuture<List<ProgramInfo>> radioPrograms(String rid, int limit, int offset, boolean asc) {
+        return getJson("/dj/program", "rid", rid, "limit", Integer.toString(limit), "offset", Integer.toString(offset), "asc", Boolean.toString(asc))
+                .thenApply(root -> {
+                    List<ProgramInfo> programs = new ArrayList<>();
+                    JsonArray list = arr(root, "programs");
+                    if (list == null) return programs;
+                    for (JsonElement elem : list) {
+                        JsonObject node = elem.getAsJsonObject();
+                        JsonObject mainSong = obj(node, "mainSong");
+                        String mainTrackId = mainSong != null ? str(mainSong, "id") : "";
+                        String coverUrl = str(node, "coverUrl");
+                        if (coverUrl.isBlank()) coverUrl = str(node, "coverUrl");
+                        JsonObject radio = obj(node, "radio");
+                        String radioId = radio != null ? str(radio, "id") : rid;
+                        String radioName = radio != null ? str(radio, "name") : "";
+                        programs.add(new ProgramInfo(
+                                str(node, "id"),
+                                str(node, "name"),
+                                mainTrackId,
+                                lng(node, "duration"),
+                                coverUrl,
+                                str(node, "description"),
+                                radioId,
+                                radioName
+                        ));
+                    }
+                    return programs;
+                });
+    }
+
+    public CompletableFuture<ProgramInfo> programDetail(String programId) {
+        return getJson("/dj/program/detail", "id", programId).thenApply(root -> {
+            JsonObject prog = obj(root, "program");
+            if (prog == null) {
+                throw new RuntimeException("节目详情为空: " + programId);
+            }
+            JsonObject mainSong = obj(prog, "mainSong");
+            String mainTrackId = mainSong != null ? str(mainSong, "id") : "";
+            JsonObject radio = obj(prog, "radio");
+            String radioId = radio != null ? str(radio, "id") : "";
+            String radioName = radio != null ? str(radio, "name") : "";
+            return new ProgramInfo(
+                    str(prog, "id"),
+                    str(prog, "name"),
+                    mainTrackId,
+                    lng(prog, "duration"),
+                    str(prog, "coverUrl"),
+                    str(prog, "description"),
+                    radioId,
+                    radioName
+            );
+        });
+    }
+
+    public CompletableFuture<List<SearchEntry>> hotRadios(int limit, int offset) {
+        return getJson("/dj/hot", "limit", Integer.toString(limit), "offset", Integer.toString(offset))
+                .thenApply(root -> {
+                    List<SearchEntry> entries = new ArrayList<>();
+                    JsonArray list = arr(root, "djRadios");
+                    if (list == null) list = arr(root, "data");
+                    if (list == null) return entries;
+                    for (JsonElement elem : list) {
+                        JsonObject node = elem.getAsJsonObject();
+                        String rid = str(node, "id");
+                        String name = str(node, "name");
+                        String rcmd = str(node, "rcmdText");
+                        if (rcmd.isBlank()) rcmd = str(node, "desc");
+                        entries.add(new SearchEntry(
+                                rid,
+                                name,
+                                rcmd.isBlank() ? "播客" : rcmd,
+                                viewRadioCommand(rid),
+                                ""
+                        ));
+                    }
+                    return entries;
+                });
+    }
+
+    public CompletableFuture<List<SearchEntry>> radioCategories() {
+        return getJson("/dj/category/recommend").thenApply(root -> {
+            List<SearchEntry> entries = new ArrayList<>();
+            JsonArray data = arr(root, "data");
+            if (data == null) return entries;
+            for (JsonElement elem : data) {
+                JsonObject node = elem.getAsJsonObject();
+                int cateId = intVal(node, "id");
+                String name = str(node, "name");
+                JsonArray radios = arr(node, "radios");
+                int radioCount = radios != null ? radios.size() : 0;
+                entries.add(new SearchEntry(
+                        String.valueOf(cateId),
+                        name,
+                        radioCount + " 个播客",
+                        "",
+                        ""
+                ));
+            }
+            return entries;
+        });
+    }
+
     private static final int PROVIDER_TIMEOUT_SECONDS = 3;
     private static final String[] VKEYS_QUALITIES = {"4", "3", "2"};
     private static final String[] BYFUNS_QUALITIES = {"exhigh", "higher", "standard"};
@@ -370,14 +533,14 @@ public final class NeteaseApiClient {
     private CompletableFuture<List<String>> songUrls(String id) {
         return tryThirdParty(id)
                 .thenCompose(urls -> {
-                    if (!urls.isEmpty()) return CompletableFuture.completedFuture(List.copyOf(urls));
-                    return tryThirdParty(id);
-                })
-                .thenCompose(urls -> {
-                    if (!urls.isEmpty()) return CompletableFuture.completedFuture(List.copyOf(urls));
+                    if (!urls.isEmpty()) return CompletableFuture.completedFuture(urls);
+                    MusicPlayerMod.LOGGER.warn("第三方音源均不可用 (id={}), 尝试 Mycelis 回退", id);
                     return CompletableFuture.supplyAsync(() -> {
                         String m = fetchMycelisUrl(id);
-                        return m != null ? List.of(m) : List.of();
+                        if (m == null) {
+                            MusicPlayerMod.LOGGER.warn("Mycelis 音源也失败 (id={})", id);
+                        }
+                        return m != null ? List.of(m) : List.<String>of();
                     }, EXECUTOR);
                 });
     }
@@ -385,13 +548,17 @@ public final class NeteaseApiClient {
     private CompletableFuture<List<String>> tryThirdParty(String id) {
         CompletableFuture<String> vkeys = supplyWithTimeout(() -> fetchVkeysUrl(id));
         CompletableFuture<String> byfuns = supplyWithTimeout(() -> fetchByfunsUrl(id));
-        CompletableFuture<String> qijieya = supplyWithTimeout(() -> fetchQijieyaUrl(id));
+        CompletableFuture<String> qijieya = CompletableFuture.supplyAsync(() -> fetchQijieyaUrl(id), EXECUTOR);
         return CompletableFuture.allOf(vkeys, byfuns, qijieya)
                 .thenApply(nil -> {
                     Set<String> set = new LinkedHashSet<>();
                     addIfValid(set, vkeys);
                     addIfValid(set, byfuns);
                     addIfValid(set, qijieya);
+                    if (set.isEmpty()) {
+                        MusicPlayerMod.LOGGER.warn("第三方音源全部失败 (id={}): VKEYS={}, Byfuns={}, Qijieya={}",
+                                id, statusOf(vkeys), statusOf(byfuns), statusOf(qijieya));
+                    }
                     return List.copyOf(set);
                 });
     }
@@ -407,10 +574,21 @@ public final class NeteaseApiClient {
             String url = future.get();
             if (url != null) urls.add(url);
         } catch (Exception ignored) {
+            MusicPlayerMod.LOGGER.trace("第三方音源请求失败", ignored);
+        }
+    }
+
+    private static String statusOf(CompletableFuture<String> future) {
+        try {
+            String url = future.join();
+            return url != null ? "OK" : "无URL";
+        } catch (Exception e) {
+            return "异常";
         }
     }
 
     private String fetchVkeysUrl(String id) {
+        String lastError = null;
         for (String quality : VKEYS_QUALITIES) {
             try {
                 Request request = baseRequest(VKEYS_URL, new String[]{"id", id, "quality", quality}, "application/json,text/plain,*/*");
@@ -419,13 +597,18 @@ public final class NeteaseApiClient {
                 if (isValidUrl(url)) {
                     return url.trim();
                 }
-            } catch (Exception ignored) {
+                lastError = "响应无URL字段";
+            } catch (Exception e) {
+                lastError = rootMessage(e);
+                MusicPlayerMod.LOGGER.trace("VKEYS 音源失败 id={} quality={}: {}", id, quality, lastError);
             }
         }
+        MusicPlayerMod.LOGGER.warn("VKEYS 音源所有质量均失败 (id={}): {}", id, lastError);
         return null;
     }
 
     private String fetchByfunsUrl(String id) {
+        String lastError = null;
         for (String level : BYFUNS_QUALITIES) {
             try {
                 Request request = baseRequest(BYFUNS_URL, new String[]{"id", id, "level", level}, "text/plain,*/*");
@@ -433,26 +616,45 @@ public final class NeteaseApiClient {
                 if (isValidUrl(url)) {
                     return url.trim();
                 }
-            } catch (Exception ignored) {
+                lastError = "返回非URL: " + (url != null ? url.substring(0, Math.min(url.length(), 60)) : "null");
+            } catch (Exception e) {
+                lastError = rootMessage(e);
+                MusicPlayerMod.LOGGER.trace("Byfuns 音源失败 id={} level={}: {}", id, level, lastError);
             }
         }
+        MusicPlayerMod.LOGGER.warn("Byfuns 音源所有质量均失败 (id={}): {}", id, lastError);
         return null;
     }
 
     private String fetchQijieyaUrl(String id) {
         try {
-            Request request = baseRequest(QIJIEYA_URL, new String[]{"type", "url", "id", id}, "text/plain,*/*");
-            String url = executeText(request);
-            if (isValidUrl(url)) {
-                return url.trim();
+            String url = "https://api.qijieya.cn/meting/?type=url&id=" + id;
+            OkHttpClient client = HttpClientFactory.createApiClient();
+            Request request = new Request.Builder().url(url)
+                    .header("User-Agent", "MinecraftMusicPlayer/2.0")
+                    .get().build();
+            try (Response response = client.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    MusicPlayerMod.LOGGER.warn("Qijieya 请求失败 (id={}): HTTP {}", id, response.code());
+                    return null;
+                }
+                ResponseBody body = response.body();
+                if (body == null) return null;
+                if (body.contentLength() == 0) return null;
+                String contentType = response.header("Content-Type", "");
+                if (!contentType.startsWith("audio/")) return null;
+                MusicPlayerMod.LOGGER.info("Qijieya 可用 (id={}), 返回源地址", id);
+                return url;
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            MusicPlayerMod.LOGGER.warn("Qijieya 音源请求异常 (id={}): {}", id, rootMessage(e));
         }
         return null;
     }
 
     private String fetchMycelisUrl(String id) {
         String base = baseUrl();
+        String lastError = null;
         for (String level : new String[]{"lossless", "exhigh", "higher", "standard"}) {
             try {
                 Request request = baseRequest(base + "/song/url/v1", new String[]{"id", id, "level", level}, "application/json,text/plain,*/*");
@@ -461,7 +663,10 @@ public final class NeteaseApiClient {
                 if (isValidUrl(url)) {
                     return url.trim();
                 }
-            } catch (Exception ignored) {
+                lastError = "API响应无URL, code=" + intVal(root, "code");
+            } catch (Exception e) {
+                lastError = rootMessage(e);
+                MusicPlayerMod.LOGGER.trace("Mycelis 音源失败 id={} level={}: {}", id, level, lastError);
             }
         }
         try {
@@ -471,8 +676,12 @@ public final class NeteaseApiClient {
             if (isValidUrl(url)) {
                 return url.trim();
             }
-        } catch (Exception ignored) {
+            lastError = "旧版API响应无URL, code=" + intVal(root, "code");
+        } catch (Exception e) {
+            lastError = rootMessage(e);
+            MusicPlayerMod.LOGGER.trace("Mycelis 旧版音源失败 id={}: {}", id, lastError);
         }
+        MusicPlayerMod.LOGGER.warn("Mycelis 音源失败 (id={}): {}", id, lastError);
         return null;
     }
 
@@ -623,6 +832,7 @@ public final class NeteaseApiClient {
                                 tracks.add(track);
                             }
                         } catch (Exception ex) {
+                            MusicPlayerMod.LOGGER.trace("收集曲目结果时忽略失败的请求", ex);
                         }
                     }
                     return tracks;
@@ -636,15 +846,12 @@ public final class NeteaseApiClient {
         }, EXECUTOR);
     }
 
-    private CompletableFuture<String> getTextFromAbsoluteUrl(String absoluteUrl, String... queryPairs) {
-        return CompletableFuture.supplyAsync(() -> {
-            Request request = baseRequest(absoluteUrl, queryPairs, "text/plain,*/*");
-            return executeText(request);
-        }, EXECUTOR);
-    }
-
     private static Request baseRequest(String absoluteUrl, String[] queryPairs, String accept) {
-        HttpUrl.Builder builder = Objects.requireNonNull(HttpUrl.parse(absoluteUrl)).newBuilder();
+        HttpUrl parsed = HttpUrl.parse(absoluteUrl);
+        if (parsed == null) {
+            throw new IllegalArgumentException("无效的 API 地址: " + absoluteUrl);
+        }
+        HttpUrl.Builder builder = parsed.newBuilder();
         for (int index = 0; index + 1 < queryPairs.length; index += 2) {
             builder.addQueryParameter(queryPairs[index], queryPairs[index + 1]);
         }
@@ -665,7 +872,7 @@ public final class NeteaseApiClient {
             String body = Objects.requireNonNull(response.body()).string();
             return JsonParser.parseString(body).getAsJsonObject();
         } catch (Exception exception) {
-            MusicPlayerMod.LOGGER.warn("请求音乐接口失败: {}", request.url(), exception);
+            MusicPlayerMod.LOGGER.debug("请求音乐接口失败: {}", request.url(), exception);
             throw new RuntimeException(exception);
         }
     }
@@ -682,7 +889,7 @@ public final class NeteaseApiClient {
             }
             return body;
         } catch (Exception exception) {
-            MusicPlayerMod.LOGGER.warn("请求音乐接口失败: {}", request.url(), exception);
+            MusicPlayerMod.LOGGER.debug("请求音乐接口失败: {}", request.url(), exception);
             throw new RuntimeException(exception);
         }
     }
@@ -692,29 +899,16 @@ public final class NeteaseApiClient {
         return raw.endsWith("/") ? raw.substring(0, raw.length() - 1) : raw;
     }
 
-    private static void addCandidate(Set<String> urls, String url) {
-        if (url == null || url.isBlank() || "null".equalsIgnoreCase(url)) {
-            return;
-        }
-        String normalized = url.trim();
-        String lower = normalized.toLowerCase();
-        if (lower.contains("musicrep-ts") || lower.contains("jd-musicrep-ts")) {
-            return;
-        }
-        if (!(lower.contains(".mp3") || lower.contains("type=mp3") || lower.contains("encodetype=mp3"))) {
-            return;
-        }
-        urls.add(normalized);
-    }
-
     private static String firstArtistName(JsonObject songNode) {
         JsonArray artists = arr(songNode, "ar");
         if (artists != null && !artists.isEmpty()) {
-            return str(artists.get(0).getAsJsonObject(), "name");
+            JsonElement el = artists.get(0);
+            if (el != null && el.isJsonObject()) return str(el.getAsJsonObject(), "name");
         }
         JsonArray artistsAlt = arr(songNode, "artists");
         if (artistsAlt != null && !artistsAlt.isEmpty()) {
-            return str(artistsAlt.get(0).getAsJsonObject(), "name");
+            JsonElement el = artistsAlt.get(0);
+            if (el != null && el.isJsonObject()) return str(el.getAsJsonObject(), "name");
         }
         return "";
     }
@@ -722,18 +916,21 @@ public final class NeteaseApiClient {
     private static String firstArtistId(JsonObject songNode) {
         JsonArray artists = arr(songNode, "ar");
         if (artists != null && !artists.isEmpty()) {
-            return str(artists.get(0).getAsJsonObject(), "id");
+            JsonElement el = artists.get(0);
+            if (el != null && el.isJsonObject()) return str(el.getAsJsonObject(), "id");
         }
         JsonArray artistsAlt = arr(songNode, "artists");
         if (artistsAlt != null && !artistsAlt.isEmpty()) {
-            return str(artistsAlt.get(0).getAsJsonObject(), "id");
+            JsonElement el = artistsAlt.get(0);
+            if (el != null && el.isJsonObject()) return str(el.getAsJsonObject(), "id");
         }
         return "";
     }
 
     private static String firstUrl(JsonArray data) {
         if (data != null && !data.isEmpty()) {
-            return str(data.get(0).getAsJsonObject(), "url");
+            JsonElement el = data.get(0);
+            if (el != null && el.isJsonObject()) return str(el.getAsJsonObject(), "url");
         }
         return null;
     }
@@ -764,6 +961,14 @@ public final class NeteaseApiClient {
 
     private static String viewUserCommand(String userId) {
         return "/music view user " + userId;
+    }
+
+    private static String viewRadioCommand(String rid) {
+        return "/music view radio " + rid;
+    }
+
+    private static String playRadioCommand(String rid) {
+        return "/music play radio " + rid;
     }
 
     // --- null-safe Gson helpers matching Jackson's path() behavior ---
@@ -798,9 +1003,22 @@ public final class NeteaseApiClient {
         return el != null && el.isJsonPrimitive() && el.getAsJsonPrimitive().isNumber() ? el.getAsLong() : 0L;
     }
 
+
     private static int intVal(JsonObject parent, String key) {
         if (parent == null) return 0;
         JsonElement el = parent.get(key);
         return el != null && el.isJsonPrimitive() && el.getAsJsonPrimitive().isNumber() ? el.getAsInt() : 0;
+    }
+
+    private static String rootMessage(Throwable throwable) {
+        if (throwable == null) return "未知错误";
+        Throwable current = throwable;
+        int depth = 0;
+        while (current.getCause() != null && depth < 100) {
+            current = current.getCause();
+            depth++;
+        }
+        String msg = current.getMessage();
+        return msg != null && !msg.isBlank() ? msg : current.getClass().getSimpleName();
     }
 }

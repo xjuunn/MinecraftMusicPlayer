@@ -22,6 +22,7 @@ public final class JukeboxCoverRenderer {
     private static final double SIDE_CENTER_Y = 0.02D;
     private static final float OUTER_HALF_SIZE = 0.34F;
     private static final float INNER_HALF_SIZE = 0.235F;
+    private static final int FULL_BRIGHTNESS = 0xF000F0;
     private static boolean blackTextureRegistered;
 
     private JukeboxCoverRenderer() {
@@ -67,7 +68,7 @@ public final class JukeboxCoverRenderer {
         } else {
             sideSpin = Math.max(0L, now - startedAtMillis) / 1000.0F * 18.0F;
         }
-        int light = 0xF000F0;
+        int light = FULL_BRIGHTNESS;
 
         double baseX = pos.getX() + 0.5D - camera.x;
         double baseY = pos.getY() + 0.5D - camera.y;

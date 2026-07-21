@@ -33,8 +33,8 @@ public final class ClientMusicController {
     private static final ClientMusicController INSTANCE = new ClientMusicController();
 
     private final BackgroundMusicAudioDevice audioDevice = new BackgroundMusicAudioDevice();
-    private Player player;
-    private Thread playbackThread;
+    private volatile Player player;
+    private volatile Thread playbackThread;
     private String currentTrackId = "";
     private volatile boolean backgroundMusicPlaying;
     private long lastPositionReportTime;
@@ -106,7 +106,7 @@ public final class ClientMusicController {
 
     private void playWithFallback(List<String> urls, String trackId, String title, String subtitle) {
         if (urls == null || urls.isEmpty()) {
-            MusicPlayerMod.LOGGER.error("没有可用的播放源: {} - {}", title, subtitle);
+            MusicPlayerMod.LOGGER.warn("没有可用的播放源: {} - {}", title, subtitle);
             reportFailed(trackId, "没有可用的播放源");
             return;
         }
@@ -119,7 +119,7 @@ public final class ClientMusicController {
 
             String url = urls.get(index);
             try {
-                MusicPlayerMod.LOGGER.info("开始尝试播放源 {}/{}: {} - {}", index + 1, urls.size(), title, Messages.sanitizeForLog(url));
+                MusicPlayerMod.LOGGER.debug("开始尝试播放源 {}/{}: {} - {}", index + 1, urls.size(), title, Messages.sanitizeForLog(url));
                 playSingle(url, title, subtitle);
                 if (!Thread.currentThread().isInterrupted()) {
                     reportEnded(trackId);
@@ -134,7 +134,7 @@ public final class ClientMusicController {
             }
         }
 
-        MusicPlayerMod.LOGGER.error("所有播放源都不可用: {} - {}", title, subtitle, lastException);
+        MusicPlayerMod.LOGGER.warn("所有播放源都不可用: {} - {}", title, subtitle, lastException);
         reportFailed(trackId, lastException == null ? "所有播放源都不可用" : lastException.getMessage());
     }
 
@@ -271,7 +271,8 @@ public final class ClientMusicController {
                     sourceLine = dataLine;
                     sourceLine.open(audioFormat);
                     if (sourceLine.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
-                        gainControl = (FloatControl) sourceLine.getControl(FloatControl.Type.MASTER_GAIN);
+                        javax.sound.sampled.Control ctrl = sourceLine.getControl(FloatControl.Type.MASTER_GAIN);
+                        if (ctrl instanceof FloatControl fc) gainControl = fc;
                     }
                     sourceLine.start();
                 }

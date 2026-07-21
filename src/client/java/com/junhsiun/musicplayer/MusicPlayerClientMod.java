@@ -33,7 +33,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             ClientMusicController.getInstance().tick();
         });
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
-            if (!world.isClientSide()) {
+            if (!world.isClientSide() || hitResult == null) {
                 return InteractionResult.PASS;
             }
             BlockState state = world.getBlockState(hitResult.getBlockPos());
@@ -55,7 +55,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             ClientMusicController.getInstance().stop("Client stopping.");
             ClientJukeboxController.getInstance().stopAll("Client stopping.");
-            CoverArtTextureCache.getInstance().clear();
+            CoverArtTextureCache.getInstance().shutdown();
         });
     }
 }

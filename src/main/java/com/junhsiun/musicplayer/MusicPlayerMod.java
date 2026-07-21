@@ -47,6 +47,7 @@ public final class MusicPlayerMod implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(JUKEBOX_PLAYBACK_SERVICE::tick);
         ServerTickEvents.END_SERVER_TICK.register(MUSIC_QUEUE_SERVICE::tick);
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+            if (hitResult == null) return InteractionResult.PASS;
             ItemStack heldStack = player.getItemInHand(hand);
 
             if (MusicDiscHelper.isPendingDisc(heldStack)) {
@@ -104,6 +105,7 @@ public final class MusicPlayerMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             MUSIC_QUEUE_SERVICE.shutdown(server);
             JUKEBOX_PLAYBACK_SERVICE.shutdown(server);
+            NETEASE_API_CLIENT.shutdownExecutor();
         });
     }
 

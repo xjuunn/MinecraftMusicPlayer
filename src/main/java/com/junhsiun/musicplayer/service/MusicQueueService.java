@@ -4,6 +4,8 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.model.LyricLine;
+import com.junhsiun.musicplayer.model.PlayOrder;
+import com.junhsiun.musicplayer.model.ProgramInfo;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
@@ -27,6 +29,8 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -47,13 +51,14 @@ public final class MusicQueueService {
     private CurrentPlayback currentPlayback;
     private boolean paused;
     private long pausedAtMillis;
+    private PlayOrder playOrder = PlayOrder.SEQUENTIAL;
     private CompletableFuture<Void> requestPipeline = CompletableFuture.completedFuture(null);
     private final LyricService lyricService = new LyricService();
     private volatile List<LyricLine> currentLyrics = List.of();
     private String globalLastSentLyricText = "";
     private String globalLastLyric = "";
     private int globalLyricRefreshCounter = 0;
-    private boolean lyricFetchAttempted = false;
+    private volatile boolean lyricFetchAttempted = false;
     private long clientPositionMillis = -1L;
     private long clientPositionTime = 0L;
     private final Map<String, List<LyricLine>> jukeboxLyricsCache = new ConcurrentHashMap<>();
@@ -70,6 +75,14 @@ public final class MusicQueueService {
     private UUID playlistRequesterId = null;
     private String playlistRequesterName = "";
     private boolean playlistMode = false;
+    private boolean playlistReversed = false;
+
+    // Radio one-at-a-time state
+    private List<ProgramInfo> cachedRadioPrograms = List.of();
+    private int radioProgramIndex = 0;
+    private boolean radioPlaylistMode = false;
+    private String radioName = "";
+    private final Map<String, TrackInfo> radioResolvedTracks = new HashMap<>();
 
     // ── Public query methods ─────────────────────────────────────────
 
@@ -86,11 +99,17 @@ public final class MusicQueueService {
     }
 
     public int playlistRemainingCount() {
-        return playlistMode ? playlistTotalTracks - playlistTrackIndex + playlistQueue.size() : 0;
+        if (!playlistMode) return 0;
+        int remaining = playlistReversed ? playlistTrackIndex + 1 : playlistTotalTracks - playlistTrackIndex;
+        return remaining + playlistQueue.size();
     }
 
     public boolean isPlaylistMode() {
         return playlistMode;
+    }
+
+    public boolean isPlaylistReversed() {
+        return playlistReversed;
     }
 
     public TrackInfo currentTrack() {
@@ -109,6 +128,15 @@ public final class MusicQueueService {
 
     public boolean isPaused() {
         return paused;
+    }
+
+    public PlayOrder playOrder() {
+        return playOrder;
+    }
+
+    public void setPlayOrder(PlayOrder order) {
+        this.playOrder = order;
+        MusicPlayerMod.LOGGER.info("播放顺序已切换: {}", order.displayName());
     }
 
     public void seek(MinecraftServer server, int deltaSeconds) {
@@ -218,13 +246,13 @@ public final class MusicQueueService {
                 advance(server, "");
                 return;
             }
-            if (currentLyrics.isEmpty() && !lyricFetchAttempted) {
+            if (!radioPlaylistMode && currentLyrics.isEmpty() && !lyricFetchAttempted) {
                 lyricFetchAttempted = true;
                 lyricService.fetchLyrics(currentPlayback.track().id())
                         .thenAccept(lines -> {
                             if (!lines.isEmpty()) {
                                 currentLyrics = lines;
-                                MusicPlayerMod.LOGGER.info("歌词已加载: {} 行", lines.size());
+                                MusicPlayerMod.LOGGER.debug("歌词已加载: {} 行", lines.size());
                             }
                         })
                         .exceptionally(ex -> {
@@ -504,6 +532,10 @@ public final class MusicQueueService {
     // ── Playlist mode ─────────────────────────────────────────────────
 
     public void requestPlaylist(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String playlistId) {
+        requestPlaylist(server, source, requester, playlistId, false);
+    }
+
+    public void requestPlaylist(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String playlistId, boolean reverse) {
         if (!MusicPlayerConfigManager.get().allowPlaylistRequest) {
             source.sendFailure(Component.literal("管理员已禁用歌单点播。"));
             return;
@@ -528,35 +560,66 @@ public final class MusicQueueService {
                 // Setup playlist mode
                 this.playlistId = playlistId;
                 playlistTotalTracks = playlist.trackCount();
-                playlistTrackIndex = 0;
+                playlistReversed = reverse;
+                playlistTrackIndex = reverse ? playlistTotalTracks - 1 : 0;
                 playlistRequesterId = requester.getUUID();
                 playlistRequesterName = requester.getGameProfile().name();
                 playlistMode = true;
 
-                MusicPlayerMod.LOGGER.info("歌单模式启动: [{}] ID={}, 共 {} 首",
-                        playlist.title(), playlistId, playlistTotalTracks);
+                MusicPlayerMod.LOGGER.info("歌单模式启动: [{}] ID={}, 共 {} 首{}",
+                        playlist.title(), playlistId, playlistTotalTracks, reverse ? " (倒序)" : "");
 
                 // Load first track and start playing
-                loadPlaylistBatch(server, 1, () -> {
-                    if (!playlistQueue.isEmpty()) {
-                        QueuedTrack first = playlistQueue.removeFirst();
-                        MusicPlayerMod.LOGGER.info("歌单首曲开始播放: {} - {} (1/{})",
-                                first.title(), first.artist(), playlistTotalTracks);
-                        resolveTrack(first.songId()).whenComplete((track, trackThrowable) -> server.execute(() -> {
-                            if (trackThrowable != null) {
-                                MusicPlayerMod.LOGGER.warn("歌单首曲加载失败: {}", rootMessage(trackThrowable));
-                                advance(server, "歌单首曲加载失败，跳过到下一首。");
-                                return;
-                            }
-                            startTrack(server, track, first.requesterId(), first.requesterName());
-                            source.sendSuccess(() -> Component.literal("歌单模式已启动: [" + playlist.title() + "]，共 " + playlistTotalTracks + " 首")
-                                    .withStyle(ChatFormatting.GREEN), false);
+                Runnable loadAndStart = () -> {
+                    if (playlistQueue.isEmpty()) return;
+                    QueuedTrack first = playlistQueue.removeFirst();
+                    int displayIndex = reverse ? playlistTotalTracks : 1;
+                    MusicPlayerMod.LOGGER.debug("歌单首曲开始播放: {} - {} ({}/{})",
+                            first.title(), first.artist(), displayIndex, playlistTotalTracks);
+                    resolveTrack(first.songId()).whenComplete((track, trackThrowable) -> server.execute(() -> {
+                        if (trackThrowable != null) {
+                            MusicPlayerMod.LOGGER.warn("歌单首曲加载失败: {}", rootMessage(trackThrowable));
+                            advance(server, "歌单首曲加载失败，跳过到下一首。");
+                            return;
+                        }
+                        startTrack(server, track, first.requesterId(), first.requesterName());
+                        source.sendSuccess(() -> Component.literal("歌单模式已启动: [" + playlist.title() + "]，共 " + playlistTotalTracks + " 首")
+                                .withStyle(ChatFormatting.GREEN), false);
 
-                            // Load remaining batch in background
+                        if (reverse) {
+                            loadNextPlaylistTrack(server);
+                        } else {
                             loadPlaylistBatch(server, PLAYLIST_BATCH_SIZE, null);
-                        }));
-                    }
-                });
+                        }
+                    }));
+                };
+
+                if (reverse) {
+                    // Load directly the last track, no batching — load one at a time via loadNextPlaylistTrack
+                    int lastIndex = playlistTotalTracks - 1;
+                    MusicPlayerMod.netease().playlistTracksPage(playlistId, lastIndex, 1)
+                            .whenComplete((tracks, t) -> server.execute(() -> {
+                                if (t != null || tracks == null || tracks.isEmpty()) {
+                                    source.sendFailure(Component.literal("无法加载歌单最后一首歌曲。"));
+                                    return;
+                                }
+                                SearchEntry entry = tracks.getFirst();
+                                resolveTrack(entry.id()).thenAccept(track -> {
+                                    playlistQueue.addLast(new QueuedTrack(
+                                            track.id(), track.title(), track.artist(),
+                                            track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
+                                            playlistRequesterId, playlistRequesterName
+                                    ));
+                                    playlistTrackIndex = lastIndex - 1;
+                                    server.execute(() -> loadAndStart.run());
+                                }).exceptionally(ex -> {
+                                    server.execute(() -> source.sendFailure(Component.literal("加载第一首歌曲失败: " + rootMessage(ex))));
+                                    return null;
+                                });
+                            }));
+                } else {
+                    loadPlaylistBatch(server, 1, loadAndStart);
+                }
             });
             return null;
         }));
@@ -571,7 +634,7 @@ public final class MusicQueueService {
 
         int startIndex = playlistTrackIndex;
         playlistTrackIndex += batchSize;
-        MusicPlayerMod.LOGGER.info("歌单批量加载 {} 首 ({}:{}/{})", batchSize, startIndex + 1, playlistTrackIndex, playlistTotalTracks);
+        MusicPlayerMod.LOGGER.debug("歌单批量加载 {} 首 ({}:{}/{})", batchSize, startIndex + 1, startIndex + batchSize, playlistTotalTracks);
 
         MusicPlayerMod.netease().playlistTracksPage(playlistId, startIndex, batchSize)
                 .whenComplete((tracks, t) -> server.execute(() -> {
@@ -584,14 +647,14 @@ public final class MusicQueueService {
                     CompletableFuture<Void>[] futures = new CompletableFuture[tracks.size()];
                     for (int i = 0; i < tracks.size(); i++) {
                         SearchEntry entry = tracks.get(i);
-                        int trackNumber = startIndex + i + 1;
+                        int trackNumber = (startIndex + i + 1);
                         futures[i] = resolveTrack(entry.id()).thenAccept(track -> {
                             playlistQueue.addLast(new QueuedTrack(
                                     track.id(), track.title(), track.artist(),
                                     track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
                                     playlistRequesterId, playlistRequesterName
                             ));
-                            MusicPlayerMod.LOGGER.info("歌单加载: {}/{} - {} - {}",
+                            MusicPlayerMod.LOGGER.debug("歌单加载: {}/{} - {} - {}",
                                     trackNumber, playlistTotalTracks, track.title(), track.artist());
                         }).exceptionally(throwable -> {
                             MusicPlayerMod.LOGGER.warn("歌单加载失败: [{}/{}] - {}, 原因: {}",
@@ -600,20 +663,169 @@ public final class MusicQueueService {
                         });
                     }
                     CompletableFuture.allOf(futures).whenComplete((v, ex) -> {
-                        MusicPlayerMod.LOGGER.info("歌单批量加载完成，当前队列 {} 首，剩余 {} 首",
+                        MusicPlayerMod.LOGGER.debug("歌单批量加载完成，当前队列 {} 首，剩余 {} 首",
                                 playlistQueue.size(), playlistTotalTracks - playlistTrackIndex);
                         if (onComplete != null) server.execute(onComplete);
                     });
                 }));
     }
 
+    // ── Radio / Podcast ──────────────────────────────────────────────
+
+    public void requestProgram(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String programId) {
+        enqueueRequest(() -> MusicPlayerMod.netease().programDetail(programId).thenCompose(program -> {
+            if (program == null || program.mainTrackId().isBlank()) {
+                server.execute(() -> source.sendFailure(Component.literal("该节目没有可播放的音频。")));
+                return CompletableFuture.<Void>completedFuture(null);
+            }
+            return MusicPlayerMod.netease().resolveRadioSong(program.mainTrackId()).thenApply(track -> {
+                if (track == null || track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
+                    server.execute(() -> source.sendFailure(Component.literal("无法获取节目音频源。")));
+                    return null;
+                }
+                String programTitle = program.name();
+                String radioName = program.radioName().isBlank() ? "播客" : program.radioName();
+                TrackInfo programTrack = new TrackInfo(track.id(), programTitle, radioName, "", program.coverUrl(), track.sourceUrls(), program.durationMillis());
+                server.execute(() -> enqueueOrStart(server, source, requester, programTrack));
+                return null;
+            });
+        }).exceptionally(throwable -> {
+            server.execute(() -> source.sendFailure(Component.literal("加载节目失败: " + rootMessage(throwable))));
+            return null;
+        }));
+    }
+
+    public void requestRadio(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String radioId, boolean reverse) {
+        enqueueRequest(() -> MusicPlayerMod.netease().radioDetail(radioId).thenCompose(radio -> {
+            if (radio == null || radio.programCount() <= 0) {
+                server.execute(() -> source.sendFailure(Component.literal("该播客没有可播放的节目。")));
+                return CompletableFuture.<Void>completedFuture(null);
+            }
+            String radioName = radio.name();
+            return MusicPlayerMod.netease().radioPrograms(radioId, 200, 0, reverse).thenCompose(programs -> {
+                if (programs == null || programs.isEmpty()) {
+                    server.execute(() -> source.sendFailure(Component.literal("该播客没有可播放的节目。")));
+                    return CompletableFuture.<Void>completedFuture(null);
+                }
+                if (programs.size() > 100) {
+                    programs = programs.subList(0, 100);
+                }
+
+                stop(server, "");
+                queue.clear();
+                playlistQueue.clear();
+                resetPlaylistState();
+
+                // Cache all program metadata, but only resolve audio one at a time
+                cachedRadioPrograms = List.copyOf(programs);
+                radioProgramIndex = 0;
+                radioPlaylistMode = true;
+                this.radioName = radioName;
+                playlistTotalTracks = programs.size();
+                playlistTrackIndex = 0;
+                playlistRequesterId = requester.getUUID();
+                playlistRequesterName = requester.getGameProfile().name();
+                playlistMode = true;
+
+                // Load first program only — remaining are loaded on demand during playback
+                return resolveAndEnqueueRadioProgram(server, source, 0,
+                        () -> server.execute(() -> {
+                            if (playlistQueue.isEmpty()) {
+                                source.sendFailure(Component.literal("没有可播放的节目。"));
+                                cleanUpRadioPlaylist();
+                                return;
+                            }
+                            source.sendSuccess(() -> Component.literal("播客模式已启动: [" + radioName + "]，共 " + playlistTotalTracks + " 期")
+                                    .withStyle(ChatFormatting.GREEN), false);
+                            QueuedTrack first = playlistQueue.removeFirst();
+                            advanceAndStart(server, null, first);
+                        }));
+            });
+        }).exceptionally(throwable -> {
+            server.execute(() -> source.sendFailure(Component.literal("加载播客失败: " + rootMessage(throwable))));
+            return null;
+        }));
+    }
+
+    private CompletableFuture<Void> resolveAndEnqueueRadioProgram(MinecraftServer server, CommandSourceStack source, int index, Runnable onSuccess) {
+        if (index < 0 || index >= cachedRadioPrograms.size()) {
+            if (onSuccess != null) server.execute(onSuccess);
+            return CompletableFuture.completedFuture(null);
+        }
+        ProgramInfo prog = cachedRadioPrograms.get(index);
+        if (prog.mainTrackId().isBlank()) {
+            server.execute(() -> {
+                playlistTotalTracks--;
+                if (onSuccess != null) onSuccess.run();
+                if (currentPlayback == null && radioPlaylistMode) advance(server, null);
+            });
+            return CompletableFuture.completedFuture(null);
+        }
+        return MusicPlayerMod.netease().resolveRadioSong(prog.mainTrackId())
+                .thenAccept(track -> {
+                    if (track != null && track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
+                        TrackInfo programTrack = new TrackInfo(track.id(), prog.name(), radioName, "", prog.coverUrl(), track.sourceUrls(), prog.durationMillis());
+                        synchronized (trackCache) {
+                            trackCache.put(prog.mainTrackId(), CompletableFuture.completedFuture(programTrack));
+                        }
+                        radioResolvedTracks.put(track.id(), programTrack);
+                        server.execute(() -> {
+                            playlistQueue.addLast(new QueuedTrack(
+                                    programTrack.id(), programTrack.title(), programTrack.artist(),
+                                    "", playlistRequesterId, playlistRequesterName));
+                            playlistTrackIndex++;
+                            if (currentPlayback == null && source == null) {
+                                advance(server, null);
+                            }
+                        });
+                    } else {
+                        server.execute(() -> {
+                            playlistTotalTracks--;
+                            if (currentPlayback == null && radioPlaylistMode) advance(server, null);
+                        });
+                    }
+                })
+                .exceptionally(ex -> {
+                    MusicPlayerMod.LOGGER.trace("播客节目解析失败: {} - {}", prog.name(), rootMessage(ex));
+                    server.execute(() -> {
+                        playlistTotalTracks--;
+                        if (currentPlayback == null && radioPlaylistMode) advance(server, null);
+                    });
+                    return null;
+                })
+                .thenRun(() -> {
+                    if (onSuccess != null) server.execute(onSuccess);
+                });
+    }
+
+    private void radioPlaylistPreloadNext(MinecraftServer server) {
+        if (!radioPlaylistMode || !playlistMode) return;
+        int nextIndex = radioProgramIndex + 1;
+        if (nextIndex >= cachedRadioPrograms.size()) return;
+        // mark as "in-flight" before the async load
+        radioProgramIndex = nextIndex;
+        resolveAndEnqueueRadioProgram(server, null, nextIndex, null);
+    }
+
+    private void cleanUpRadioPlaylist() {
+        cachedRadioPrograms = List.of();
+        radioProgramIndex = 0;
+        radioPlaylistMode = false;
+        radioResolvedTracks.clear();
+    }
+
     private void loadNextPlaylistTrack(MinecraftServer server) {
-        if (!playlistMode || playlistTrackIndex >= playlistTotalTracks) {
+        if (!playlistMode) return;
+        if (playlistReversed ? playlistTrackIndex < 0 : playlistTrackIndex >= playlistTotalTracks) {
             return;
         }
 
         int index = playlistTrackIndex;
-        playlistTrackIndex++;
+        if (playlistReversed) {
+            playlistTrackIndex--;
+        } else {
+            playlistTrackIndex++;
+        }
         MusicPlayerMod.netease().playlistTracksPage(playlistId, index, 1)
                 .whenComplete((tracks, t) -> server.execute(() -> {
                     if (t != null || tracks.isEmpty()) return;
@@ -630,7 +842,7 @@ public final class MusicQueueService {
                                 track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
                                 playlistRequesterId, playlistRequesterName
                         ));
-                        MusicPlayerMod.LOGGER.info("歌单预载: {}/{} - {} - {}",
+                        MusicPlayerMod.LOGGER.debug("歌单预载: {}/{} - {} - {}",
                                 trackNumber, playlistTotalTracks, track.title(), track.artist());
                     }));
                 }));
@@ -643,6 +855,8 @@ public final class MusicQueueService {
         playlistRequesterId = null;
         playlistRequesterName = "";
         playlistMode = false;
+        playlistReversed = false;
+        cleanUpRadioPlaylist();
     }
 
     // ── Vote / skip / stop ───────────────────────────────────────────
@@ -838,27 +1052,62 @@ public final class MusicQueueService {
 
         // Priority 2: playlist queue (low-priority "micro" tasks)
         if (!playlistQueue.isEmpty()) {
-            QueuedTrack next = playlistQueue.removeFirst();
-            int consumed = playlistTrackIndex - playlistQueue.size();
-            MusicPlayerMod.LOGGER.info("advance: 从歌单取曲 - {} - {} (歌单进度: {}/{})",
+            QueuedTrack next = switch (playOrder) {
+                case REVERSE -> playlistQueue.removeLast();
+                case SHUFFLE -> {
+                    List<QueuedTrack> temp = new ArrayList<>(playlistQueue);
+                    playlistQueue.clear();
+                    int idx = temp.isEmpty() ? 0 : new Random().nextInt(temp.size());
+                    QueuedTrack picked = temp.remove(idx);
+                    playlistQueue.addAll(temp);
+                    yield picked;
+                }
+                default -> playlistQueue.removeFirst();
+            };
+            int consumed;
+            if (playlistReversed) {
+                int totalProcessed = (playlistTotalTracks - 1) - playlistTrackIndex;
+                consumed = totalProcessed - playlistQueue.size();
+            } else {
+                consumed = playlistTrackIndex - playlistQueue.size();
+            }
+            MusicPlayerMod.LOGGER.debug("advance: 从歌单取曲 - {} - {} (歌单进度: {}/{})",
                     next.title(), next.artist(), consumed, playlistTotalTracks);
-            // Silently load the next track from playlist
-            loadNextPlaylistTrack(server);
+            if (!radioPlaylistMode) {
+                loadNextPlaylistTrack(server);
+            }
             advanceAndStart(server, reason, next);
             return;
         }
 
         // Both empty
         if (playlistMode) {
+            if (radioPlaylistMode) {
+                if (playlistTrackIndex < playlistTotalTracks) {
+                    return;
+                }
+            }
             MusicPlayerMod.LOGGER.info("歌单已全部播放完毕，共 {} 首", playlistTotalTracks);
             playlistMode = false;
+            cleanUpRadioPlaylist();
         }
         stop(server, reason == null ? "播放已全部完成。" : reason);
     }
 
     private void advanceAndStart(MinecraftServer server, String reason, QueuedTrack next) {
-        refreshTrackCache();
-        resolveTrack(next.songId()).whenComplete((track, throwable) -> server.execute(() -> {
+        refreshTrackCache(next.songId());
+        CompletableFuture<TrackInfo> future;
+        if (radioPlaylistMode) {
+            TrackInfo rt = radioResolvedTracks.remove(next.songId());
+            if (rt != null) {
+                future = CompletableFuture.completedFuture(rt);
+            } else {
+                future = resolveRadioTrackOnDemand(next.songId());
+            }
+        } else {
+            future = resolveTrack(next.songId());
+        }
+        future.whenComplete((track, throwable) -> server.execute(() -> {
             if (!server.isRunning()) {
                 return;
             }
@@ -872,6 +1121,9 @@ public final class MusicQueueService {
             }
             try {
                 startTrack(server, track, next.requesterId(), next.requesterName());
+                if (currentPlayback != null && radioPlaylistMode) {
+                    radioPlaylistPreloadNext(server);
+                }
             } catch (Exception e) {
                 MusicPlayerMod.LOGGER.error("播放歌曲失败: {}", track.title(), e);
                 advance(server, "播放失败，正在跳过到下一首。");
@@ -906,19 +1158,21 @@ public final class MusicQueueService {
         globalLastSentLyricText = "";
         globalLastLyric = "";
         globalLyricRefreshCounter = 0;
-        lyricFetchAttempted = true;
-        lyricService.fetchLyrics(track.id())
-                .thenAccept(lines -> server.execute(() -> {
-                    if (!lines.isEmpty()) {
-                        currentLyrics = lines;
-                        MusicPlayerMod.LOGGER.info("歌词已加载: {} 行", lines.size());
-                    }
-                }))
-                .exceptionally(ex -> {
-                    MusicPlayerMod.LOGGER.warn("歌词获取失败: {}", track.id(), ex);
-                    server.execute(() -> lyricFetchAttempted = false);
-                    return null;
-                });
+        if (!radioPlaylistMode) {
+            lyricFetchAttempted = true;
+            lyricService.fetchLyrics(track.id())
+                    .thenAccept(lines -> server.execute(() -> {
+                        if (!lines.isEmpty()) {
+                            currentLyrics = lines;
+                            MusicPlayerMod.LOGGER.debug("歌词已加载: {} 行", lines.size());
+                        }
+                    }))
+                    .exceptionally(ex -> {
+                        MusicPlayerMod.LOGGER.warn("歌词获取失败: {}", track.id(), ex);
+                        server.execute(() -> lyricFetchAttempted = false);
+                        return null;
+                    });
+        }
 
         prewarmNextTrack();
     }
@@ -1072,7 +1326,23 @@ public final class MusicQueueService {
         }
     }
 
-    private void refreshTrackCache() {
+    private CompletableFuture<TrackInfo> resolveRadioTrackOnDemand(String songId) {
+        for (ProgramInfo prog : cachedRadioPrograms) {
+            if (prog.mainTrackId().equals(songId)) {
+                return MusicPlayerMod.netease().resolveRadioSong(songId)
+                        .thenApply(track -> {
+                            if (track != null && track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
+                                return new TrackInfo(track.id(), prog.name(), radioName, "",
+                                        prog.coverUrl(), track.sourceUrls(), prog.durationMillis());
+                            }
+                            return track;
+                        });
+            }
+        }
+        return resolveTrack(songId);
+    }
+
+    private void refreshTrackCache(String... extraIds) {
         int cacheSize = Math.max(0, MusicPlayerConfigManager.get().queueCacheSize);
         synchronized (trackCache) {
             if (cacheSize == 0) {
@@ -1085,6 +1355,18 @@ public final class MusicQueueService {
                     break;
                 }
                 keep.add(queuedTrack.songId());
+            }
+            for (QueuedTrack queuedTrack : playlistQueue) {
+                if (keep.size() >= cacheSize) {
+                    break;
+                }
+                if (!keep.contains(queuedTrack.songId())) {
+                    keep.add(queuedTrack.songId());
+                }
+            }
+            for (String extraId : extraIds) {
+                if (keep.size() >= cacheSize) break;
+                if (!keep.contains(extraId)) keep.add(extraId);
             }
             trackCache.keySet().removeIf(songId -> !keep.contains(songId));
             for (String songId : keep) {
@@ -1124,9 +1406,12 @@ public final class MusicQueueService {
     }
 
     private static String rootMessage(Throwable throwable) {
+        if (throwable == null) return "未知错误";
         Throwable current = throwable;
-        while (current.getCause() != null) {
+        int depth = 0;
+        while (current.getCause() != null && depth < 100) {
             current = current.getCause();
+            depth++;
         }
         return current.getMessage() == null ? current.toString() : current.getMessage();
     }

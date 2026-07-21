@@ -69,8 +69,11 @@ public final class MusicPlayerConfigManager {
         if (config.proxy == null) {
             config.proxy = "";
         }
-        if (!config.useSystemProxy && (config.proxy == null || config.proxy.isBlank())) {
-            config.useSystemProxy = true;
+        if (config.proxy == null) {
+            config.proxy = "";
+            if (!config.useSystemProxy) {
+                config.useSystemProxy = true;
+            }
         }
         if (config.connectTimeoutSeconds <= 0) {
             config.connectTimeoutSeconds = 10;

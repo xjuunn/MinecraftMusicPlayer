@@ -57,7 +57,7 @@ public final class LootMusicDiscService {
     private final List<RandomSongSource> sources = new ArrayList<>();
     private final AtomicInteger sourceIndex = new AtomicInteger(0);
     private boolean loaded;
-    private MinecraftServer server;
+    private volatile MinecraftServer server;
 
     public LootMusicDiscService() {
     }

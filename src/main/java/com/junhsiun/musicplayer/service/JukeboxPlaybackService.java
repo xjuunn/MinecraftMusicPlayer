@@ -26,11 +26,12 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class JukeboxPlaybackService {
     private static final double AUDIBLE_RANGE_SQR = 64.0D * 64.0D;
 
-    private final Map<Long, ActiveJukebox> activeJukeboxes = new HashMap<>();
+    private final Map<Long, ActiveJukebox> activeJukeboxes = new ConcurrentHashMap<>();
     private final Map<UUID, Long> playerPositionMillis = new HashMap<>();
     private final Map<UUID, Long> playerPositionTime = new HashMap<>();
 
@@ -89,7 +90,7 @@ public final class JukeboxPlaybackService {
             ServerLevel level = server.getLevel(active.dimension());
             String invalidReason = level == null ? "missing level" : getInvalidReason(level, active);
             if (invalidReason != null) {
-                MusicPlayerMod.LOGGER.info("Stopping custom jukebox playback on server at {}: {}", active.pos(), invalidReason);
+                MusicPlayerMod.LOGGER.debug("Stopping custom jukebox playback on server at {}: {}", active.pos(), invalidReason);
                 stopPlayback(server, active);
                 expiredKeys.add(active.key());
                 continue;
@@ -149,7 +150,7 @@ public final class JukeboxPlaybackService {
     private DiscTrackData resolveDiscData(DiscTrackData original, TrackInfo track, Throwable throwable) {
         if (throwable != null || track == null || track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
             if (throwable != null) {
-                MusicPlayerMod.LOGGER.warn("??????????????????????: {}", original.trackId(), throwable);
+                MusicPlayerMod.LOGGER.warn("解析唱片曲目数据失败: {}", original.trackId(), throwable);
             }
             return original;
         }
@@ -229,7 +230,7 @@ public final class JukeboxPlaybackService {
 
     private void sendPlay(ServerPlayer player, ActiveJukebox active) {
         if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
-            MusicPlayerMod.LOGGER.info("Sending custom jukebox play to {} at {}", player.getScoreboardName(), active.pos());
+            MusicPlayerMod.LOGGER.debug("Sending custom jukebox play to {} at {}", player.getScoreboardName(), active.pos());
             long offset;
             if (active.tryMarkFirstPlaySent()) {
                 offset = 0L;
@@ -250,7 +251,7 @@ public final class JukeboxPlaybackService {
 
     private void sendStop(ServerPlayer player, long key) {
         if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
-            MusicPlayerMod.LOGGER.info("Sending custom jukebox stop to {} at {}", player.getScoreboardName(), BlockPos.of(key));
+            MusicPlayerMod.LOGGER.debug("Sending custom jukebox stop to {} at {}", player.getScoreboardName(), BlockPos.of(key));
             ServerPlayNetworking.send(player, JukeboxMusicPayload.stop(key));
         }
     }

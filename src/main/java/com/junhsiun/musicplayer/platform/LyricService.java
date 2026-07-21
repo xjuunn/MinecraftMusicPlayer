@@ -1,5 +1,6 @@
 package com.junhsiun.musicplayer.platform;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.junhsiun.musicplayer.MusicPlayerMod;
@@ -47,7 +48,7 @@ public final class LyricService {
                 try (Response response = client.newCall(request).execute()) {
                     if (!response.isSuccessful()) return null;
                     String body = response.body() != null ? response.body().string() : "";
-                    MusicPlayerMod.LOGGER.info("歌词(primary) 响应长度: {} 字符", body.length());
+                    MusicPlayerMod.LOGGER.debug("歌词(primary) 响应长度: {} 字符", body.length());
                     return parseLrc(body);
                 }
             } catch (Exception e) {
@@ -73,13 +74,14 @@ public final class LyricService {
                     if (!response.isSuccessful()) return null;
                     String body = response.body() != null ? response.body().string() : "";
                     JsonObject root = JsonParser.parseString(body).getAsJsonObject();
-                    if (root.get("code") != null && root.get("code").getAsInt() != 200) return null;
+                    if (root.get("code") == null || !root.get("code").isJsonPrimitive() || root.get("code").getAsInt() != 200) return null;
                     String lyric = "";
                     if (root.has("lrc") && root.get("lrc").isJsonObject()) {
-                        lyric = root.getAsJsonObject("lrc").get("lyric").getAsString();
+                        JsonElement lrcElement = root.getAsJsonObject("lrc").get("lyric");
+                        lyric = lrcElement != null && lrcElement.isJsonPrimitive() ? lrcElement.getAsString() : "";
                     }
                     if (lyric == null || lyric.isBlank()) return null;
-                    MusicPlayerMod.LOGGER.info("歌词(fallback) 响应长度: {} 字符", lyric.length());
+                    MusicPlayerMod.LOGGER.debug("歌词(fallback) 响应长度: {} 字符", lyric.length());
                     return parseLrc(lyric);
                 }
             } catch (Exception e) {

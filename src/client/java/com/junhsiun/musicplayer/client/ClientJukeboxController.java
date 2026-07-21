@@ -64,7 +64,7 @@ public final class ClientJukeboxController {
     }
 
     public void handle(JukeboxMusicPayload payload) {
-        MusicPlayerMod.LOGGER.info("Received custom jukebox payload: action={}, pos={}", payload.action(), BlockPos.of(payload.jukeboxPos()));
+        MusicPlayerMod.LOGGER.debug("Received custom jukebox payload: action={}, pos={}", payload.action(), BlockPos.of(payload.jukeboxPos()));
         switch (payload.action()) {
             case "play" -> {
                 play(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl(), payload.offsetMillis());
@@ -138,7 +138,7 @@ public final class ClientJukeboxController {
             if (invalidReason == null) {
                 continue;
             }
-            MusicPlayerMod.LOGGER.info("Stopping custom jukebox playback locally because jukebox state is invalid at {}: {}", BlockPos.of(jukeboxPos), invalidReason);
+            MusicPlayerMod.LOGGER.debug("Stopping custom jukebox playback locally because jukebox state is invalid at {}: {}", BlockPos.of(jukeboxPos), invalidReason);
             playbackHandles.remove(jukeboxPos, handle);
             stopPlaybackOnly(handle);
         }
@@ -152,7 +152,7 @@ public final class ClientJukeboxController {
 
     public void markPendingInsertion(BlockPos pos) {
         pendingInsertions.put(pos.asLong(), System.currentTimeMillis());
-        MusicPlayerMod.LOGGER.info("Marked custom jukebox insertion pending at {}", pos);
+        MusicPlayerMod.LOGGER.debug("Marked custom jukebox insertion pending at {}", pos);
     }
 
     public boolean shouldSuppressVanillaSound(BlockPos pos) {
@@ -387,11 +387,11 @@ public final class ClientJukeboxController {
     private void logSourceFallback(String url, Exception exception) {
         String message = exception.getMessage();
         if (message != null && (message.contains("HTTP 403") || message.contains("HTTP 404"))) {
-            MusicPlayerMod.LOGGER.info("Jukebox source rejected, trying next source: {}", Messages.sanitizeForLog(url));
+            MusicPlayerMod.LOGGER.debug("Jukebox source rejected, trying next source: {}", Messages.sanitizeForLog(url));
             return;
         }
         if (exception instanceof SocketTimeoutException) {
-            MusicPlayerMod.LOGGER.info("Jukebox source timed out, trying next source: {}", Messages.sanitizeForLog(url));
+            MusicPlayerMod.LOGGER.debug("Jukebox source timed out, trying next source: {}", Messages.sanitizeForLog(url));
             return;
         }
         MusicPlayerMod.LOGGER.warn("Jukebox source failed, trying next source: {}", Messages.sanitizeForLog(url), exception);
@@ -451,7 +451,7 @@ public final class ClientJukeboxController {
         }
 
         minecraft.getSoundManager().stop(soundInstance);
-        MusicPlayerMod.LOGGER.info("Stopped vanilla jukebox sound at {}: {}", pos, reason);
+        MusicPlayerMod.LOGGER.debug("Stopped vanilla jukebox sound at {}: {}", pos, reason);
     }
 
     private static final class SpatialAudioDevice extends AudioDeviceBase {
@@ -515,7 +515,8 @@ public final class ClientJukeboxController {
                     sourceLine = dataLine;
                     sourceLine.open(audioFormat);
                     if (sourceLine.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
-                        gainControl = (FloatControl) sourceLine.getControl(FloatControl.Type.MASTER_GAIN);
+                        javax.sound.sampled.Control ctrl = sourceLine.getControl(FloatControl.Type.MASTER_GAIN);
+                        if (ctrl instanceof FloatControl fc) gainControl = fc;
                     }
                     sourceLine.start();
                 }

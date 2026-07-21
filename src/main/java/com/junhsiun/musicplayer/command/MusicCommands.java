@@ -5,7 +5,10 @@ import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.model.ArtistInfo;
+import com.junhsiun.musicplayer.model.PlayOrder;
 import com.junhsiun.musicplayer.model.PlaylistInfo;
+import com.junhsiun.musicplayer.model.ProgramInfo;
+import com.junhsiun.musicplayer.model.RadioInfo;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.model.UserPlaylistView;
@@ -61,6 +64,7 @@ public final class MusicCommands {
                 .then(lyrics())
                 .then(search())
                 .then(view())
+                .then(radio())
                 .then(config()));
     }
 
@@ -82,16 +86,19 @@ public final class MusicCommands {
         helpEntry(source, "stop", "管理员 - 完全停止播放");
         helpEntry(source, "queue", "管理单点队列");
         helpEntry(source, "playlist", "管理歌单播放模式");
-        helpEntry(source, "search", "搜索歌曲、作者、歌单或用户");
-        helpEntry(source, "view", "查看歌单、作者或用户详情");
+        helpEntry(source, "search", "搜索歌曲、作者、歌单、播客或用户");
+        helpEntry(source, "view", "查看歌单、作者、播客、节目或用户详情");
         helpEntry(source, "join", "加入当前播放");
         helpEntry(source, "leave", "退出当前播放");
         helpEntry(source, "mute", "暂时静音当前歌曲");
         helpEntry(source, "burn", "将歌曲刻录到唱片");
         helpEntry(source, "random", "随机生成热门音乐");
         helpEntry(source, "lyrics", "切换实时歌词显示");
+        helpEntry(source, "radio", "浏览热门播客与分类");
         helpEntry(source, "help", "显示本帮助页面");
         helpEntry(source, "config", "管理员 - 配置与管理");
+        source.sendSuccess(() -> spacer(), false);
+        source.sendSuccess(() -> Component.literal("提示: 使用 /music help <命令> 查看详细用法，例如 /music help radio").withStyle(ChatFormatting.DARK_GRAY), false);
         source.sendSuccess(() -> spacer(), false);
         return 1;
     }
@@ -121,12 +128,14 @@ public final class MusicCommands {
                 source.sendSuccess(() -> sectionHeader("play", null), false);
                 detailLine(source, "/music play song <歌曲ID>", "点播一首单曲");
                 detailLine(source, "/music play playlist <歌单ID>", "切换到歌单播放模式，从第一首开始顺序播放");
+                detailLine(source, "/music play playlist <歌单ID> reverse", "从最后一首开始播放");
             }
             case "playlist" -> {
                 source.sendSuccess(() -> sectionHeader("playlist", null), false);
                 detailLine(source, "/music playlist", "查看歌单播放状态");
                 detailLine(source, "/music playlist list", "查看当前歌单已加载的曲目");
                 detailLine(source, "/music playlist stop", "停止歌单播放模式");
+                detailLine(source, "/music playlist order", "查看/切换播放顺序");
             }
             case "skip" -> {
                 source.sendSuccess(() -> sectionHeader("skip", null), false);
@@ -189,6 +198,17 @@ public final class MusicCommands {
                 detailLine(source, "/music config status", "查看当前配置状态");
                 detailLine(source, "/music config clearqueue", "清空单点队列");
                 detailLine(source, "/music config set <配置项> <值>", "修改配置项");
+            }
+            case "radio" -> {
+                source.sendSuccess(() -> sectionHeader("radio", null), false);
+                detailLine(source, "/music radio hot [页码]", "热门播客列表");
+                detailLine(source, "/music radio categories", "播客分类列表");
+                detailLine(source, "/music view radio <id>", "查看播客详情与节目列表");
+                detailLine(source, "/music view program <id>", "查看节目详情");
+                detailLine(source, "/music search radio <关键词>", "搜索播客");
+                detailLine(source, "/music play program <id>", "播放单个节目");
+                detailLine(source, "/music play radio <id>", "播放整个播客（自动播放所有期数）");
+                detailLine(source, "/music play radio <id> reverse", "从最后一页开始播放");
             }
             default -> {
                 source.sendSuccess(() -> Component.literal("未知子命令: " + subcommand).withStyle(ChatFormatting.RED), false);
@@ -336,7 +356,7 @@ public final class MusicCommands {
             SearchEntry entry = entries.get(index);
             int order = (page.page() - 1) * page.pageSize() + index + 1;
             MutableComponent line = Component.literal(order + ". ").withStyle(ChatFormatting.DARK_GRAY)
-                    .append(Messages.clickableCommand("[下一首]", "将这首歌调整为下一首播放", "/music playlist next " + entry.id(), ChatFormatting.GREEN))
+                    .append(Messages.clickableCommand("[下一首]", "将这首歌调整为下一首播放", "/music queue promote " + entry.id(), ChatFormatting.GREEN))
                     .append(Component.literal(" "))
                     .append(clickableText(entry.title(), entry.titleCommand(), "重新播放这首歌曲", ChatFormatting.AQUA));
             if (entry.subtitle() != null && !entry.subtitle().isBlank()) {
@@ -360,7 +380,28 @@ public final class MusicCommands {
                         .executes(context -> {
                             MusicPlayerMod.queueService().stopPlaylist(context.getSource().getServer());
                             return 1;
-                        }));
+                        }))
+                .then(Commands.literal("order")
+                        .executes(context -> {
+                            PlayOrder current = MusicPlayerMod.queueService().playOrder();
+                            Messages.info(context.getSource(), "当前播放顺序: " + current.displayName(), false);
+                            return 1;
+                        })
+                        .then(Commands.literal("sequential").executes(context -> {
+                            MusicPlayerMod.queueService().setPlayOrder(PlayOrder.SEQUENTIAL);
+                            Messages.success(context.getSource(), "播放顺序已切换为: 正序", false);
+                            return 1;
+                        }))
+                        .then(Commands.literal("reverse").executes(context -> {
+                            MusicPlayerMod.queueService().setPlayOrder(PlayOrder.REVERSE);
+                            Messages.success(context.getSource(), "播放顺序已切换为: 倒序", false);
+                            return 1;
+                        }))
+                        .then(Commands.literal("shuffle").executes(context -> {
+                            MusicPlayerMod.queueService().setPlayOrder(PlayOrder.SHUFFLE);
+                            Messages.success(context.getSource(), "播放顺序已切换为: 随机", false);
+                            return 1;
+                        })));
     }
 
     private static int showPlaylistStatus(CommandSourceStack source) {
@@ -394,8 +435,16 @@ public final class MusicCommands {
         if (isPlaylistMode) {
             statusLine.append(Component.literal("  ·  歌单队列: ").withStyle(ChatFormatting.GOLD))
                     .append(Component.literal(String.valueOf(remaining)).withStyle(ChatFormatting.AQUA))
-                    .append(Component.literal(" 首").withStyle(ChatFormatting.GRAY));
+                    .append(Component.literal(" 首").withStyle(ChatFormatting.GRAY))
+                    .append(Component.literal("  ·  方向: ").withStyle(ChatFormatting.GOLD))
+                    .append(Component.literal(MusicPlayerMod.queueService().isPlaylistReversed() ? "倒序" : "正序").withStyle(ChatFormatting.AQUA));
         }
+        statusLine.append(Component.literal("  ·  顺序: ").withStyle(ChatFormatting.GOLD))
+                .append(Messages.clickableCommand(
+                        MusicPlayerMod.queueService().playOrder().displayName(),
+                        "切换播放顺序: /music playlist order [sequential|reverse|shuffle]",
+                        "/music playlist order",
+                        ChatFormatting.AQUA));
         source.sendSuccess(() -> statusLine, false);
         source.sendSuccess(() -> spacer(), false);
         return 1;
@@ -518,14 +567,42 @@ public final class MusicCommands {
                             MusicPlayerMod.queueService().requestSong(context.getSource().getServer(), context.getSource(), player, songId);
                             return 1;
                         })))
-                .then(Commands.literal("playlist")
-                        .then(Commands.argument("playlist_id", StringArgumentType.string()).executes(context -> {
-                            ServerPlayer player = context.getSource().getPlayerOrException();
-                            String playlistId = StringArgumentType.getString(context, "playlist_id");
-                            loading(context.getSource(), "正在加载歌单并切换到歌单播放模式，请稍候...");
-                            MusicPlayerMod.queueService().requestPlaylist(context.getSource().getServer(), context.getSource(), player, playlistId);
-                            return 1;
-                        })));
+                    .then(Commands.literal("playlist")
+                            .then(Commands.argument("playlist_id", StringArgumentType.string()).executes(context -> {
+                                ServerPlayer player = context.getSource().getPlayerOrException();
+                                String playlistId = StringArgumentType.getString(context, "playlist_id");
+                                loading(context.getSource(), "正在加载歌单并切换到歌单播放模式，请稍候...");
+                                MusicPlayerMod.queueService().requestPlaylist(context.getSource().getServer(), context.getSource(), player, playlistId);
+                                return 1;
+                            }).then(Commands.literal("reverse").executes(context -> {
+                                ServerPlayer player = context.getSource().getPlayerOrException();
+                                String playlistId = StringArgumentType.getString(context, "playlist_id");
+                                loading(context.getSource(), "正在倒序加载歌单，请稍候...");
+                                MusicPlayerMod.queueService().requestPlaylist(context.getSource().getServer(), context.getSource(), player, playlistId, true);
+                                return 1;
+                            }))))
+                    .then(Commands.literal("program")
+                            .then(Commands.argument("program_id", StringArgumentType.string()).executes(context -> {
+                                ServerPlayer player = context.getSource().getPlayerOrException();
+                                String programId = StringArgumentType.getString(context, "program_id");
+                                loading(context.getSource(), "正在解析节目并加入队列...");
+                                MusicPlayerMod.queueService().requestProgram(context.getSource().getServer(), context.getSource(), player, programId);
+                                return 1;
+                            })))
+                    .then(Commands.literal("radio")
+                            .then(Commands.argument("radio_id", StringArgumentType.string()).executes(context -> {
+                                ServerPlayer player = context.getSource().getPlayerOrException();
+                                String radioId = StringArgumentType.getString(context, "radio_id");
+                                loading(context.getSource(), "正在加载播客节目...");
+                                MusicPlayerMod.queueService().requestRadio(context.getSource().getServer(), context.getSource(), player, radioId, false);
+                                return 1;
+                            }).then(Commands.literal("reverse").executes(context -> {
+                                ServerPlayer player = context.getSource().getPlayerOrException();
+                                String radioId = StringArgumentType.getString(context, "radio_id");
+                                loading(context.getSource(), "正在倒序加载播客节目...");
+                                MusicPlayerMod.queueService().requestRadio(context.getSource().getServer(), context.getSource(), player, radioId, true);
+                                return 1;
+                            }))));
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> burn() {
@@ -565,6 +642,69 @@ public final class MusicCommands {
         return 1;
     }
 
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> radio() {
+        return Commands.literal("radio")
+                .executes(context -> {
+                    sendHeader(context.getSource());
+                    context.getSource().sendSuccess(() -> sectionHeader("播客中心", "浏览和发现播客"), false);
+                    return 1;
+                })
+                .then(Commands.literal("hot")
+                        .then(Commands.argument("page", IntegerArgumentType.integer(1)).executes(context -> {
+                            int page = IntegerArgumentType.getInteger(context, "page");
+                            showHotRadios(context.getSource(), page);
+                            return 1;
+                        }))
+                        .executes(context -> {
+                            showHotRadios(context.getSource(), 1);
+                            return 1;
+                        }))
+                .then(Commands.literal("categories")
+                        .executes(context -> showRadioCategories(context.getSource())));
+    }
+
+    private static void showHotRadios(CommandSourceStack source, int page) {
+        loading(source, "正在获取热门播客...");
+        MinecraftServer server = source.getServer();
+        int offset = (page - 1) * 30;
+        MusicPlayerMod.netease().hotRadios(30, offset).whenComplete((results, throwable) -> server.execute(() -> {
+            if (throwable != null) {
+                Messages.warning(source, "获取热门播客失败: " + rootMessage(throwable));
+                return;
+            }
+            if (results.isEmpty()) {
+                Messages.warning(source, "没有更多热门播客。");
+                return;
+            }
+            sendHeader(source);
+            source.sendSuccess(() -> sectionHeader("热门播客", "第 " + page + " 页"), false);
+            source.sendSuccess(() -> spacer(), false);
+            for (SearchEntry entry : results) {
+                source.sendSuccess(() -> renderEntry(entry, Messages.clickableCommand("[查看]", "查看播客详情", "/music view radio " + entry.id(), ChatFormatting.GREEN), "查看播客详情", ""), false);
+            }
+            source.sendSuccess(() -> spacer(), false);
+        }));
+    }
+
+    private static int showRadioCategories(CommandSourceStack source) {
+        loading(source, "正在获取播客分类...");
+        MinecraftServer server = source.getServer();
+        MusicPlayerMod.netease().radioCategories().whenComplete((categories, throwable) -> server.execute(() -> {
+            if (throwable != null) {
+                Messages.warning(source, "获取播客分类失败: " + rootMessage(throwable));
+                return;
+            }
+            sendHeader(source);
+            source.sendSuccess(() -> sectionHeader("播客推荐分类", "点播播客: /music play radio <id>"), false);
+            source.sendSuccess(() -> spacer(), false);
+            for (SearchEntry entry : categories) {
+                source.sendSuccess(() -> renderEntry(entry, Component.literal("").withStyle(ChatFormatting.GREEN), "播客分类", ""), false);
+            }
+            source.sendSuccess(() -> spacer(), false);
+        }));
+        return 1;
+    }
+
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> search() {
         return Commands.literal("search")
                 .then(pagedSearch("song", "正在搜索歌曲，请稍候...", (source, keyword, page, literal) -> {
@@ -586,6 +726,10 @@ public final class MusicCommands {
                 .then(pagedSearch("user", "正在搜索用户，请稍候...", (source, keyword, page, literal) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().searchUsers(keyword, page).whenComplete((results, throwable) -> server.execute(() -> sendUserResults(source, keyword, page, literal, results, throwable)));
+                }))
+                .then(pagedSearch("radio", "正在搜索播客，请稍候...", (source, keyword, page, literal) -> {
+                    MinecraftServer server = source.getServer();
+                    MusicPlayerMod.netease().searchRadios(keyword, page).whenComplete((results, throwable) -> server.execute(() -> sendRadioResults(source, keyword, page, literal, results, throwable)));
                 }));
     }
 
@@ -607,7 +751,17 @@ public final class MusicCommands {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().artistDetail(id).whenComplete((artist, throwable) -> server.execute(() -> showArtist(source, id, page, artist, throwable, "author")));
                 }))
-                .then(viewUrl());
+                .then(viewUrl())
+                .then(pagedView("radio", "radio_id", "正在加载播客详情...", (source, id, page) -> {
+                    MinecraftServer server = source.getServer();
+                    MusicPlayerMod.netease().radioDetail(id).whenComplete((radio, throwable) ->
+                            server.execute(() -> showRadioDetail(source, id, page, radio, throwable)));
+                }))
+                .then(pagedView("program", "program_id", "正在加载节目详情...", (source, id, page) -> {
+                    MinecraftServer server = source.getServer();
+                    MusicPlayerMod.netease().programDetail(id).whenComplete((program, throwable) ->
+                            server.execute(() -> showProgramDetail(source, program, throwable)));
+                }));
     }
 
     private static final Pattern URL_ID_PATTERN = Pattern.compile("[?&]id=(\\d+)");
@@ -631,8 +785,12 @@ public final class MusicCommands {
                 loading(context.getSource(), "正在加载歌单详情...");
                 MusicPlayerMod.netease().playlistDetail(id).whenComplete((playlist, throwable) ->
                         server.execute(() -> showPlaylist(context.getSource(), id, 1, playlist, throwable)));
+            } else if (url.contains("/djradio") || url.contains("/dj")) {
+                loading(context.getSource(), "正在加载播客详情...");
+                MusicPlayerMod.netease().radioDetail(id).whenComplete((radio, throwable) ->
+                        server.execute(() -> showRadioDetail(context.getSource(), id, 1, radio, throwable)));
             } else {
-                Messages.warning(context.getSource(), "不支持的链接类型，仅支持 music.163.com 的单曲和歌单链接。");
+                Messages.warning(context.getSource(), "不支持的链接类型，仅支持 music.163.com 的单曲、歌单和播客链接。");
                 return 0;
             }
             return 1;
@@ -898,7 +1056,9 @@ public final class MusicCommands {
                             .append(Component.literal(" · 创建者: ").withStyle(ChatFormatting.GRAY))
                             .append(clickableText(playlist.ownerName(), "/music view user " + playlist.ownerId(), "查看创建者信息", ChatFormatting.YELLOW))
                             .append(Component.literal(" "))
-                            .append(Messages.clickableCommand("[播放歌单]", "播放此歌单", "/music play playlist " + playlist.id(), ChatFormatting.GREEN)), false);
+                            .append(Messages.clickableCommand("[播放歌单]", "从第一首开始顺序播放", "/music play playlist " + playlist.id(), ChatFormatting.GREEN))
+                            .append(Component.literal(" "))
+                            .append(Messages.clickableCommand("[倒序播放]", "从最后一首开始播放", "/music play playlist " + playlist.id() + " reverse", ChatFormatting.GOLD)), false);
                     source.sendSuccess(() -> spacer(), false);
 
                     if (t != null) {
@@ -1022,6 +1182,140 @@ public final class MusicCommands {
         }
 
         source.sendSuccess(() -> spacer(), false);
+    }
+
+    private static void sendRadioResults(CommandSourceStack source, String keyword, int page, String literal, List<SearchEntry> results, Throwable throwable) {
+        if (throwable != null) {
+            Messages.warning(source, "搜索播客失败: " + rootMessage(throwable));
+            return;
+        }
+        if (results.isEmpty()) {
+            Messages.warning(source, "没有搜索到匹配的播客。");
+            return;
+        }
+        sendHeader(source);
+        source.sendSuccess(() -> sectionHeader("播客搜索结果", "点击播客名播放，点击[查看]查看详情"), false);
+        source.sendSuccess(() -> spacer(), false);
+        for (SearchEntry entry : results) {
+            MutableComponent actions = Messages.clickableCommand("[播放播客]", "按照顺序播放", "/music play radio " + entry.id(), ChatFormatting.GREEN)
+                    .append(Component.literal(" "))
+                    .append(Messages.clickableCommand("[查看]", "查看播客详情", "/music view radio " + entry.id(), ChatFormatting.GRAY));
+            source.sendSuccess(() -> renderEntry(entry, actions, "点击播放此播客", "点击播放此播客"), false);
+        }
+        source.sendSuccess(() -> spacer(), false);
+        sendSearchNavigation(source, literal, keyword, page, results.size());
+    }
+
+    private static void showRadioDetail(CommandSourceStack source, String radioId, int requestedPage, RadioInfo radio, Throwable throwable) {
+        if (throwable != null || radio == null) {
+            Messages.warning(source, "加载播客详情失败。");
+            return;
+        }
+
+        int pageSize = pageSize();
+        int totalPrograms = radio.programCount();
+        int totalPages = Math.max(1, (int) Math.ceil((double) totalPrograms / pageSize));
+        int page = Math.max(1, Math.min(requestedPage, totalPages));
+        int offset = (page - 1) * pageSize;
+
+        // Load programs for the current page
+        MinecraftServer server = source.getServer();
+        MusicPlayerMod.netease().radioPrograms(radioId, pageSize, offset, false)
+                .whenComplete((pagePrograms, t) -> server.execute(() -> {
+                    sendHeader(source);
+                    sendQuickBar(source,
+                            Messages.clickableCommand("[播放全部]", "按照顺序播放", "/music play radio " + radioId, ChatFormatting.GREEN),
+                            Messages.clickableCommand("[倒序播放]", "从最后一页开始播放", "/music play radio " + radioId + " reverse", ChatFormatting.GOLD),
+                            Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.DARK_GRAY));
+                    source.sendSuccess(() -> {
+                        MutableComponent line = Component.literal("◆ ").withStyle(ChatFormatting.GOLD)
+                                .append(Component.literal("播客详情").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+                        if (!radio.name().isBlank()) {
+                            line.append(Component.literal("  " + radio.name()).withStyle(ChatFormatting.GRAY));
+                        }
+                        return line;
+                    }, false);
+                    source.sendSuccess(() -> spacer(), false);
+
+                    if (radio.playCount() > 0) {
+                        source.sendSuccess(() -> Component.literal("播放: ").withStyle(ChatFormatting.GRAY)
+                                .append(Component.literal(String.valueOf(radio.playCount())).withStyle(ChatFormatting.WHITE)), false);
+                    }
+                    if (radio.radioFeeType() != 0) {
+                        source.sendSuccess(() -> Component.literal("付费播客，部分节目可能需要订阅后才能播放。").withStyle(ChatFormatting.RED), false);
+                    }
+                    if (radio.description() != null && !radio.description().isBlank()) {
+                        source.sendSuccess(() -> spacer(), false);
+                        source.sendSuccess(() -> Component.literal(radio.description()).withStyle(ChatFormatting.GRAY), false);
+                    }
+
+                    if (t != null || pagePrograms == null || pagePrograms.isEmpty()) {
+                        source.sendSuccess(() -> spacer(), false);
+                        source.sendSuccess(() -> Component.literal("该播客暂无节目列表。").withStyle(ChatFormatting.GRAY), false);
+                        return;
+                    }
+
+                    source.sendSuccess(() -> spacer(), false);
+                    source.sendSuccess(() -> sectionHeader("节目列表 (第" + page + "/" + totalPages + "页)", "点击节目名可直接播放"), false);
+                    for (ProgramInfo prog : pagePrograms) {
+                        source.sendSuccess(() -> renderProgramEntry(source, prog), false);
+                    }
+                    source.sendSuccess(() -> spacer(), false);
+                    if (totalPages > 1) {
+                        String baseCmd = "/music view radio " + radioId;
+                        sendNavigation(source, page, totalPages, baseCmd + " page %d", true, baseCmd + " page ");
+                    }
+                    source.sendSuccess(() -> spacer(), false);
+                }));
+    }
+
+    private static void showProgramDetail(CommandSourceStack source, ProgramInfo program, Throwable throwable) {
+        if (throwable != null || program == null) {
+            Messages.warning(source, "加载节目详情失败。");
+            return;
+        }
+        sendHeader(source);
+        sendQuickBar(source,
+                Messages.clickableCommand("[播放]", "播放此节目", "/music play program " + program.id(), ChatFormatting.GREEN),
+                program.radioId().isBlank() ? null : Messages.clickableCommand("[播客]", "查看所属播客", "/music view radio " + program.radioId(), ChatFormatting.AQUA),
+                Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.DARK_GRAY));
+        source.sendSuccess(() -> sectionHeader("节目详情", program.name()), false);
+        source.sendSuccess(() -> spacer(), false);
+        source.sendSuccess(() -> Component.literal("节目: ").withStyle(ChatFormatting.GOLD)
+                .append(Component.literal(program.name()).withStyle(ChatFormatting.WHITE)), false);
+        if (!program.radioName().isBlank()) {
+            source.sendSuccess(() -> Component.literal("播客: ").withStyle(ChatFormatting.GRAY)
+                    .append(clickableText(program.radioName(), "/music view radio " + program.radioId(), "查看播客详情", ChatFormatting.AQUA)), false);
+        }
+        if (program.durationMillis() > 0L) {
+            source.sendSuccess(() -> Component.literal("时长: ").withStyle(ChatFormatting.GRAY)
+                    .append(Component.literal(Messages.formatDuration(program.durationMillis())).withStyle(ChatFormatting.WHITE)), false);
+        }
+        if (program.coverUrl() != null && !program.coverUrl().isBlank()) {
+            source.sendSuccess(() -> Component.literal("封面: ").withStyle(ChatFormatting.GRAY)
+                    .append(Messages.clickableUrl("[点击查看]", "在浏览器中打开封面图片", program.coverUrl(), ChatFormatting.BLUE)), false);
+        }
+        if (program.description() != null && !program.description().isBlank()) {
+            source.sendSuccess(() -> spacer(), false);
+            source.sendSuccess(() -> Component.literal(program.description()).withStyle(ChatFormatting.GRAY), false);
+        }
+        source.sendSuccess(() -> spacer(), false);
+        source.sendSuccess(() -> Component.literal("操作: ").withStyle(ChatFormatting.GOLD)
+                .append(Messages.clickableCommand("[播放]", "播放此节目", "/music play program " + program.id(), ChatFormatting.GREEN)), false);
+        source.sendSuccess(() -> spacer(), false);
+    }
+
+    private static MutableComponent renderProgramEntry(CommandSourceStack source, ProgramInfo program) {
+        MutableComponent line = Messages.clickableCommand("[播放]", "直接播放此节目", "/music play program " + program.id(), ChatFormatting.GREEN);
+        line.append(Component.literal(" "));
+        line.append(Messages.clickableCommand(program.name(), "直接播放此节目", "/music play program " + program.id(), ChatFormatting.AQUA));
+        if (program.durationMillis() > 0L) {
+            line.append(Component.literal("  ").withStyle(ChatFormatting.DARK_GRAY));
+            line.append(Component.literal(Messages.formatDuration(program.durationMillis())).withStyle(ChatFormatting.GRAY));
+        }
+        line.append(Component.literal(" "));
+        line.append(Messages.clickableCommand("[详情]", "查看节目详情", "/music view program " + program.id(), ChatFormatting.GRAY));
+        return line;
     }
 
     private static MutableComponent renderRandomTrack(CommandSourceStack source, TrackInfo track) {
@@ -1249,9 +1543,12 @@ public final class MusicCommands {
     }
 
     private static String rootMessage(Throwable throwable) {
+        if (throwable == null) return "未知错误";
         Throwable current = throwable;
-        while (current.getCause() != null) {
+        int depth = 0;
+        while (current.getCause() != null && depth < 100) {
             current = current.getCause();
+            depth++;
         }
         return current.getMessage() == null ? current.toString() : current.getMessage();
     }

@@ -15,6 +15,9 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -46,7 +49,7 @@ public final class CoverArtTextureCache {
         if (existing != null) {
             return;
         }
-        MusicPlayerMod.LOGGER.info("Requesting cover art: {}", coverUrl);
+        MusicPlayerMod.LOGGER.debug("Requesting cover art: {}", coverUrl);
         entries.put(coverUrl, CacheEntry.pending());
         executor.execute(() -> downloadAndRegister(coverUrl));
     }
@@ -64,6 +67,11 @@ public final class CoverArtTextureCache {
             }
         }
         entries.clear();
+    }
+
+    public void shutdown() {
+        clear();
+        executor.shutdown();
     }
 
     private void downloadAndRegister(String coverUrl) {
@@ -88,7 +96,7 @@ public final class CoverArtTextureCache {
 
             try (NativeImage image = readImage(bytes)) {
                 NativeImage processedImage = toCircularTexture(image);
-                Identifier textureId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "cover/" + Integer.toHexString(coverUrl.hashCode()));
+                Identifier textureId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "cover/" + hashUrl(coverUrl));
                 Minecraft.getInstance().execute(() -> registerTexture(coverUrl, textureId, processedImage));
             }
         } catch (Exception exception) {
@@ -106,7 +114,7 @@ public final class CoverArtTextureCache {
             texture.upload();
             client.getTextureManager().register(textureId, texture);
             entries.put(coverUrl, CacheEntry.ready(textureId));
-            MusicPlayerMod.LOGGER.info("Registered cover art texture: {} -> {}", coverUrl, textureId);
+            MusicPlayerMod.LOGGER.debug("Registered cover art texture: {} -> {}", coverUrl, textureId);
 
             while (entries.size() > MAX_CACHE_SIZE) {
                 String eldestKey = entries.keySet().iterator().next();
@@ -170,6 +178,20 @@ public final class CoverArtTextureCache {
             }
         }
         return result;
+    }
+
+    private static String hashUrl(String url) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] digest = md.digest(url.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(32);
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b & 0xFF));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            return Integer.toHexString(url.hashCode());
+        }
     }
 
     private static float clamp(float value) {

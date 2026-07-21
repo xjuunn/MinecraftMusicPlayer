@@ -41,7 +41,7 @@ public final class LyricsPreferenceState extends SavedData {
         if (enabled) {
             preferences.put(playerId, true);
         } else {
-            preferences.remove(playerId);
+            preferences.put(playerId, false);
         }
         setDirty();
     }
