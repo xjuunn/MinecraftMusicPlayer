@@ -947,8 +947,13 @@ public final class MusicQueueService {
         }
         MusicPlayerMod.LOGGER.info("歌单模式已手动停止，进度: {}/{}",
                 playlistTotalTracks - playlistRemainingCount(), playlistTotalTracks);
+        currentPlayback = null;
+        voteSkipPlayers.clear();
+        clearLyrics(server);
         playlistQueue.clear();
         resetPlaylistState();
+        refreshTrackCache();
+        server.getPlayerList().getPlayers().forEach(player -> sendStop(player, "歌单模式已停止。"));
         broadcast(server, Component.literal("歌单模式已停止。").withStyle(ChatFormatting.YELLOW));
     }
 
