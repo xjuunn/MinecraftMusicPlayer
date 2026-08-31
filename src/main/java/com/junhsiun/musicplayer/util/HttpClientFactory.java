@@ -20,7 +20,17 @@ public final class HttpClientFactory {
     private static final int API_CONNECT_TIMEOUT = 5;
     private static final int API_READ_TIMEOUT = 10;
 
+    /** 缓存的 API 客户端，复用连接池，降低重复建连开销。 */
+    private static volatile OkHttpClient cachedApiClient;
+    private static volatile String cachedApiClientConfigKey = "";
+
     private HttpClientFactory() {
+    }
+
+    /** 供配置重载时清空缓存的 API 客户端。 */
+    public static void invalidateApiClient() {
+        cachedApiClient = null;
+        cachedApiClientConfigKey = "";
     }
 
     public static OkHttpClient create() {
@@ -64,6 +74,24 @@ public final class HttpClientFactory {
 
     public static OkHttpClient createApiClient() {
         MusicPlayerConfig config = MusicPlayerConfigManager.get();
+        String configKey = config.connectTimeoutSeconds + "|" + config.readTimeoutSeconds + "|" + config.proxy + "|" + config.useSystemProxy;
+        OkHttpClient cached = cachedApiClient;
+        if (cached != null && cachedApiClientConfigKey.equals(configKey)) {
+            return cached;
+        }
+        synchronized (HttpClientFactory.class) {
+            cached = cachedApiClient;
+            if (cached != null && cachedApiClientConfigKey.equals(configKey)) {
+                return cached;
+            }
+            OkHttpClient client = buildApiClient(config);
+            cachedApiClient = client;
+            cachedApiClientConfigKey = configKey;
+            return client;
+        }
+    }
+
+    private static OkHttpClient buildApiClient(MusicPlayerConfig config) {
         return new OkHttpClient.Builder()
                 .connectTimeout(Duration.ofSeconds(Math.min(config.connectTimeoutSeconds, API_CONNECT_TIMEOUT)))
                 .readTimeout(Duration.ofSeconds(Math.min(config.readTimeoutSeconds, API_READ_TIMEOUT)))

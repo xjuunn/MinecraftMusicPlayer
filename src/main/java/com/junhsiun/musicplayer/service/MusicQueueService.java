@@ -6,12 +6,15 @@ import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.model.LyricLine;
 import com.junhsiun.musicplayer.model.PlayOrder;
 import com.junhsiun.musicplayer.model.ProgramInfo;
+import com.junhsiun.musicplayer.model.QueuedTrack;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.platform.LyricService;
 import com.junhsiun.musicplayer.util.Messages;
+import com.junhsiun.musicplayer.util.PlayerSongLimiter;
+import com.junhsiun.musicplayer.util.SongRequestPolicy;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -504,17 +507,25 @@ public final class MusicQueueService {
     // ── Request song ─────────────────────────────────────────────────
 
     public void requestSong(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String songId) {
-        if (!MusicPlayerConfigManager.get().allowSongRequest) {
-            source.sendFailure(Component.literal("管理员已禁用歌曲点播。"));
-            return;
-        }
-        if (queue.size() >= MusicPlayerConfigManager.get().maxQueueSize) {
-            source.sendFailure(Component.literal("单点队列已满，请稍后再试。"));
-            return;
-        }
-        if (isTrackActiveOrQueued(songId)) {
-            source.sendSuccess(() -> Component.literal("该歌曲正在播放或已在队列中。")
-                    .withStyle(ChatFormatting.YELLOW), false);
+        MusicPlayerConfig config = MusicPlayerConfigManager.get();
+        UUID requesterUuid = requester.getUUID();
+        SongRequestPolicy.Decision decision = SongRequestPolicy.decide(
+                config.allowSongRequest,
+                queue.size(),
+                config.maxQueueSize,
+                currentPlayback == null ? null : currentPlayback.requesterId(),
+                queue.stream().toList(),
+                requesterUuid,
+                config.maxSongsPerPlayer,
+                songId,
+                isTrackActiveOrQueued(songId));
+        if (decision.message() != null && !decision.message().isEmpty()) {
+            if (decision.kind() == SongRequestPolicy.Kind.REJECT) {
+                source.sendFailure(Component.literal(decision.message()));
+            } else {
+                source.sendSuccess(() -> Component.literal(decision.message())
+                        .withStyle(ChatFormatting.YELLOW), false);
+            }
             return;
         }
         enqueueRequest(() -> resolveTrack(songId).handle((track, throwable) -> {
@@ -1422,8 +1433,5 @@ public final class MusicQueueService {
     }
 
     private record CurrentPlayback(TrackInfo track, long startedAt, long expectedEndAt, UUID requesterId, String requesterName) {
-    }
-
-    private record QueuedTrack(String songId, String title, String artist, String artistCommand, UUID requesterId, String requesterName) {
     }
 }

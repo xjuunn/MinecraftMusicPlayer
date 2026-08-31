@@ -18,6 +18,8 @@ public class MusicPlayerConfig {
     public int readTimeoutSeconds = 20;
     public int searchLimit = 8;
     public int maxQueueSize = 40;
+    /** 每个玩家在同一队列中最多可点播的歌曲数量。 */
+    public int maxSongsPerPlayer = 5;
     public int playlistQueueLimit = 20;
     public int queueCacheSize = 3;
     public double voteSkipPercent = 0.6D;

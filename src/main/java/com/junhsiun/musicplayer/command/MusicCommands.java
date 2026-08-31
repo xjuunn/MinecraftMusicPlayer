@@ -823,7 +823,7 @@ public final class MusicCommands {
                     Messages.info(context.getSource(), "实时歌词: " + yesNo(config.showLyrics), false);
                     Messages.info(context.getSource(), "代理模式: " + (!config.proxy.isBlank() ? ("手动代理 " + config.proxy) : (config.useSystemProxy ? "自动系统代理" : "直连")), false);
                     Messages.info(context.getSource(), "IPv4 优先: " + yesNo(config.preferIpv4) + "，连接超时: " + config.connectTimeoutSeconds + "s，读取超时: " + config.readTimeoutSeconds + "s", false);
-                    Messages.info(context.getSource(), "搜索上限: " + config.searchLimit + "，队列上限: " + config.maxQueueSize + "，歌单导入上限: " + config.playlistQueueLimit + "，预缓存数量: " + config.queueCacheSize, false);
+                    Messages.info(context.getSource(), "搜索上限: " + config.searchLimit + "，队列上限: " + config.maxQueueSize + "，每玩家点数上限: " + config.maxSongsPerPlayer + "，歌单导入上限: " + config.playlistQueueLimit + "，预缓存数量: " + config.queueCacheSize, false);
                     Messages.info(context.getSource(), "投票切歌阈值: " + config.voteSkipPercent, false);
                     Messages.info(context.getSource(), "战利品音乐唱片: " + yesNo(config.enableLootMusicDiscs) + "，生成概率: " + config.lootMusicDiscChance + "，每个容器数量: " + config.lootMusicDiscCount, false);
                     return 1;
@@ -865,6 +865,7 @@ public final class MusicCommands {
                         .then(intSetting("readTimeoutSeconds", 3, 120, value -> MusicPlayerConfigManager.get().readTimeoutSeconds = value))
                         .then(intSetting("searchLimit", 3, 20, value -> MusicPlayerConfigManager.get().searchLimit = value))
                         .then(intSetting("maxQueueSize", 1, 200, value -> MusicPlayerConfigManager.get().maxQueueSize = value))
+                        .then(intSetting("maxSongsPerPlayer", 1, 50, value -> MusicPlayerConfigManager.get().maxSongsPerPlayer = value))
                         .then(intSetting("playlistQueueLimit", 1, 100, value -> MusicPlayerConfigManager.get().playlistQueueLimit = value))
                         .then(intSetting("queueCacheSize", 0, 20, value -> {
                             MusicPlayerConfigManager.get().queueCacheSize = value;

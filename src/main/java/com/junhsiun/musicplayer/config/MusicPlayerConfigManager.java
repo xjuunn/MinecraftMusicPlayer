@@ -69,12 +69,6 @@ public final class MusicPlayerConfigManager {
         if (config.proxy == null) {
             config.proxy = "";
         }
-        if (config.proxy == null) {
-            config.proxy = "";
-            if (!config.useSystemProxy) {
-                config.useSystemProxy = true;
-            }
-        }
         if (config.connectTimeoutSeconds <= 0) {
             config.connectTimeoutSeconds = 10;
         }
@@ -83,6 +77,12 @@ public final class MusicPlayerConfigManager {
         }
         if (config.queueCacheSize < 0) {
             config.queueCacheSize = 3;
+        }
+        if (config.maxQueueSize <= 0) {
+            config.maxQueueSize = 40;
+        }
+        if (config.maxSongsPerPlayer <= 0) {
+            config.maxSongsPerPlayer = 5;
         }
         if (config.lootMusicDiscChance < 0D || config.lootMusicDiscChance > 1D) {
             config.lootMusicDiscChance = 0.3D;
