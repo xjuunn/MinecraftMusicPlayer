@@ -4,6 +4,7 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
+import com.junhsiun.musicplayer.util.MediaFormatUtil;
 import com.junhsiun.musicplayer.util.Messages;
 import javazoom.jl.decoder.JavaLayerException;
 import javazoom.jl.player.AudioDeviceBase;
@@ -118,6 +119,11 @@ public final class ClientMusicController {
             }
 
             String url = urls.get(index);
+            // JLayer 只能解码 MP3：跳过已知无损/其他格式的直链（如 FLAC），避免解码立刻失败
+            if (!MediaFormatUtil.isJlayerPlayable(url)) {
+                MusicPlayerMod.LOGGER.debug("跳过 JLayer 无法解码的播放源 {}/{}: {}", index + 1, urls.size(), Messages.sanitizeForLog(url));
+                continue;
+            }
             try {
                 MusicPlayerMod.LOGGER.debug("开始尝试播放源 {}/{}: {} - {}", index + 1, urls.size(), title, Messages.sanitizeForLog(url));
                 playSingle(url, title, subtitle);

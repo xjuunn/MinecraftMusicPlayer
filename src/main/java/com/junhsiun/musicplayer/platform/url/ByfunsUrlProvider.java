@@ -17,7 +17,9 @@ import static com.junhsiun.musicplayer.platform.url.UrlUtil.isHttpUrl;
 public final class ByfunsUrlProvider implements SongUrlProvider {
     private static final Logger LOGGER = LoggerFactory.getLogger(ByfunsUrlProvider.class);
     private static final String BASE_URL = "https://api.byfuns.top/1/";
-    private static final String[] LEVELS = {"lossless", "exhigh", "higher", "standard"};
+    // 不使用 lossless：它返回 FLAC 无损直链，而客户端 JLayer 只能解码 MP3。
+    // 使用 exhigh/higher/standard（MP3 档位），与旧实现保持一致以确保可播放。
+    private static final String[] LEVELS = {"exhigh", "higher", "standard"};
 
     private final SongUrlHttp http;
 

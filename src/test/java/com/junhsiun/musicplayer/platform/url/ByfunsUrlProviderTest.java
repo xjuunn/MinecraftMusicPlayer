@@ -146,17 +146,19 @@ class ByfunsUrlProviderTest {
     // ── 音质档位顺序 ──────────────────────────────────────
 
     @Test
-    void 按音质档位降序探测() throws Exception {
+    void 按音质档位降序探测且不使用lossless() throws Exception {
         FakeSongUrlHttp http = new FakeSongUrlHttp();
         http.stubText("https://api.byfuns.top/1/", "https://best.mp3");
         ByfunsUrlProvider provider = new ByfunsUrlProvider(http);
         resolve(provider, "42");
 
-        // 应按 lossless → exhigh → higher → standard 依次请求，直到获得可用 URL
-        List<String> expectedFirst = List.of("id", "42", "level", "lossless");
+        // 应跳过 lossless，按 exhigh → higher → standard 依次请求，直到获得可用 URL
+        List<String> expectedFirst = List.of("id", "42", "level", "exhigh");
         List<List<String>> calls = http.callParams("https://api.byfuns.top/1/");
         assertFalse(calls.isEmpty());
         assertEquals(expectedFirst, calls.get(0));
+        // 第一个有效结果即返回，只请求了 exhigh 一个档位
+        assertEquals(1, calls.size());
     }
 
     @Test
@@ -167,11 +169,10 @@ class ByfunsUrlProviderTest {
         resolve(provider, "7");
 
         List<List<String>> calls = http.callParams("https://api.byfuns.top/1/");
-        // 非 URL 会继续尝试所有档位：lossless, exhigh, higher, standard
-        assertEquals(4, calls.size());
-        assertEquals("lossless", calls.get(0).get(3));
-        assertEquals("exhigh", calls.get(1).get(3));
-        assertEquals("higher", calls.get(2).get(3));
-        assertEquals("standard", calls.get(3).get(3));
+        // 非 URL 会继续尝试所有 MP3 档位：exhigh, higher, standard
+        assertEquals(3, calls.size());
+        assertEquals("exhigh", calls.get(0).get(3));
+        assertEquals("higher", calls.get(1).get(3));
+        assertEquals("standard", calls.get(2).get(3));
     }
 }
