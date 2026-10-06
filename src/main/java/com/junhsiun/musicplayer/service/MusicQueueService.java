@@ -874,7 +874,7 @@ public final class MusicQueueService {
 
     public void voteSkip(MinecraftServer server, ServerPlayer voter) {
         if (currentPlayback == null) {
-            voter.sendSystemMessage(Component.literal("当前没有歌曲在播放。").withStyle(ChatFormatting.RED));
+            Messages.sendFailurePlayer(voter.createCommandSourceStack(), Component.literal("当前没有歌曲在播放。").withStyle(ChatFormatting.RED));
             return;
         }
         if (voter.getUUID().equals(currentPlayback.requesterId())) {
@@ -882,7 +882,7 @@ public final class MusicQueueService {
             return;
         }
         if (!voteSkipPlayers.add(voter.getUUID())) {
-            voter.sendSystemMessage(Component.literal("你已经为当前歌曲投过票了。").withStyle(ChatFormatting.YELLOW));
+            Messages.sendFailurePlayer(voter.createCommandSourceStack(), Component.literal("你已经为当前歌曲投过票了。").withStyle(ChatFormatting.YELLOW));
             return;
         }
         int activeListeners = activeListeners(server);

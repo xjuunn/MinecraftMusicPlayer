@@ -7,6 +7,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.net.URI;
 
@@ -40,12 +41,24 @@ public final class Messages {
         return String.format("%d:%02d", minutes, seconds);
     }
 
+    public static void sendChat(CommandSourceStack source, Component component) {
+        if (source.getEntity() instanceof ServerPlayer player) {
+            player.sendSystemMessage(component);
+            return;
+        }
+        source.sendSuccess(() -> component, false);
+    }
+
+    public static void sendChatLines(CommandSourceStack source, Component component) {
+        sendChat(source, component);
+    }
+
     public static void info(CommandSourceStack source, String text) {
         info(source, text, false);
     }
 
     public static void info(CommandSourceStack source, String text, boolean broadcastToOps) {
-        source.sendSuccess(() -> Component.literal(text).withStyle(ChatFormatting.GRAY), broadcastToOps);
+        sendChat(source, Component.literal(text).withStyle(ChatFormatting.GRAY));
     }
 
     public static void success(CommandSourceStack source, String text) {
@@ -53,15 +66,44 @@ public final class Messages {
     }
 
     public static void success(CommandSourceStack source, String text, boolean broadcastToOps) {
-        source.sendSuccess(() -> Component.literal(text).withStyle(ChatFormatting.GREEN), broadcastToOps);
+        sendChat(source, Component.literal(text).withStyle(ChatFormatting.GREEN));
     }
 
     public static void warning(CommandSourceStack source, String text) {
-        source.sendFailure(Component.literal(text));
+        Component component = Component.literal(text).withStyle(ChatFormatting.RED);
+        if (source.getEntity() instanceof ServerPlayer player) {
+            player.sendSystemMessage(component);
+            return;
+        }
+        source.sendFailure(component);
     }
 
     public static void loading(CommandSourceStack source, String text) {
-        source.sendSuccess(() -> Component.literal(text).withStyle(ChatFormatting.YELLOW), false);
+        sendChat(source, Component.literal(text).withStyle(ChatFormatting.YELLOW));
+    }
+
+    public static void sendLine(CommandSourceStack source, Component component) {
+        sendChat(source, component);
+    }
+
+    public static void sendFailurePlayer(CommandSourceStack source, Component component) {
+        if (source.getEntity() instanceof ServerPlayer player) {
+            player.sendSystemMessage(component);
+            return;
+        }
+        source.sendFailure(component);
+    }
+
+    public static void sendFailure(CommandSourceStack source, Component component) {
+        sendFailurePlayer(source, component);
+    }
+
+    public static void sendSuccess(CommandSourceStack source, Component component) {
+        sendChat(source, component);
+    }
+
+    public static void sendSuccess(CommandSourceStack source, Component component, boolean broadcastToOps) {
+        sendChat(source, component);
     }
 
     public static MutableComponent clickableCommand(String label, String hover, String command, ChatFormatting color) {
