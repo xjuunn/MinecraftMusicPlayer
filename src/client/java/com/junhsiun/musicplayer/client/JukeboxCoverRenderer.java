@@ -96,13 +96,13 @@ public final class JukeboxCoverRenderer {
         PoseStack ps = new PoseStack();
         ps.translate(x, y, z);
         if (yRotationDegrees != 0.0F) {
-            ps.mulPose(Axis.YP.rotationDegrees(yRotationDegrees));
+            ps.rotateDegrees(Axis.YP, yRotationDegrees);
         }
         if (xRotationDegrees != 0.0F) {
-            ps.mulPose(Axis.XP.rotationDegrees(xRotationDegrees));
+            ps.rotateDegrees(Axis.XP, xRotationDegrees);
         }
         if (spinDegrees != 0.0F) {
-            ps.mulPose(Axis.ZP.rotationDegrees(spinDegrees));
+            ps.rotateDegrees(Axis.ZP, spinDegrees);
         }
 
         collector.submitCustomGeometry(ps, RenderTypes.entityCutout(BLACK_DISC_TEXTURE), (pose, consumer) ->

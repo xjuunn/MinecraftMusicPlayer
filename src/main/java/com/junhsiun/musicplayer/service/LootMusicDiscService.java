@@ -15,6 +15,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Prediction;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -145,7 +146,7 @@ public final class LootMusicDiscService {
                     MusicPlayerMod.LOGGER.warn("Failed to generate random music disc for player {}", player.getScoreboardName(), throwable);
                     ItemStack returned = baseDisc.copyWithCount(1);
                     if (!player.getInventory().add(returned)) {
-                        player.drop(returned, false, true);
+                        player.drop(returned, false, Prediction.SERVER_ONLY);
                     }
                     player.sendSystemMessage(Component.literal("生成失败，唱片已归还").withStyle(ChatFormatting.RED));
                     return;
@@ -207,7 +208,7 @@ public final class LootMusicDiscService {
     private void giveBurnedDisc(ServerPlayer player, ItemStack baseDisc, TrackInfo track) {
         ItemStack burnedDisc = MusicDiscHelper.burn(baseDisc, track);
         if (!player.getInventory().add(burnedDisc)) {
-            player.drop(burnedDisc, false, true);
+            player.drop(burnedDisc, false, Prediction.SERVER_ONLY);
         }
         player.sendSystemMessage(Component.literal("已生成: ").withStyle(ChatFormatting.GREEN)
                 .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
