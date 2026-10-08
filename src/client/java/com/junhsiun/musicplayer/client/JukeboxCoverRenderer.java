@@ -36,7 +36,7 @@ public final class JukeboxCoverRenderer {
 
         ensureBlackTexture();
         SubmitNodeCollector collector = context.submitNodeCollector();
-        Vec3 camera = minecraft.gameRenderer.mainCamera().position();
+        Vec3 camera = minecraft.gameRenderer.getMainCamera().position();
         long now = System.currentTimeMillis();
 
         for (ClientJukeboxController.JukeboxVisualState state : ClientJukeboxController.getInstance().getVisualStates()) {
