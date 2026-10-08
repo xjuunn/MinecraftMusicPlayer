@@ -135,7 +135,7 @@ class MycelisUrlProviderTest {
     // ── 音质档位顺序 ──────────────────────────────────────
 
     @Test
-    void 按音质档位降序探测() throws Exception {
+    void 按音质档位顺序探测() throws Exception {
         FakeSongUrlHttp http = new FakeSongUrlHttp();
         http.stubJson("https://example.com/song/url/v1", "{\"data\":[{\"url\":\"https://m.mp3\"}]}");
         MycelisUrlProvider provider = new MycelisUrlProvider(http, () -> "https://example.com");
@@ -143,7 +143,6 @@ class MycelisUrlProviderTest {
 
         List<List<String>> calls = http.callParams("https://example.com/song/url/v1");
         assertFalse(calls.isEmpty());
-        // 第一个请求应为最高档 lossless
-        assertEquals("lossless", calls.get(0).get(calls.get(0).size() - 1));
+        assertEquals("standard", calls.get(0).get(calls.get(0).size() - 1));
     }
 }

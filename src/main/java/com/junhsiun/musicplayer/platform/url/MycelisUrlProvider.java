@@ -19,7 +19,7 @@ import static com.junhsiun.musicplayer.platform.url.UrlUtil.isHttpUrl;
  */
 public final class MycelisUrlProvider implements SongUrlProvider {
     private static final Logger LOGGER = LoggerFactory.getLogger(MycelisUrlProvider.class);
-    private static final String[] LEVELS = {"lossless", "exhigh", "higher", "standard"};
+    private static final String[] LEVELS = {"standard", "higher", "exhigh", "lossless"};
 
     private final SongUrlHttp http;
     private final Supplier<String> baseUrlSupplier;

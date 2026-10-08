@@ -127,6 +127,57 @@ class PlayerSongLimiterTest {
         assertFalse(PlayerSongLimiter.canRequest(null, List.of(), ALICE, -100));
     }
 
+    // ── 在途请求（已放行、尚未入队） ────────────────────
+
+    @Test
+    void 在途请求计入上限() {
+        // 已入队 0 首，在途 5 首 → 占用 5 = 上限，禁止
+        assertFalse(PlayerSongLimiter.canRequest(null, List.of(), ALICE, 5, 5));
+        // 在途 4 首 → 占用 4 < 5，允许
+        assertTrue(PlayerSongLimiter.canRequest(null, List.of(), ALICE, 5, 4));
+    }
+
+    @Test
+    void 在途请求与已入队歌曲合并计数() {
+        // 播放中 1 首 + 队列 3 首 + 在途 1 首 = 5 = 上限
+        List<QueuedTrack> queued = List.of(track(ALICE), track(ALICE), track(ALICE));
+        assertFalse(PlayerSongLimiter.canRequest(ALICE, queued, ALICE, 5, 1));
+        // 在途 0 首 → 占用 4 < 5，允许
+        assertTrue(PlayerSongLimiter.canRequest(ALICE, queued, ALICE, 5, 0));
+    }
+
+    @Test
+    void 在途请求只计入被请求玩家() {
+        // 队列全是 BOB 的歌，ALICE 在途 5 首仍受自己的上限约束
+        List<QueuedTrack> queued = List.of(track(BOB), track(BOB));
+        assertFalse(PlayerSongLimiter.canRequest(null, queued, ALICE, 5, 5));
+        assertTrue(PlayerSongLimiter.canRequest(null, queued, ALICE, 5, 4));
+        // 占用统计本身不含在途（在途只影响 canRequest）
+        assertEquals(0, PlayerSongLimiter.occupiedCount(null, queued, ALICE));
+    }
+
+    @Test
+    void 负数在途按零处理() {
+        assertTrue(PlayerSongLimiter.canRequest(null, List.of(), ALICE, 5, -1));
+        assertTrue(PlayerSongLimiter.canRequest(ALICE, List.of(), ALICE, 2, -100));
+    }
+
+    @Test
+    void 上限为0时即使无在途也不可点播() {
+        assertFalse(PlayerSongLimiter.canRequest(null, List.of(), ALICE, 0, 5));
+    }
+
+    @Test
+    void 四参重载等价于在途为零() {
+        List<QueuedTrack> queued = List.of(track(ALICE), track(ALICE));
+        assertEquals(
+                PlayerSongLimiter.canRequest(ALICE, queued, ALICE, 5),
+                PlayerSongLimiter.canRequest(ALICE, queued, ALICE, 5, 0));
+        assertEquals(
+                PlayerSongLimiter.canRequest(null, List.of(), ALICE, 0),
+                PlayerSongLimiter.canRequest(null, List.of(), ALICE, 0, 3));
+    }
+
     // ── 多玩家独立计数 ────────────────────────────────────
 
     @Test

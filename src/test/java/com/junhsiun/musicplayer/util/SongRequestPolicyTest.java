@@ -131,6 +131,56 @@ class SongRequestPolicyTest {
         assertEquals(Kind.REJECT, d.kind());
     }
 
+    // ── 在途请求（已放行、尚未入队） ────────────────────
+
+    @Test
+    void 在途请求达到上限时拒绝() {
+        // 队列为空，但 ALICE 已有 5 首在途解析中 → 拒绝
+        Decision d = SongRequestPolicy.decide(true, 0, 40, null, List.of(), ALICE, 5, 5, "100", false);
+        assertEquals(Kind.REJECT, d.kind());
+        assertEquals("你一次最多只能点 5 首歌曲，请先播放或移除后再试。", d.message());
+    }
+
+    @Test
+    void 在途请求未达上限时允许() {
+        Decision d = SongRequestPolicy.decide(true, 0, 40, null, List.of(), ALICE, 5, 4, "100", false);
+        assertEquals("", d.message());
+    }
+
+    @Test
+    void 在途请求与队列歌曲合并计数() {
+        // 播放中 1 首 + 队列 3 首 + 在途 1 首 = 5 = 上限 → 拒绝
+        List<QueuedTrack> queued = List.of(track(ALICE), track(ALICE), track(ALICE));
+        Decision d = SongRequestPolicy.decide(true, 3, 40, ALICE, queued, ALICE, 5, 1, "100", false);
+        assertEquals(Kind.REJECT, d.kind());
+        assertEquals("你一次最多只能点 5 首歌曲，请先播放或移除后再试。", d.message());
+    }
+
+    @Test
+    void 在途请求只按发起玩家自己的在途数判定() {
+        // 队列里全是 ALICE 的歌，BOB 自己在途 4 首 → 仍可点
+        List<QueuedTrack> queued = List.of(track(ALICE), track(ALICE), track(ALICE));
+        Decision d = SongRequestPolicy.decide(true, 3, 40, null, queued, BOB, 5, 4, "100", false);
+        assertEquals("", d.message());
+        // BOB 自己在途满 5 首 → 拒绝
+        Decision rejected = SongRequestPolicy.decide(true, 3, 40, null, queued, BOB, 5, 5, "100", false);
+        assertEquals(Kind.REJECT, rejected.kind());
+    }
+
+    @Test
+    void 九参重载等价于在途为零() {
+        Decision withoutPending = SongRequestPolicy.decide(true, 0, 40, ALICE, List.of(), ALICE, 5, "100", false);
+        Decision withZeroPending = SongRequestPolicy.decide(true, 0, 40, ALICE, List.of(), ALICE, 5, 0, "100", false);
+        assertEquals(withoutPending, withZeroPending);
+    }
+
+    @Test
+    void 在途计数优先于重复判定() {
+        // 队列未满、在途已达上限，且歌曲已重复 → 仍返回上限消息
+        Decision d = SongRequestPolicy.decide(true, 0, 40, null, List.of(), ALICE, 5, 5, "100", true);
+        assertEquals("你一次最多只能点 5 首歌曲，请先播放或移除后再试。", d.message());
+    }
+
     // ── 重复歌曲 ──────────────────────────────────────────
 
     @Test

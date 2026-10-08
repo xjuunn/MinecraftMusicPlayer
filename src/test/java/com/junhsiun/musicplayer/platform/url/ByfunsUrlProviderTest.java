@@ -45,16 +45,15 @@ class ByfunsUrlProviderTest {
     // ── 音质档回退 ────────────────────────────────────────
 
     @Test
-    void lossless失败回退到exhigh() throws Exception {
+    void standard优先返回有效URL() throws Exception {
         FakeSongUrlHttp http = new FakeSongUrlHttp();
-        http.stubText("https://api.byfuns.top/1/", "https://exhigh.mp3");
+        http.stubText("https://api.byfuns.top/1/", "https://standard.mp3");
         ByfunsUrlProvider provider = new ByfunsUrlProvider(http);
-        // lossless 没有 stub，所以 getText 返回 null → 跳过；exhigh 返回有效 URL
-        assertEquals(List.of("https://exhigh.mp3"), resolve(provider, "1"));
+        assertEquals(List.of("https://standard.mp3"), resolve(provider, "1"));
     }
 
     @Test
-    void lossless和exhigh失败回退到higher() throws Exception {
+    void standard失败回退到higher() throws Exception {
         FakeSongUrlHttp http = new FakeSongUrlHttp();
         http.stubText("https://api.byfuns.top/1/", "https://higher.mp3");
         ByfunsUrlProvider provider = new ByfunsUrlProvider(http);
@@ -146,18 +145,16 @@ class ByfunsUrlProviderTest {
     // ── 音质档位顺序 ──────────────────────────────────────
 
     @Test
-    void 按音质档位降序探测且不使用lossless() throws Exception {
+    void 按音质档位顺序探测() throws Exception {
         FakeSongUrlHttp http = new FakeSongUrlHttp();
         http.stubText("https://api.byfuns.top/1/", "https://best.mp3");
         ByfunsUrlProvider provider = new ByfunsUrlProvider(http);
         resolve(provider, "42");
 
-        // 应跳过 lossless，按 exhigh → higher → standard 依次请求，直到获得可用 URL
-        List<String> expectedFirst = List.of("id", "42", "level", "exhigh");
+        List<String> expectedFirst = List.of("id", "42", "level", "standard");
         List<List<String>> calls = http.callParams("https://api.byfuns.top/1/");
         assertFalse(calls.isEmpty());
         assertEquals(expectedFirst, calls.get(0));
-        // 第一个有效结果即返回，只请求了 exhigh 一个档位
         assertEquals(1, calls.size());
     }
 
@@ -169,10 +166,9 @@ class ByfunsUrlProviderTest {
         resolve(provider, "7");
 
         List<List<String>> calls = http.callParams("https://api.byfuns.top/1/");
-        // 非 URL 会继续尝试所有 MP3 档位：exhigh, higher, standard
         assertEquals(3, calls.size());
-        assertEquals("exhigh", calls.get(0).get(3));
+        assertEquals("standard", calls.get(0).get(3));
         assertEquals("higher", calls.get(1).get(3));
-        assertEquals("standard", calls.get(2).get(3));
+        assertEquals("exhigh", calls.get(2).get(3));
     }
 }

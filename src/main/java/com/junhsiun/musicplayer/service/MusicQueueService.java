@@ -56,6 +56,8 @@ public final class MusicQueueService {
     private long pausedAtMillis;
     private PlayOrder playOrder = PlayOrder.SEQUENTIAL;
     private CompletableFuture<Void> requestPipeline = CompletableFuture.completedFuture(null);
+    /** 每玩家已通过校验、但尚未完成异步解析入队的在途点歌数（仅服务端线程访问）。 */
+    private final Map<UUID, Integer> pendingSongRequests = new HashMap<>();
     private final LyricService lyricService = new LyricService();
     private volatile List<LyricLine> currentLyrics = List.of();
     private String globalLastSentLyricText = "";
@@ -511,12 +513,13 @@ public final class MusicQueueService {
         UUID requesterUuid = requester.getUUID();
         SongRequestPolicy.Decision decision = SongRequestPolicy.decide(
                 config.allowSongRequest,
-                queue.size(),
+                queue.size() + totalPendingSongRequests(),
                 config.maxQueueSize,
                 currentPlayback == null ? null : currentPlayback.requesterId(),
                 queue.stream().toList(),
                 requesterUuid,
                 config.maxSongsPerPlayer,
+                pendingSongRequests.getOrDefault(requesterUuid, 0),
                 songId,
                 isTrackActiveOrQueued(songId));
         if (decision.message() != null && !decision.message().isEmpty()) {
@@ -528,16 +531,56 @@ public final class MusicQueueService {
             }
             return;
         }
-        enqueueRequest(() -> resolveTrack(songId).handle((track, throwable) -> {
-            server.execute(() -> {
-                if (throwable != null) {
-                    source.sendFailure(Component.literal("点播失败: " + rootMessage(throwable)));
-                    return;
-                }
-                enqueueOrStart(server, source, requester, track);
+        // 预留在途名额：入队（或失败）后释放，避免异步解析窗口内连点突破上限
+        pendingSongRequests.merge(requesterUuid, 1, Integer::sum);
+        enqueueRequest(() -> resolveAndEnqueue(server, source, requester, songId, requesterUuid));
+    }
+
+    /** 解析单曲并在入队（或失败）后释放该玩家的在途点歌名额。 */
+    private CompletableFuture<Void> resolveAndEnqueue(MinecraftServer server, CommandSourceStack source,
+                                                      ServerPlayer requester, String songId, UUID requesterUuid) {
+        try {
+            return resolveTrack(songId).handle((track, throwable) -> {
+                server.execute(() -> {
+                    try {
+                        if (throwable != null) {
+                            source.sendFailure(Component.literal("点播失败: " + rootMessage(throwable)));
+                            return;
+                        }
+                        if (track == null || track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
+                            source.sendFailure(Component.literal("点播失败: 无法获取可播放的音乐链接"));
+                            return;
+                        }
+                        enqueueOrStart(server, source, requester, track);
+                    } finally {
+                        releaseSongRequest(requesterUuid);
+                    }
+                });
+                return null;
             });
-            return null;
-        }));
+        } catch (RuntimeException ex) {
+            server.execute(() -> {
+                try {
+                    source.sendFailure(Component.literal("点播失败: " + rootMessage(ex)));
+                } finally {
+                    releaseSongRequest(requesterUuid);
+                }
+            });
+            return CompletableFuture.completedFuture(null);
+        }
+    }
+
+    private void releaseSongRequest(UUID requesterUuid) {
+        pendingSongRequests.compute(requesterUuid,
+                (uuid, count) -> (count == null || count <= 1) ? null : count - 1);
+    }
+
+    private int totalPendingSongRequests() {
+        int total = 0;
+        for (int count : pendingSongRequests.values()) {
+            total += count;
+        }
+        return total;
     }
 
     // ── Playlist mode ─────────────────────────────────────────────────
@@ -619,7 +662,8 @@ public final class MusicQueueService {
                                     playlistQueue.addLast(new QueuedTrack(
                                             track.id(), track.title(), track.artist(),
                                             track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
-                                            playlistRequesterId, playlistRequesterName
+                                            playlistRequesterId, playlistRequesterName,
+                                            track.sourceUrls()
                                     ));
                                     playlistTrackIndex = lastIndex - 1;
                                     server.execute(() -> loadAndStart.run());
@@ -660,11 +704,12 @@ public final class MusicQueueService {
                         SearchEntry entry = tracks.get(i);
                         int trackNumber = (startIndex + i + 1);
                         futures[i] = resolveTrack(entry.id()).thenAccept(track -> {
-                            playlistQueue.addLast(new QueuedTrack(
-                                    track.id(), track.title(), track.artist(),
-                                    track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
-                                    playlistRequesterId, playlistRequesterName
-                            ));
+                                    playlistQueue.addLast(new QueuedTrack(
+                                            track.id(), track.title(), track.artist(),
+                                            track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
+                                            playlistRequesterId, playlistRequesterName,
+                                            track.sourceUrls()
+                                    ));
                             MusicPlayerMod.LOGGER.debug("歌单加载: {}/{} - {} - {}",
                                     trackNumber, playlistTotalTracks, track.title(), track.artist());
                         }).exceptionally(throwable -> {
@@ -739,7 +784,7 @@ public final class MusicQueueService {
                 playlistMode = true;
 
                 // Load first program only — remaining are loaded on demand during playback
-                return resolveAndEnqueueRadioProgram(server, source, 0,
+                return resolveAndEnqueueRadioProgram(server, source, requester, 0,
                         () -> server.execute(() -> {
                             if (playlistQueue.isEmpty()) {
                                 source.sendFailure(Component.literal("没有可播放的节目。"));
@@ -758,7 +803,7 @@ public final class MusicQueueService {
         }));
     }
 
-    private CompletableFuture<Void> resolveAndEnqueueRadioProgram(MinecraftServer server, CommandSourceStack source, int index, Runnable onSuccess) {
+    private CompletableFuture<Void> resolveAndEnqueueRadioProgram(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, int index, Runnable onSuccess) {
         if (index < 0 || index >= cachedRadioPrograms.size()) {
             if (onSuccess != null) server.execute(onSuccess);
             return CompletableFuture.completedFuture(null);
@@ -781,10 +826,33 @@ public final class MusicQueueService {
                         }
                         radioResolvedTracks.put(track.id(), programTrack);
                         server.execute(() -> {
-                            playlistQueue.addLast(new QueuedTrack(
-                                    programTrack.id(), programTrack.title(), programTrack.artist(),
-                                    "", playlistRequesterId, playlistRequesterName));
-                            playlistTrackIndex++;
+                            // Enforce per-player limit for radio playlist: count songs added by this requester
+                            int ownerCount = 0;
+                            UUID limitTarget = requester != null ? requester.getUUID() : playlistRequesterId;
+                            if (limitTarget != null) {
+                                if (playlistRequesterId != null && playlistRequesterId.equals(limitTarget)) {
+                                    ownerCount++;
+                                }
+                                for (QueuedTrack qt : playlistQueue) {
+                                    if (qt.requesterId() != null && qt.requesterId().equals(limitTarget)) {
+                                        ownerCount++;
+                                    }
+                                }
+                            }
+                            if (limitTarget != null && ownerCount >= MusicPlayerConfigManager.get().maxSongsPerPlayer) {
+                                // Don't add more for this requester - but still track index? No, we failed to add.
+                                // Just skip adding to queue; we'll adjust total
+                                playlistTotalTracks--;
+                                if (currentPlayback == null && radioPlaylistMode) {
+                                    advance(server, null);
+                                }
+                            } else {
+                                playlistQueue.addLast(new QueuedTrack(
+                                        programTrack.id(), programTrack.title(), programTrack.artist(),
+                                        "", playlistRequesterId, playlistRequesterName,
+                                        programTrack.sourceUrls()));
+                                playlistTrackIndex++;
+                            }
                             if (currentPlayback == null && source == null) {
                                 advance(server, null);
                             }
@@ -815,7 +883,7 @@ public final class MusicQueueService {
         if (nextIndex >= cachedRadioPrograms.size()) return;
         // mark as "in-flight" before the async load
         radioProgramIndex = nextIndex;
-        resolveAndEnqueueRadioProgram(server, null, nextIndex, null);
+        resolveAndEnqueueRadioProgram(server, null, null, nextIndex, null);
     }
 
     private void cleanUpRadioPlaylist() {
@@ -851,7 +919,8 @@ public final class MusicQueueService {
                         playlistQueue.addLast(new QueuedTrack(
                                 track.id(), track.title(), track.artist(),
                                 track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
-                                playlistRequesterId, playlistRequesterName
+                                playlistRequesterId, playlistRequesterName,
+                                track.sourceUrls()
                         ));
                         MusicPlayerMod.LOGGER.debug("歌单预载: {}/{} - {} - {}",
                                 trackNumber, playlistTotalTracks, track.title(), track.artist());
@@ -1037,7 +1106,8 @@ public final class MusicQueueService {
                 track.artist(),
                 track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
                 requester.getUUID(),
-                requester.getGameProfile().name()
+                requester.getGameProfile().name(),
+                track.sourceUrls()
         ));
         refreshTrackCache();
         if (MusicPlayerConfigManager.get().announceQueueChanges) {
@@ -1121,7 +1191,19 @@ public final class MusicQueueService {
                 future = resolveRadioTrackOnDemand(next.songId());
             }
         } else {
-            future = resolveTrack(next.songId());
+            if (next.sourceUrls() != null && !next.sourceUrls().isEmpty()) {
+                future = resolveTrack(next.songId()).thenApply(track -> {
+                    if (track == null) {
+                        return null;
+                    }
+                    List<String> cachedUrls = next.sourceUrls();
+                    List<String> finalUrls = cachedUrls.isEmpty() ? track.sourceUrls() : cachedUrls;
+                    return new TrackInfo(track.id(), track.title(), track.artist(), track.artistId(),
+                            track.coverUrl(), finalUrls, track.durationMillis());
+                });
+            } else {
+                future = resolveTrack(next.songId());
+            }
         }
         future.whenComplete((track, throwable) -> server.execute(() -> {
             if (!server.isRunning()) {
@@ -1136,12 +1218,18 @@ public final class MusicQueueService {
                 broadcast(server, Component.literal(reason).withStyle(ChatFormatting.YELLOW));
             }
             try {
-                startTrack(server, track, next.requesterId(), next.requesterName());
+                TrackInfo trackToPlay = track;
+                if (trackToPlay != null && (trackToPlay.sourceUrls() == null || trackToPlay.sourceUrls().isEmpty())
+                        && next.sourceUrls() != null && !next.sourceUrls().isEmpty()) {
+                    trackToPlay = new TrackInfo(trackToPlay.id(), trackToPlay.title(), trackToPlay.artist(),
+                            trackToPlay.artistId(), trackToPlay.coverUrl(), next.sourceUrls(), trackToPlay.durationMillis());
+                }
+                startTrack(server, trackToPlay, next.requesterId(), next.requesterName());
                 if (currentPlayback != null && radioPlaylistMode) {
                     radioPlaylistPreloadNext(server);
                 }
             } catch (Exception e) {
-                MusicPlayerMod.LOGGER.error("播放歌曲失败: {}", track.title(), e);
+                MusicPlayerMod.LOGGER.error("播放歌曲失败: {}", track == null ? next.title() : track.title(), e);
                 advance(server, "播放失败，正在跳过到下一首。");
             }
         }));
