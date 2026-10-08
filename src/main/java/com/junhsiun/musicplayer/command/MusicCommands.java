@@ -90,7 +90,7 @@ public final class MusicCommands {
         helpEntry(source, "view", "查看歌单、作者、播客、节目或用户详情");
         helpEntry(source, "join", "加入当前播放");
         helpEntry(source, "leave", "退出当前播放");
-        helpEntry(source, "mute", "暂时静音当前歌曲");
+        helpEntry(source, "mute", "暂时静音当前歌曲，下一首自动恢复");
         helpEntry(source, "burn", "将歌曲刻录到唱片");
         helpEntry(source, "random", "随机生成热门音乐");
         helpEntry(source, "lyrics", "切换实时歌词显示");
@@ -168,7 +168,7 @@ public final class MusicCommands {
             }
             case "mute" -> {
                 Messages.sendSuccess(source,  sectionHeader("mute", null), false);
-                detailLine(source, "/music mute once", "暂时静音当前歌曲，可用 /music join 重新加入");
+                detailLine(source, "/music mute once", "暂时静音当前歌曲，下一首歌自动恢复，可用 /music join 立即重新加入");
             }
             case "burn" -> {
                 Messages.sendSuccess(source,  sectionHeader("burn", null), false);
@@ -537,8 +537,8 @@ public final class MusicCommands {
         return Commands.literal("mute")
                 .then(Commands.literal("once").executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
-                    MusicPlayerMod.queueService().leavePlayer(player);
-                    Messages.success(context.getSource(), "你已停止接收当前歌曲，可用 /music join 重新加入。", false);
+                    MusicPlayerMod.queueService().mutePlayerOnce(player);
+                    Messages.success(context.getSource(), "你已静音当前歌曲，下一首歌将自动恢复播放。", false);
                     return 1;
                 }));
     }

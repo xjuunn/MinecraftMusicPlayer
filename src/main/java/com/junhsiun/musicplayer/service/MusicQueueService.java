@@ -47,6 +47,7 @@ public final class MusicQueueService {
     private final Deque<QueuedTrack> queue = new ArrayDeque<>();
     private final Deque<QueuedTrack> playlistQueue = new ArrayDeque<>();
     private final Set<UUID> optedOutPlayers = new HashSet<>();
+    private final Set<UUID> mutedOncePlayers = new HashSet<>();
     private final Set<UUID> voteSkipPlayers = new HashSet<>();
     private final Object requestPipelineLock = new Object();
     private final Map<String, CompletableFuture<TrackInfo>> trackCache = new LinkedHashMap<>();
@@ -421,6 +422,7 @@ public final class MusicQueueService {
         trackCache.clear();
         voteSkipPlayers.clear();
         optedOutPlayers.clear();
+        mutedOncePlayers.clear();
         resetPlaylistState();
         synchronized (requestPipelineLock) {
             requestPipeline = CompletableFuture.completedFuture(null);
@@ -450,6 +452,7 @@ public final class MusicQueueService {
 
     public void handleDisconnect(ServerPlayer player) {
         optedOutPlayers.remove(player.getUUID());
+        mutedOncePlayers.remove(player.getUUID());
         voteSkipPlayers.remove(player.getUUID());
     }
 
@@ -498,6 +501,7 @@ public final class MusicQueueService {
 
     public void joinPlayer(ServerPlayer player) {
         optedOutPlayers.remove(player.getUUID());
+        mutedOncePlayers.remove(player.getUUID());
         if (currentPlayback != null) {
             long offset = Math.max(0L, System.currentTimeMillis() - currentPlayback.startedAt());
             sendPlay(player, currentPlayback.track(), offset);
@@ -507,6 +511,12 @@ public final class MusicQueueService {
     public void leavePlayer(ServerPlayer player) {
         optedOutPlayers.add(player.getUUID());
         sendStop(player, "你已退出当前播放。");
+    }
+
+    public void mutePlayerOnce(ServerPlayer player) {
+        optedOutPlayers.add(player.getUUID());
+        mutedOncePlayers.add(player.getUUID());
+        sendStop(player, "你已静音当前歌曲。");
     }
 
     // ── Request song ─────────────────────────────────────────────────
@@ -1253,6 +1263,10 @@ public final class MusicQueueService {
         pausedAtMillis = 0L;
         voteSkipPlayers.clear();
         refreshTrackCache();
+        for (UUID uuid : mutedOncePlayers) {
+            optedOutPlayers.remove(uuid);
+        }
+        mutedOncePlayers.clear();
         server.getPlayerList().getPlayers().stream()
                 .filter(player -> !optedOutPlayers.contains(player.getUUID()))
                 .sorted(Comparator.comparing(player -> player.getGameProfile().name()))
