@@ -227,14 +227,39 @@ public final class NeteaseApiClient {
     }
 
     public CompletableFuture<ArtistInfo> artistDetail(String artistId) {
-        return getJson("/artists", "id", artistId).thenCompose(root -> {
-            JsonObject artist = obj(root, "artist");
-            return fetchAllArtistSongs(artistId).thenApply(tracks -> new ArtistInfo(
-                    str(artist, "id"),
-                    str(artist, "name"),
-                    str(artist, "briefDesc"),
-                    tracks
-            ));
+        return getJson("/artists", "id", artistId)
+                .thenCombine(artistSongCount(artistId), (root, songCount) -> {
+                    JsonObject artist = obj(root, "artist");
+                    return new ArtistInfo(
+                            str(artist, "id"),
+                            str(artist, "name"),
+                            str(artist, "briefDesc"),
+                            songCount
+                    );
+                });
+    }
+
+    private CompletableFuture<Integer> artistSongCount(String artistId) {
+        return getJson("/artist/songs", "id", artistId, "limit", "1", "offset", "0")
+                .thenApply(root -> intVal(root, "total"));
+    }
+
+    public CompletableFuture<List<SearchEntry>> artistSongsPage(String artistId, int offset, int limit) {
+        return getJson("/artist/songs", "id", artistId,
+                "limit", Integer.toString(limit),
+                "offset", Integer.toString(offset)).thenApply(root -> {
+            JsonArray songs = arr(root, "songs");
+            if (songs == null || songs.isEmpty()) return List.of();
+            List<SearchEntry> tracks = new ArrayList<>();
+            for (JsonElement elem : songs) {
+                JsonObject song = elem.getAsJsonObject();
+                String songId = str(song, "id");
+                tracks.add(new SearchEntry(songId, str(song, "name"),
+                        str(obj(song, "al"), "name"), playSongCommand(songId), ""));
+            }
+            MusicPlayerMod.LOGGER.debug("作者歌曲分页: id={}, offset={}, limit={}, 返回={}, total={}",
+                    artistId, offset, limit, tracks.size(), intVal(root, "total"));
+            return tracks;
         });
     }
 
@@ -531,42 +556,6 @@ public final class NeteaseApiClient {
 
     private CompletableFuture<JsonObject> getJson(String path, String... queryPairs) {
         return getJsonFromAbsoluteUrl(baseUrl() + path, queryPairs);
-    }
-
-    private CompletableFuture<List<SearchEntry>> fetchAllArtistSongs(String artistId) {
-        return CompletableFuture.supplyAsync(() -> {
-            List<SearchEntry> tracks = new ArrayList<>();
-            int offset = 0;
-
-            while (true) {
-                JsonObject root = executeJson(baseRequest(
-                        baseUrl() + "/artist/songs",
-                        new String[]{"id", artistId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
-                        "application/json,text/plain,*/*"
-                ));
-                JsonArray songs = arr(root, "songs");
-                if (songs == null || songs.isEmpty()) {
-                    break;
-                }
-                for (JsonElement elem : songs) {
-                    JsonObject song = elem.getAsJsonObject();
-                    String songId = str(song, "id");
-                    tracks.add(new SearchEntry(
-                            songId,
-                            str(song, "name"),
-                            str(obj(song, "al"), "name"),
-                            playSongCommand(songId),
-                            ""
-                    ));
-                }
-                if (songs.size() < DETAIL_FETCH_BATCH_SIZE) {
-                    break;
-                }
-                offset += songs.size();
-            }
-
-            return tracks;
-        }, EXECUTOR);
     }
 
     private List<String> fetchHotPlaylistCategories() {

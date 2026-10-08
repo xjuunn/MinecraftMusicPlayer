@@ -1118,25 +1118,40 @@ public final class MusicCommands {
             Messages.warning(source, "未找到作者详情。");
             return;
         }
-        sendHeader(source);
-        Messages.sendSuccess(source,  Component.literal("作者: ").withStyle(ChatFormatting.GOLD)
-                .append(clickableText(artist.name(), "/music view " + literal + " " + artist.id(), "查看作者详情", ChatFormatting.AQUA)), false);
-        if (artist.description() != null && !artist.description().isBlank()) {
-            Messages.sendSuccess(source,  spacer(), false);
-            Messages.sendSuccess(source,  Component.literal(artist.description()).withStyle(ChatFormatting.GRAY), false);
-        }
-        if (artist.topSongs().isEmpty()) {
-            Messages.warning(source, "该作者没有可显示的热门歌曲。");
-            return;
-        }
-        Messages.sendSuccess(source,  spacer(), false);
-        PageWindow page = pageWindow(artist.topSongs().size(), requestedPage, pageSize());
-        for (SearchEntry track : slicePage(artist.topSongs(), page)) {
-            Messages.sendSuccess(source,  renderEntry(track, trackActions(source, track.id(), "[点歌]", "点播这首歌曲", ChatFormatting.GREEN), "点播这首歌曲", ""), false);
-        }
-        Messages.sendSuccess(source,  spacer(), false);
-        sendNavigation(source, page.page(), page.totalPages(), "/music view " + literal + " " + artistId + " page %d", true, "/music view " + literal + " " + artistId + " page ");
-        Messages.sendSuccess(source,  spacer(), false);
+
+        int pageSize = pageSize();
+        int totalPages = Math.max(1, (int) Math.ceil((double) artist.songCount() / pageSize));
+        int page = Math.max(1, Math.min(requestedPage, totalPages));
+        int offset = (page - 1) * pageSize;
+
+        MinecraftServer server = source.getServer();
+        MusicPlayerMod.netease().artistSongsPage(artistId, offset, pageSize)
+                .whenComplete((tracks, t) -> server.execute(() -> {
+                    sendHeader(source);
+                    Messages.sendSuccess(source,  Component.literal("作者: ").withStyle(ChatFormatting.GOLD)
+                            .append(clickableText(artist.name(), "/music view " + literal + " " + artist.id(), "查看作者详情", ChatFormatting.AQUA)), false);
+                    if (artist.description() != null && !artist.description().isBlank()) {
+                        Messages.sendSuccess(source,  spacer(), false);
+                        Messages.sendSuccess(source,  Component.literal(artist.description()).withStyle(ChatFormatting.GRAY), false);
+                    }
+                    if (t != null) {
+                        Messages.warning(source, "加载歌曲失败: " + rootMessage(t));
+                        return;
+                    }
+                    if (tracks.isEmpty()) {
+                        Messages.warning(source, "该作者没有可显示的歌曲。");
+                        return;
+                    }
+                    Messages.sendSuccess(source,  spacer(), false);
+                    for (SearchEntry track : tracks) {
+                        Messages.sendSuccess(source,  renderEntry(track,
+                                trackActions(source, track.id(), "[点歌]", "点播这首歌曲", ChatFormatting.GREEN),
+                                "点播这首歌曲", ""), false);
+                    }
+                    Messages.sendSuccess(source,  spacer(), false);
+                    sendNavigation(source, page, totalPages, "/music view " + literal + " " + artistId + " page %d", true, "/music view " + literal + " " + artistId + " page ");
+                    Messages.sendSuccess(source,  spacer(), false);
+                }));
     }
 
     private static void showSong(CommandSourceStack source, TrackInfo track, Throwable throwable) {
