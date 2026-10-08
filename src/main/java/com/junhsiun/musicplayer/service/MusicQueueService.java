@@ -366,6 +366,9 @@ public final class MusicQueueService {
     }
 
     private long getElapsedMillis() {
+        if (paused) {
+            return Math.max(0L, pausedAtMillis);
+        }
         long monotonic = currentPlayback != null
                 ? System.currentTimeMillis() - currentPlayback.startedAt()
                 : 0L;
