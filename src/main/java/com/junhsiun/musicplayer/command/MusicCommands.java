@@ -30,7 +30,6 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
-import net.minecraft.util.Prediction;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -1454,7 +1453,7 @@ public final class MusicCommands {
         } else {
             mainHand.shrink(1);
             if (!player.getInventory().add(burnedDisc)) {
-                player.drop(burnedDisc, false, Prediction.SERVER_ONLY);
+                player.drop(burnedDisc, false, true);
             }
         }
 

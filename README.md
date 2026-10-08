@@ -28,9 +28,9 @@ Minecraft Music Player 是一个 Fabric 双端音乐模组，提供网易云音�
 
 ## 依赖要求
 
-- Minecraft `26.3`
+- Minecraft `26.2`
 - Fabric Loader `0.19.3` 或更高
-- Fabric API `0.161.0+26.3` 或兼容版本
+- Fabric API `0.154.2+26.2` 或兼容版本
 - Java `25`
 - 可访问的网易云音乐 API 服务，默认 `https://mycelis.dpdns.org/`
 
