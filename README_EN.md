@@ -26,10 +26,10 @@ The server handles commands, queue, sync, and jukebox control. The client handle
 
 ## Requirements
 
-- Minecraft `26.2`
+- Minecraft `1.21.11`
 - Fabric Loader `0.19.3` or newer
-- Fabric API `0.154.2+26.2` or compatible
-- Java `25`
+- Fabric API `0.141.3+1.21.11` or compatible
+- Java `21`
 - A reachable NetEase music API service, default `https://mycelis.dpdns.org/`
 
 ## Installation

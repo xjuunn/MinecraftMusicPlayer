@@ -39,9 +39,9 @@ public final class MusicPlayerMod implements ModInitializer {
     @Override
     public void onInitialize() {
         MusicPlayerConfigManager.load();
-        PayloadTypeRegistry.clientboundPlay().register(MusicControlPayload.TYPE, MusicControlPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(JukeboxMusicPayload.TYPE, JukeboxMusicPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(MusicControlPayload.TYPE, MusicControlPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(JukeboxMusicPayload.TYPE, JukeboxMusicPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
 
         CommandRegistrationCallback.EVENT.register(MusicCommands::register);
         ServerTickEvents.END_SERVER_TICK.register(JUKEBOX_PLAYBACK_SERVICE::tick);

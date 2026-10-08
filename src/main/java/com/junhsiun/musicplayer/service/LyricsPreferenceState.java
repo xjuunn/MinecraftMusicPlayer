@@ -3,7 +3,6 @@ package com.junhsiun.musicplayer.service;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.UUIDUtil;
-import net.minecraft.resources.Identifier;
 import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
@@ -13,7 +12,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public final class LyricsPreferenceState extends SavedData {
-    private static final Identifier ID = Identifier.fromNamespaceAndPath("musicplayer", "lyrics_preferences");
+    private static final String ID = "musicplayer/lyrics_preferences";
     private static final Codec<LyricsPreferenceState> CODEC = RecordCodecBuilder.create(instance ->
             instance.group(
                     Codec.unboundedMap(UUIDUtil.STRING_CODEC, Codec.BOOL)

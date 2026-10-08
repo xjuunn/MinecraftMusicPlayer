@@ -332,7 +332,7 @@ public final class MusicQueueService {
                 playerJukeboxRefresh.remove(player.getUUID());
 
                 if (currentPlayback == null || currentLyrics.isEmpty()) {
-                    player.sendOverlayMessage(Component.literal(""));
+                    player.displayClientMessage(Component.literal(""), true);
                     continue;
                 }
 
@@ -360,7 +360,7 @@ public final class MusicQueueService {
             }
 
             if (!overlayText.isEmpty()) {
-                player.sendOverlayMessage(Component.literal("♫ " + overlayText).withStyle(ChatFormatting.AQUA));
+                player.displayClientMessage(Component.literal("♫ " + overlayText).withStyle(ChatFormatting.AQUA), true);
             }
         }
     }
@@ -386,7 +386,7 @@ public final class MusicQueueService {
             lyricsPreference.put(player.getUUID(), true);
         } else {
             lyricsPreference.put(player.getUUID(), false);
-            player.sendOverlayMessage(Component.literal(""));
+            player.displayClientMessage(Component.literal(""), true);
         }
         if (lyricsPreferenceState != null) {
             lyricsPreferenceState.setEnabled(player.getUUID(), enabled);
@@ -397,7 +397,7 @@ public final class MusicQueueService {
         Boolean current = lyricsPreference.get(player.getUUID());
         if (current != null && current) {
             lyricsPreference.put(player.getUUID(), false);
-            player.sendOverlayMessage(Component.literal(""));
+            player.displayClientMessage(Component.literal(""), true);
             if (lyricsPreferenceState != null) {
                 lyricsPreferenceState.setEnabled(player.getUUID(), false);
             }
@@ -1322,7 +1322,7 @@ public final class MusicQueueService {
         Component empty = Component.literal("");
         server.getPlayerList().getPlayers().stream()
                 .filter(p -> !optedOutPlayers.contains(p.getUUID()))
-                .forEach(p -> p.sendOverlayMessage(empty));
+                .forEach(p -> p.displayClientMessage(empty, true));
     }
 
     private int activeListeners(MinecraftServer server) {

@@ -283,7 +283,7 @@ public final class LootMusicDiscService {
         }
 
         randomizable.unpackLootTable(player);
-        int inserted = insertPendingDiscs(container, player.level().getRandom(), count);
+        int inserted = insertPendingDiscs(container, player.level().random, count);
         if (inserted > 0) {
             MusicPlayerMod.LOGGER.info("Injected {} random music disc(s) into loot container: {}", inserted, containerKey);
             container.setChanged();
