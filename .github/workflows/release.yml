@@ -1,0 +1,149 @@
+name: Release
+
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "要发布的版本分支（新增分支时在此追加一行分支名）"
+        required: true
+        type: choice
+        options:
+          - master
+          - "26.2"
+          - "26.1"
+          - "1.21.11"
+      version:
+        description: "Release 版本号（如 2.3.0 或 v2.3.0）"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    name: 发布 ${{ github.event_name == 'push' && github.ref_name || format('{0} · {1}', github.event.inputs.version, github.event.inputs.branch) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || github.event.inputs.branch }}
+          fetch-depth: 0
+
+      - name: Parse tag
+        id: meta
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_BRANCH: ${{ github.event.inputs.branch }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "push" ]; then
+            TAG="$REF_NAME"
+            BASE="${TAG#v}"
+            SUFFIX=""
+            case "$BASE" in
+              *-[0-9]*)
+                CAND="${BASE##*-}"
+                if echo "$CAND" | grep -Eq '^[0-9]+(\.[0-9]+)*$'; then
+                  SUFFIX="$CAND"
+                  BASE="${BASE%-*}"
+                fi
+                ;;
+            esac
+          else
+            VERSION="${INPUT_VERSION#v}"
+            if [ -z "$VERSION" ]; then
+              echo "::error::版本号不能为空"
+              exit 1
+            fi
+            BASE="$VERSION"
+            SUFFIX=""
+            if [ "$INPUT_BRANCH" != "master" ]; then
+              SUFFIX="$INPUT_BRANCH"
+            fi
+            TAG="v$BASE"
+            if [ -n "$SUFFIX" ]; then
+              TAG="$TAG-$SUFFIX"
+            fi
+          fi
+          if [ -z "$BASE" ] || ! echo "$BASE" | grep -Eq '^[0-9A-Za-z][0-9A-Za-z._-]*$'; then
+            echo "::error::版本号格式无效: $BASE"
+            exit 1
+          fi
+          echo "event=$EVENT" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "release=v$BASE" >> "$GITHUB_OUTPUT"
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "suffix=$SUFFIX" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG release=v$BASE suffix=$SUFFIX"
+
+      - name: Verify suffix matches Minecraft version
+        if: ${{ steps.meta.outputs.event == 'push' && steps.meta.outputs.suffix != '' }}
+        shell: bash
+        env:
+          SUFFIX: ${{ steps.meta.outputs.suffix }}
+        run: |
+          set -euo pipefail
+          MC=$(sed -n 's/^minecraft_version=//p' gradle.properties | head -n1 | tr -d ' ')
+          if [ "$MC" != "$SUFFIX" ]; then
+            echo "::error::tag 后缀 -$SUFFIX 与所标记提交的 Minecraft 版本 ($MC) 不一致，请确认在正确分支上打 tag"
+            exit 1
+          fi
+
+      - uses: gradle/actions/wrapper-validation@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 26
+          distribution: oracle
+      - run: chmod +x gradlew
+
+      - name: Build
+        shell: bash
+        env:
+          MOD_VERSION: ${{ steps.meta.outputs.base }}
+        run: ./gradlew clean build -Pmod_version="$MOD_VERSION"
+
+      - name: Create tag and release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ steps.meta.outputs.event }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          RELEASE: ${{ steps.meta.outputs.release }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "push" ] && ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag "$TAG"
+            git push origin "refs/tags/$TAG"
+          fi
+          if ! gh release view "$RELEASE" >/dev/null 2>&1; then
+            gh release create "$RELEASE" --generate-notes || gh release view "$RELEASE" >/dev/null 2>&1
+          fi
+
+      - name: Upload jar
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE: ${{ steps.meta.outputs.release }}
+        run: |
+          set -euo pipefail
+          JARS=$(find build/libs -name '*-fabricmc*.jar' ! -name '*-sources.jar')
+          COUNT=$(echo "$JARS" | grep -c . || true)
+          if [ "$COUNT" -ne 1 ]; then
+            echo "::error::预期恰好 1 个主 jar，实际 $COUNT 个"
+            ls -la build/libs
+            exit 1
+          fi
+          echo "上传 $JARS -> release $RELEASE"
+          gh release upload "$RELEASE" --clobber "$JARS"
