@@ -12,16 +12,20 @@ import com.junhsiun.musicplayer.model.RadioInfo;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.model.UserPlaylistView;
+import com.junhsiun.musicplayer.network.OpenUrlPayload;
 import com.junhsiun.musicplayer.util.Messages;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
+import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ClickEvent;
@@ -41,6 +45,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class MusicCommands {
+    private static final String AUTHOR_USER_ID = "1732443319";
+    private static final String REPOSITORY_URL = "https://github.com/xjuunn/MinecraftMusicPlayer";
+
     private MusicCommands() {
     }
 
@@ -66,7 +73,8 @@ public final class MusicCommands {
                 .then(search())
                 .then(view())
                 .then(radio())
-                .then(config()));
+                .then(config())
+                .then(Commands.literal("star").executes(ctx -> sendStarAchievement(ctx.getSource()))));
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> help() {
@@ -80,7 +88,17 @@ public final class MusicCommands {
 
     private static int sendHelpOverview(CommandSourceStack source) {
         sendHeader(source);
-        Messages.sendSuccess(source, sectionHeader("音乐播放器", null), false);
+        MutableComponent title = sectionHeader("音乐播放器", null);
+        title.append(Component.literal("  ").withStyle(ChatFormatting.DARK_GRAY));
+        title.append(Messages.clickableCommand("Junhsiun", "查看作者歌单", "/music view user " + AUTHOR_USER_ID, ChatFormatting.AQUA));
+        title.append(Component.literal("  ").withStyle(ChatFormatting.DARK_GRAY));
+        title.append(Component.literal("仓库")
+                .withStyle(style -> style
+                        .withColor(ChatFormatting.WHITE)
+                        .withBold(true)
+                        .withClickEvent(new ClickEvent.RunCommand("/music star"))
+                        .withHoverEvent(new HoverEvent.ShowText(renderRepositoryHover()))));
+        Messages.sendSuccess(source, title, false);
         helpEntry(source, "now", "查看当前播放与进度");
         helpEntry(source, "play", "点播单曲或歌单");
         helpEntry(source, "skip", "跳过当前歌曲（投票/直接）");
@@ -102,6 +120,35 @@ public final class MusicCommands {
         Messages.sendSuccess(source, Component.literal("提示: 使用 /music help <命令> 查看详细用法，例如 /music help radio").withStyle(ChatFormatting.DARK_GRAY), false);
         Messages.sendSuccess(source, spacer(), false);
         return 1;
+    }
+
+    private static int sendStarAchievement(CommandSourceStack source) {
+        if (!(source.getEntity() instanceof ServerPlayer player)) {
+            return 0;
+        }
+        grantStarAchievement(source.getServer(), player);
+        if (ServerPlayNetworking.canSend(player, OpenUrlPayload.TYPE)) {
+            ServerPlayNetworking.send(player, new OpenUrlPayload(REPOSITORY_URL));
+        }
+        return 1;
+    }
+
+    private static void grantStarAchievement(MinecraftServer server, ServerPlayer player) {
+        Identifier advancementId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "star");
+        AdvancementHolder holder = server.getAdvancements().get(advancementId);
+        if (holder == null) {
+            MusicPlayerMod.LOGGER.warn("未找到成就定义: {}", advancementId);
+            return;
+        }
+        player.getAdvancements().award(holder, "star");
+    }
+
+    private static Component renderRepositoryHover() {
+        return Component.literal("✦ ").withStyle(ChatFormatting.YELLOW)
+                .append(Component.literal("成就解锁").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
+                .append(Component.literal("：为本项目点亮一颗 Star！").withStyle(ChatFormatting.GOLD))
+                .append(Component.literal("\n").withStyle(ChatFormatting.DARK_GRAY))
+                .append(Component.literal("点击在浏览器中打开仓库").withStyle(ChatFormatting.DARK_GRAY));
     }
 
     private static void helpEntry(CommandSourceStack source, String command, String description) {

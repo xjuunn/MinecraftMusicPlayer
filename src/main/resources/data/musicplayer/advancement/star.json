@@ -1,0 +1,19 @@
+{
+  "criteria": {
+    "star": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "title": "星星之火",
+    "description": "为MinecraftMusicPlayer点亮一颗star",
+    "icon": {
+      "id": "minecraft:torch"
+    },
+    "frame": "goal",
+    "show_toast": false,
+    "announce_to_chat": true,
+    "background": "minecraft:gui/advancements/backgrounds/adventure"
+  },
+  "rewards": {}
+}

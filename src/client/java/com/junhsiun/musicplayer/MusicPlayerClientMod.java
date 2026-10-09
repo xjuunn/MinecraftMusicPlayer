@@ -7,6 +7,8 @@ import com.junhsiun.musicplayer.client.JukeboxCoverRenderer;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
+import com.junhsiun.musicplayer.network.OpenUrlPayload;
+import com.mojang.blaze3d.Blaze3D;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -18,6 +20,8 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
+import java.net.URI;
+
 public final class MusicPlayerClientMod implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
@@ -26,6 +30,19 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
         );
         ClientPlayNetworking.registerGlobalReceiver(JukeboxMusicPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> ClientJukeboxController.getInstance().handle(payload))
+        );
+        ClientPlayNetworking.registerGlobalReceiver(OpenUrlPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> {
+                    String url = payload.url();
+                    if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
+                        return;
+                    }
+                    try {
+                        Blaze3D.openUri(URI.create(url));
+                    } catch (Exception exception) {
+                        MusicPlayerMod.LOGGER.warn("打开链接失败: {}", url, exception);
+                    }
+                })
         );
         LevelRenderEvents.COLLECT_SUBMITS.register(JukeboxCoverRenderer::render);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
