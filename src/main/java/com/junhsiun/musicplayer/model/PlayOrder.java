@@ -13,6 +13,14 @@ public enum PlayOrder {
         };
     }
 
+    public String translationKey() {
+        return switch (this) {
+            case SEQUENTIAL -> "musicplayer.play_order.sequential";
+            case REVERSE -> "musicplayer.play_order.reverse";
+            case SHUFFLE -> "musicplayer.play_order.shuffle";
+        };
+    }
+
     public static PlayOrder fromString(String value) {
         return switch (value.toLowerCase()) {
             case "reverse", "倒序" -> REVERSE;

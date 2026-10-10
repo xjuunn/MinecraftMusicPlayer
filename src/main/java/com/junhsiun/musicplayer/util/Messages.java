@@ -53,12 +53,31 @@ public final class Messages {
         sendChat(source, component);
     }
 
+    /**
+     * 将字符串渲染为组件：若字符串形如翻译键（{@code musicplayer.xxx.yyy}）则按翻译解析，否则按普通文本解析。
+     * 用于网络传输的失败原因、异常消息等既可能是键也可能是原始文本的场景。
+     */
+    public static Component textOrTranslatable(String text) {
+        if (text != null && text.matches("musicplayer\\.[a-z0-9_]+(?:\\.[a-z0-9_]+)+")) {
+            return Component.translatable(text);
+        }
+        return Component.literal(text == null ? "" : text);
+    }
+
     public static void info(CommandSourceStack source, String text) {
         info(source, text, false);
     }
 
     public static void info(CommandSourceStack source, String text, boolean broadcastToOps) {
-        sendChat(source, Component.literal(text).withStyle(ChatFormatting.GRAY));
+        info(source, Component.literal(text), broadcastToOps);
+    }
+
+    public static void info(CommandSourceStack source, Component component) {
+        info(source, component, false);
+    }
+
+    public static void info(CommandSourceStack source, Component component, boolean broadcastToOps) {
+        sendChat(source, component.copy().withStyle(ChatFormatting.GRAY));
     }
 
     public static void success(CommandSourceStack source, String text) {
@@ -66,20 +85,36 @@ public final class Messages {
     }
 
     public static void success(CommandSourceStack source, String text, boolean broadcastToOps) {
-        sendChat(source, Component.literal(text).withStyle(ChatFormatting.GREEN));
+        success(source, Component.literal(text), broadcastToOps);
+    }
+
+    public static void success(CommandSourceStack source, Component component) {
+        success(source, component, false);
+    }
+
+    public static void success(CommandSourceStack source, Component component, boolean broadcastToOps) {
+        sendChat(source, component.copy().withStyle(ChatFormatting.GREEN));
     }
 
     public static void warning(CommandSourceStack source, String text) {
-        Component component = Component.literal(text).withStyle(ChatFormatting.RED);
+        warning(source, Component.literal(text));
+    }
+
+    public static void warning(CommandSourceStack source, Component component) {
+        Component styled = component.copy().withStyle(ChatFormatting.RED);
         if (source.getEntity() instanceof ServerPlayer player) {
-            player.sendSystemMessage(component);
+            player.sendSystemMessage(styled);
             return;
         }
-        source.sendFailure(component);
+        source.sendFailure(styled);
     }
 
     public static void loading(CommandSourceStack source, String text) {
-        sendChat(source, Component.literal(text).withStyle(ChatFormatting.YELLOW));
+        loading(source, Component.literal(text));
+    }
+
+    public static void loading(CommandSourceStack source, Component component) {
+        sendChat(source, component.copy().withStyle(ChatFormatting.YELLOW));
     }
 
     public static void sendLine(CommandSourceStack source, Component component) {
@@ -107,33 +142,45 @@ public final class Messages {
     }
 
     public static MutableComponent clickableCommand(String label, String hover, String command, ChatFormatting color) {
-        return Component.literal(label).setStyle(
+        return clickableCommand(Component.literal(label), Component.literal(hover), command, color);
+    }
+
+    public static MutableComponent clickableCommand(Component label, Component hover, String command, ChatFormatting color) {
+        return label.copy().setStyle(
                 Style.EMPTY.withColor(color)
                         .withClickEvent(new ClickEvent.RunCommand(command))
-                        .withHoverEvent(new HoverEvent.ShowText(Component.literal(hover)))
+                        .withHoverEvent(new HoverEvent.ShowText(hover))
         );
     }
 
     public static MutableComponent clickableUrl(String label, String hover, String url, ChatFormatting color) {
+        return clickableUrl(Component.literal(label), Component.literal(hover), url, color);
+    }
+
+    public static MutableComponent clickableUrl(Component label, Component hover, String url, ChatFormatting color) {
         if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
-            return Component.literal(label).withStyle(color);
+            return label.copy().withStyle(color);
         }
         try {
-            return Component.literal(label).setStyle(
+            return label.copy().setStyle(
                     Style.EMPTY.withColor(color)
                             .withClickEvent(new ClickEvent.OpenUrl(URI.create(url)))
-                            .withHoverEvent(new HoverEvent.ShowText(Component.literal(hover)))
+                            .withHoverEvent(new HoverEvent.ShowText(hover))
             );
         } catch (Exception ignored) {
-            return Component.literal(label).withStyle(color);
+            return label.copy().withStyle(color);
         }
     }
 
     public static MutableComponent suggestable(String label, String hover, String command, ChatFormatting color) {
-        return Component.literal(label).setStyle(
+        return suggestable(Component.literal(label), Component.literal(hover), command, color);
+    }
+
+    public static MutableComponent suggestable(Component label, Component hover, String command, ChatFormatting color) {
+        return label.copy().setStyle(
                 Style.EMPTY.withColor(color)
                         .withClickEvent(new ClickEvent.SuggestCommand(command))
-                        .withHoverEvent(new HoverEvent.ShowText(Component.literal(hover)))
+                        .withHoverEvent(new HoverEvent.ShowText(hover))
         );
     }
 }

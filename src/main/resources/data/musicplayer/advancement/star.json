@@ -5,8 +5,8 @@
     }
   },
   "display": {
-    "title": "星星之火",
-    "description": "为MinecraftMusicPlayer点亮一颗star",
+    "title": {"translate": "musicplayer.advancement.star.title"},
+    "description": {"translate": "musicplayer.advancement.star.description"},
     "icon": {
       "id": "minecraft:torch"
     },

@@ -21,11 +21,16 @@ public final class SongRequestPolicy {
         REJECT, NOTICE
     }
 
-    /** 点歌决策结果。{@code message} 为要展示给玩家的文本。 */
-    public record Decision(Kind kind, String message) {
+    /** 点歌决策结果。{@code key} 为翻译键（为空表示允许点歌），{@code args} 为翻译参数。 */
+    public record Decision(Kind kind, String key, List<Object> args) {
         /** 允许点歌的便捷构造。 */
         public static Decision allowed() {
-            return new Decision(Kind.NOTICE, "");
+            return new Decision(Kind.NOTICE, "", List.of());
+        }
+
+        /** 允许点歌（key 为空）。 */
+        public boolean isAllowed() {
+            return key == null || key.isEmpty();
         }
     }
 
@@ -85,16 +90,16 @@ public final class SongRequestPolicy {
             boolean songActiveOrQueued) {
 
         if (!allowSongRequest) {
-            return new Decision(Kind.REJECT, "管理员已禁用歌曲点播。");
+            return new Decision(Kind.REJECT, "musicplayer.request.disabled", List.of());
         }
         if (queueSize >= maxQueueSize) {
-            return new Decision(Kind.REJECT, "单点队列已满，请稍后再试。");
+            return new Decision(Kind.REJECT, "musicplayer.request.queue_full", List.of());
         }
         if (!PlayerSongLimiter.canRequest(playingRequesterId, queued, player, maxSongsPerPlayer, pendingCount)) {
-            return new Decision(Kind.REJECT, "你一次最多只能点 " + maxSongsPerPlayer + " 首歌曲，请先播放或移除后再试。");
+            return new Decision(Kind.REJECT, "musicplayer.request.player_limit", List.of(maxSongsPerPlayer));
         }
         if (songActiveOrQueued) {
-            return new Decision(Kind.NOTICE, "该歌曲正在播放或已在队列中。");
+            return new Decision(Kind.NOTICE, "musicplayer.request.duplicate", List.of());
         }
         return Decision.allowed();
     }

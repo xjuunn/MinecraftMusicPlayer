@@ -20,6 +20,7 @@ import com.junhsiun.musicplayer.platform.url.QijieyaUrlProvider;
 import com.junhsiun.musicplayer.platform.url.SongUrlResolver;
 import com.junhsiun.musicplayer.platform.url.VkeysUrlProvider;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
+import net.minecraft.network.chat.Component;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -176,7 +177,7 @@ public final class NeteaseApiClient {
                     entries.add(new SearchEntry(
                             playlistId,
                             str(playlist, "name"),
-                            "共 " + intVal(playlist, "trackCount") + " 首",
+                            Component.translatable("musicplayer.entry.track_count", intVal(playlist, "trackCount")),
                             viewPlaylistCommand(playlistId),
                             ""
                     ));
@@ -217,7 +218,7 @@ public final class NeteaseApiClient {
                         entries.add(new SearchEntry(
                                 artistId,
                                 str(artist, "name"),
-                                "作者",
+                                Component.translatable("musicplayer.entry.artist"),
                                 viewArtistCommand(artistId),
                                 ""
                         ));
@@ -277,7 +278,7 @@ public final class NeteaseApiClient {
                 playlists = fetchTopPlaylists("全部", HOT_PLAYLIST_FETCH_SIZE, 0);
             }
             if (playlists.isEmpty()) {
-                throw new IllegalStateException("无法获取热门歌单。");
+                throw new IllegalStateException("musicplayer.error.hot_playlists_failed");
             }
 
             Collections.shuffle(playlists, random);
@@ -297,7 +298,7 @@ public final class NeteaseApiClient {
             }
 
             if (candidateNodes.isEmpty()) {
-                throw new IllegalStateException("热门歌单中没有可用歌曲。");
+                throw new IllegalStateException("musicplayer.error.hot_playlists_no_songs");
             }
 
             Collections.shuffle(candidateNodes, random);
@@ -322,7 +323,7 @@ public final class NeteaseApiClient {
                 }
             }
             if (tracks.isEmpty()) {
-                throw new IllegalStateException("随机热门歌曲解析失败。");
+                throw new IllegalStateException("musicplayer.error.random_hot_resolve_failed");
             }
             return tracks;
         }, EXECUTOR);
@@ -370,7 +371,7 @@ public final class NeteaseApiClient {
                     entries.add(new SearchEntry(
                             artistId,
                             str(node, "name"),
-                            "作者",
+                            Component.translatable("musicplayer.entry.artist"),
                             viewArtistCommand(artistId),
                             ""
                     ));
@@ -399,7 +400,7 @@ public final class NeteaseApiClient {
                     entries.add(new SearchEntry(
                             rid,
                             rname,
-                            "播客",
+                            Component.translatable("musicplayer.entry.radio"),
                             viewRadioCommand(rid),
                             playRadioCommand(rid)
                     ));
@@ -434,7 +435,7 @@ public final class NeteaseApiClient {
         return getJson("/dj/detail", "rid", rid).thenApply(root -> {
             JsonObject data = obj(root, "data");
             if (data == null) {
-                throw new RuntimeException("电台详情为空: " + rid);
+                throw new IllegalStateException("musicplayer.error.radio_detail_empty");
             }
             JsonObject dj = obj(data, "dj");
             return new RadioInfo(
@@ -486,7 +487,7 @@ public final class NeteaseApiClient {
         return getJson("/dj/program/detail", "id", programId).thenApply(root -> {
             JsonObject prog = obj(root, "program");
             if (prog == null) {
-                throw new RuntimeException("节目详情为空: " + programId);
+                throw new IllegalStateException("musicplayer.error.program_detail_empty");
             }
             JsonObject mainSong = obj(prog, "mainSong");
             String mainTrackId = mainSong != null ? str(mainSong, "id") : "";
@@ -522,7 +523,7 @@ public final class NeteaseApiClient {
                         entries.add(new SearchEntry(
                                 rid,
                                 name,
-                                rcmd.isBlank() ? "播客" : rcmd,
+                                rcmd.isBlank() ? Component.translatable("musicplayer.entry.radio") : Component.literal(rcmd),
                                 viewRadioCommand(rid),
                                 ""
                         ));
@@ -545,7 +546,7 @@ public final class NeteaseApiClient {
                 entries.add(new SearchEntry(
                         String.valueOf(cateId),
                         name,
-                        radioCount + " 个播客",
+                        Component.translatable("musicplayer.entry.radio_count", radioCount),
                         "",
                         ""
                 ));
@@ -678,7 +679,7 @@ public final class NeteaseApiClient {
     private static Request baseRequest(String absoluteUrl, String[] queryPairs, String accept) {
         HttpUrl parsed = HttpUrl.parse(absoluteUrl);
         if (parsed == null) {
-            throw new IllegalArgumentException("无效的 API 地址: " + absoluteUrl);
+            throw new IllegalArgumentException("musicplayer.error.invalid_api_url");
         }
         HttpUrl.Builder builder = parsed.newBuilder();
         for (int index = 0; index + 1 < queryPairs.length; index += 2) {
