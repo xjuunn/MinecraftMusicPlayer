@@ -6,6 +6,7 @@ import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
+import com.junhsiun.musicplayer.network.OpenUrlPayload;
 import com.junhsiun.musicplayer.platform.NeteaseApiClient;
 import com.junhsiun.musicplayer.service.JukeboxPlaybackService;
 import com.junhsiun.musicplayer.service.LootMusicDiscService;
@@ -41,6 +42,7 @@ public final class MusicPlayerMod implements ModInitializer {
         MusicPlayerConfigManager.load();
         PayloadTypeRegistry.playS2C().register(MusicControlPayload.TYPE, MusicControlPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(JukeboxMusicPayload.TYPE, JukeboxMusicPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(OpenUrlPayload.TYPE, OpenUrlPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
 
         CommandRegistrationCallback.EVENT.register(MusicCommands::register);
