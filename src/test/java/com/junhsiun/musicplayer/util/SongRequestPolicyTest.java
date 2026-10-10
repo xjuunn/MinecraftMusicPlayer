@@ -33,13 +33,13 @@ class SongRequestPolicyTest {
     void 全部条件满足时允许点歌() {
         Decision d = SongRequestPolicy.decide(true, 0, 40, null, List.of(), ALICE, 5, "100", false);
         assertEquals(Kind.NOTICE, d.kind());
-        assertEquals("", d.message());
+        assertEquals("", d.key());
     }
 
     @Test
     void allowed工厂返回空消息() {
         Decision d = Decision.allowed();
-        assertEquals("", d.message());
+        assertEquals("", d.key());
         assertEquals(Kind.NOTICE, d.kind());
     }
 
@@ -49,14 +49,14 @@ class SongRequestPolicyTest {
     void 点歌被禁用时拒绝() {
         Decision d = SongRequestPolicy.decide(false, 0, 40, null, List.of(), ALICE, 5, "100", false);
         assertEquals(Kind.REJECT, d.kind());
-        assertEquals("管理员已禁用歌曲点播。", d.message());
+        assertEquals("musicplayer.request.disabled", d.key());
     }
 
     @Test
     void 点歌被禁用优先于其他校验() {
         // 即使队列满，禁用点歌也应返回禁用消息
         Decision d = SongRequestPolicy.decide(false, 100, 40, null, List.of(), ALICE, 5, "100", false);
-        assertEquals("管理员已禁用歌曲点播。", d.message());
+        assertEquals("musicplayer.request.disabled", d.key());
     }
 
     // ── 队列满 ────────────────────────────────────────────
@@ -65,13 +65,13 @@ class SongRequestPolicyTest {
     void 队列已满时拒绝() {
         Decision d = SongRequestPolicy.decide(true, 40, 40, null, List.of(), ALICE, 5, "100", false);
         assertEquals(Kind.REJECT, d.kind());
-        assertEquals("单点队列已满，请稍后再试。", d.message());
+        assertEquals("musicplayer.request.queue_full", d.key());
     }
 
     @Test
     void 队列未满时允许() {
         Decision d = SongRequestPolicy.decide(true, 39, 40, null, List.of(), ALICE, 5, "100", false);
-        assertEquals("", d.message());
+        assertEquals("", d.key());
     }
 
     @Test
@@ -83,7 +83,7 @@ class SongRequestPolicyTest {
     @Test
     void 队列上限极大时大量歌曲也允许() {
         Decision d = SongRequestPolicy.decide(true, 999, 1000, null, List.of(), ALICE, 5, "100", false);
-        assertEquals("", d.message());
+        assertEquals("", d.key());
     }
 
     // ── 每玩家点歌上限 ────────────────────────────────────
@@ -93,14 +93,14 @@ class SongRequestPolicyTest {
         List<QueuedTrack> queued = List.of(track(ALICE), track(ALICE), track(ALICE), track(ALICE));
         Decision d = SongRequestPolicy.decide(true, 0, 40, ALICE, queued, ALICE, 5, "100", false);
         assertEquals(Kind.REJECT, d.kind());
-        assertEquals("你一次最多只能点 5 首歌曲，请先播放或移除后再试。", d.message());
+        assertEquals("musicplayer.request.player_limit", d.key());
     }
 
     @Test
     void 每玩家未达上限时允许() {
         List<QueuedTrack> queued = List.of(track(ALICE), track(ALICE), track(ALICE));
         Decision d = SongRequestPolicy.decide(true, 0, 40, ALICE, queued, ALICE, 5, "100", false);
-        assertEquals("", d.message());
+        assertEquals("", d.key());
     }
 
     @Test
@@ -108,7 +108,7 @@ class SongRequestPolicyTest {
         List<QueuedTrack> queued = List.of(track(BOB), track(BOB), track(BOB), track(BOB));
         // ALICE 未点任何歌，即使队列被 BOB 占满，ALICE 仍可点
         Decision d = SongRequestPolicy.decide(true, 4, 40, BOB, queued, ALICE, 5, "100", false);
-        assertEquals("", d.message());
+        assertEquals("", d.key());
     }
 
     @Test
@@ -122,7 +122,7 @@ class SongRequestPolicyTest {
         List<QueuedTrack> queued = List.of(track(ALICE), track(ALICE), track(ALICE), track(ALICE));
         Decision d = SongRequestPolicy.decide(true, 0, 40, ALICE, queued, ALICE, 10, "100", false);
         // 占用 1(播放) + 4(队列) = 5 < 10，应允许
-        assertEquals("", d.message());
+        assertEquals("", d.key());
     }
 
     @Test
@@ -138,13 +138,13 @@ class SongRequestPolicyTest {
         // 队列为空，但 ALICE 已有 5 首在途解析中 → 拒绝
         Decision d = SongRequestPolicy.decide(true, 0, 40, null, List.of(), ALICE, 5, 5, "100", false);
         assertEquals(Kind.REJECT, d.kind());
-        assertEquals("你一次最多只能点 5 首歌曲，请先播放或移除后再试。", d.message());
+        assertEquals("musicplayer.request.player_limit", d.key());
     }
 
     @Test
     void 在途请求未达上限时允许() {
         Decision d = SongRequestPolicy.decide(true, 0, 40, null, List.of(), ALICE, 5, 4, "100", false);
-        assertEquals("", d.message());
+        assertEquals("", d.key());
     }
 
     @Test
@@ -153,7 +153,7 @@ class SongRequestPolicyTest {
         List<QueuedTrack> queued = List.of(track(ALICE), track(ALICE), track(ALICE));
         Decision d = SongRequestPolicy.decide(true, 3, 40, ALICE, queued, ALICE, 5, 1, "100", false);
         assertEquals(Kind.REJECT, d.kind());
-        assertEquals("你一次最多只能点 5 首歌曲，请先播放或移除后再试。", d.message());
+        assertEquals("musicplayer.request.player_limit", d.key());
     }
 
     @Test
@@ -161,7 +161,7 @@ class SongRequestPolicyTest {
         // 队列里全是 ALICE 的歌，BOB 自己在途 4 首 → 仍可点
         List<QueuedTrack> queued = List.of(track(ALICE), track(ALICE), track(ALICE));
         Decision d = SongRequestPolicy.decide(true, 3, 40, null, queued, BOB, 5, 4, "100", false);
-        assertEquals("", d.message());
+        assertEquals("", d.key());
         // BOB 自己在途满 5 首 → 拒绝
         Decision rejected = SongRequestPolicy.decide(true, 3, 40, null, queued, BOB, 5, 5, "100", false);
         assertEquals(Kind.REJECT, rejected.kind());
@@ -178,7 +178,7 @@ class SongRequestPolicyTest {
     void 在途计数优先于重复判定() {
         // 队列未满、在途已达上限，且歌曲已重复 → 仍返回上限消息
         Decision d = SongRequestPolicy.decide(true, 0, 40, null, List.of(), ALICE, 5, 5, "100", true);
-        assertEquals("你一次最多只能点 5 首歌曲，请先播放或移除后再试。", d.message());
+        assertEquals("musicplayer.request.player_limit", d.key());
     }
 
     // ── 重复歌曲 ──────────────────────────────────────────
@@ -187,15 +187,15 @@ class SongRequestPolicyTest {
     void 歌曲正在播放或已在队列时给出提示() {
         Decision d = SongRequestPolicy.decide(true, 0, 40, null, List.of(), ALICE, 5, "100", true);
         assertEquals(Kind.NOTICE, d.kind());
-        assertEquals("该歌曲正在播放或已在队列中。", d.message());
+        assertEquals("musicplayer.request.duplicate", d.key());
     }
 
     @Test
     void 歌曲未重复时允许() {
         Decision d = SongRequestPolicy.decide(true, 0, 40, null, List.of(), ALICE, 5, "100", false);
         Decision d2 = SongRequestPolicy.decide(true, 0, 40, null, List.of(), ALICE, 5, "200", false);
-        assertEquals("", d.message());
-        assertEquals("", d2.message());
+        assertEquals("", d.key());
+        assertEquals("", d2.key());
     }
 
     // ── 校验顺序 ──────────────────────────────────────────
@@ -204,7 +204,7 @@ class SongRequestPolicyTest {
     void 队列满优先于上限判定() {
         // 队列已满（40/40），即使 ALICE 未达上限也应返回队列满消息
         Decision d = SongRequestPolicy.decide(true, 40, 40, null, List.of(), ALICE, 5, "100", false);
-        assertEquals("单点队列已满，请稍后再试。", d.message());
+        assertEquals("musicplayer.request.queue_full", d.key());
     }
 
     @Test
@@ -212,7 +212,7 @@ class SongRequestPolicyTest {
         // 队列未满，ALICE 达到上限，且歌曲已重复 → 应返回上限消息
         List<QueuedTrack> queued = List.of(track(ALICE), track(ALICE), track(ALICE), track(ALICE));
         Decision d = SongRequestPolicy.decide(true, 4, 40, ALICE, queued, ALICE, 5, "100", true);
-        assertEquals("你一次最多只能点 5 首歌曲，请先播放或移除后再试。", d.message());
+        assertEquals("musicplayer.request.player_limit", d.key());
     }
 
     // ── 边界与安全 ────────────────────────────────────────
@@ -220,13 +220,13 @@ class SongRequestPolicyTest {
     @Test
     void 队列为null时不崩溃() {
         Decision d = SongRequestPolicy.decide(true, 0, 40, null, null, ALICE, 5, "100", false);
-        assertEquals("", d.message());
+        assertEquals("", d.key());
     }
 
     @Test
     void null歌曲ID不崩溃() {
         Decision d = SongRequestPolicy.decide(true, 0, 40, null, List.of(), ALICE, 5, null, true);
-        assertEquals("该歌曲正在播放或已在队列中。", d.message());
+        assertEquals("musicplayer.request.duplicate", d.key());
     }
 
     @Test
@@ -238,8 +238,8 @@ class SongRequestPolicyTest {
 
     @Test
     void Decision是record可比较() {
-        Decision a = new Decision(Kind.REJECT, "x");
-        Decision b = new Decision(Kind.REJECT, "x");
+        Decision a = new Decision(Kind.REJECT, "x", List.of());
+        Decision b = new Decision(Kind.REJECT, "x", List.of());
         assertEquals(a, b);
     }
 
@@ -248,7 +248,7 @@ class SongRequestPolicyTest {
         // ALICE 正在播放自己的歌（占用1），队列中还有3首 → 占用4，仍可点1首
         List<QueuedTrack> queued = List.of(track(ALICE), track(ALICE), track(ALICE));
         Decision d = SongRequestPolicy.decide(true, 3, 40, ALICE, queued, ALICE, 5, "100", false);
-        assertEquals("", d.message());
+        assertEquals("", d.key());
     }
 
     @Test
@@ -256,6 +256,6 @@ class SongRequestPolicyTest {
         // 播放中的是 BOB 的歌，ALICE 只在队列有1首 → 占用1，ALICE 仍可点
         List<QueuedTrack> queued = List.of(track(ALICE));
         Decision d = SongRequestPolicy.decide(true, 1, 40, BOB, queued, ALICE, 5, "100", false);
-        assertEquals("", d.message());
+        assertEquals("", d.key());
     }
 }

@@ -115,11 +115,11 @@ public final class LootMusicDiscService {
             return;
         }
         if (!pendingPlayers.add(player.getUUID())) {
-            player.sendSystemMessage(Component.literal("已有正在进行的随机生成，请稍候...").withStyle(ChatFormatting.YELLOW));
+            player.sendSystemMessage(Component.translatable("musicplayer.loot.already_generating").withStyle(ChatFormatting.YELLOW));
             return;
         }
 
-        player.sendSystemMessage(Component.literal("正在生成随机音乐...").withStyle(ChatFormatting.GRAY));
+        player.sendSystemMessage(Component.translatable("musicplayer.loot.generating").withStyle(ChatFormatting.GRAY));
 
         ItemStack baseDisc = held.copyWithCount(1);
         if (held.getCount() == 1) {
@@ -147,7 +147,7 @@ public final class LootMusicDiscService {
                     if (!player.getInventory().add(returned)) {
                         player.drop(returned, false, true);
                     }
-                    player.sendSystemMessage(Component.literal("生成失败，唱片已归还").withStyle(ChatFormatting.RED));
+                    player.sendSystemMessage(Component.translatable("musicplayer.loot.failed_returned").withStyle(ChatFormatting.RED));
                     return;
                 }
                 giveBurnedDisc(player, baseDisc, tracks.getFirst());
@@ -209,7 +209,7 @@ public final class LootMusicDiscService {
         if (!player.getInventory().add(burnedDisc)) {
             player.drop(burnedDisc, false, true);
         }
-        player.sendSystemMessage(Component.literal("已生成: ").withStyle(ChatFormatting.GREEN)
+        player.sendSystemMessage(Component.translatable("musicplayer.loot.generated").withStyle(ChatFormatting.GREEN)
                 .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
                 .append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY)));
