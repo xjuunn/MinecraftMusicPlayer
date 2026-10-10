@@ -20,6 +20,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -173,7 +174,7 @@ public final class MusicQueueService {
         paused = true;
         server.getPlayerList().getPlayers().stream()
                 .filter(p -> !optedOutPlayers.contains(p.getUUID()))
-                .forEach(p -> sendStop(p, "已暂停"));
+                .forEach(p -> sendStop(p, "musicplayer.stop.paused"));
     }
 
     public void resume(MinecraftServer server) {
@@ -249,7 +250,7 @@ public final class MusicQueueService {
 
         if (currentPlayback != null) {
             if (!paused && config.autoAdvance && now >= currentPlayback.expectedEndAt()) {
-                advance(server, "");
+                advance(server, Component.empty());
                 return;
             }
             if (!radioPlaylistMode && currentLyrics.isEmpty() && !lyricFetchAttempted) {
@@ -416,7 +417,7 @@ public final class MusicQueueService {
     }
 
     public void shutdown(MinecraftServer server) {
-        stop(server, "服务器关闭，播放已停止。");
+        stop(server, "musicplayer.stop.server_shutdown");
         queue.clear();
         playlistQueue.clear();
         trackCache.clear();
@@ -478,14 +479,15 @@ public final class MusicQueueService {
         }
 
         if ("ended".equals(payload.action())) {
-            advance(server, "");
+            advance(server, Component.empty());
             return;
         }
         if ("failed".equals(payload.action())) {
-            String message = payload.message() == null || payload.message().isBlank()
-                    ? "当前歌曲播放失败，正在切换到下一首。"
-                    : "当前歌曲播放失败，正在切换到下一首。原因: " + payload.message();
-            advance(server, message);
+            Component reason = payload.message() == null || payload.message().isBlank()
+                    ? Component.translatable("musicplayer.play.failed_advance")
+                    : Component.translatable("musicplayer.play.failed_advance_reason",
+                    Messages.textOrTranslatable(payload.message()));
+            advance(server, reason);
         }
         if ("position".equals(payload.action())) {
             try {
@@ -510,13 +512,13 @@ public final class MusicQueueService {
 
     public void leavePlayer(ServerPlayer player) {
         optedOutPlayers.add(player.getUUID());
-        sendStop(player, "你已退出当前播放。");
+        sendStop(player, "musicplayer.stop.exit");
     }
 
     public void mutePlayerOnce(ServerPlayer player) {
         optedOutPlayers.add(player.getUUID());
         mutedOncePlayers.add(player.getUUID());
-        sendStop(player, "你已静音当前歌曲。");
+        sendStop(player, "musicplayer.stop.muted");
     }
 
     // ── Request song ─────────────────────────────────────────────────
@@ -535,12 +537,12 @@ public final class MusicQueueService {
                 pendingSongRequests.getOrDefault(requesterUuid, 0),
                 songId,
                 isTrackActiveOrQueued(songId));
-        if (decision.message() != null && !decision.message().isEmpty()) {
+        if (!decision.isAllowed()) {
+            Component message = Component.translatable(decision.key(), decision.args().toArray());
             if (decision.kind() == SongRequestPolicy.Kind.REJECT) {
-                source.sendFailure(Component.literal(decision.message()));
+                source.sendFailure(message);
             } else {
-                source.sendSuccess(() -> Component.literal(decision.message())
-                        .withStyle(ChatFormatting.YELLOW), false);
+                source.sendSuccess(() -> message.copy().withStyle(ChatFormatting.YELLOW), false);
             }
             return;
         }
@@ -557,11 +559,12 @@ public final class MusicQueueService {
                 server.execute(() -> {
                     try {
                         if (throwable != null) {
-                            source.sendFailure(Component.literal("点播失败: " + rootMessage(throwable)));
+                            source.sendFailure(Component.translatable("musicplayer.song.request_failed",
+                                    Messages.textOrTranslatable(rootMessage(throwable))));
                             return;
                         }
                         if (track == null || track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
-                            source.sendFailure(Component.literal("点播失败: 无法获取可播放的音乐链接"));
+                            source.sendFailure(Component.translatable("musicplayer.song.no_source"));
                             return;
                         }
                         enqueueOrStart(server, source, requester, track);
@@ -574,7 +577,8 @@ public final class MusicQueueService {
         } catch (RuntimeException ex) {
             server.execute(() -> {
                 try {
-                    source.sendFailure(Component.literal("点播失败: " + rootMessage(ex)));
+                    source.sendFailure(Component.translatable("musicplayer.song.request_failed",
+                            Messages.textOrTranslatable(rootMessage(ex))));
                 } finally {
                     releaseSongRequest(requesterUuid);
                 }
@@ -604,17 +608,18 @@ public final class MusicQueueService {
 
     public void requestPlaylist(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String playlistId, boolean reverse) {
         if (!MusicPlayerConfigManager.get().allowPlaylistRequest) {
-            source.sendFailure(Component.literal("管理员已禁用歌单点播。"));
+            source.sendFailure(Component.translatable("musicplayer.playlist.disabled"));
             return;
         }
         enqueueRequest(() -> MusicPlayerMod.netease().playlistDetail(playlistId).handle((playlist, throwable) -> {
             server.execute(() -> {
                 if (throwable != null) {
-                    source.sendFailure(Component.literal("加载歌单失败: " + rootMessage(throwable)));
+                    source.sendFailure(Component.translatable("musicplayer.playlist.load_failed",
+                            Messages.textOrTranslatable(rootMessage(throwable))));
                     return;
                 }
                 if (playlist.trackCount() <= 0) {
-                    source.sendFailure(Component.literal("该歌单没有可播放的歌曲。"));
+                    source.sendFailure(Component.translatable("musicplayer.playlist.no_songs"));
                     return;
                 }
 
@@ -646,11 +651,11 @@ public final class MusicQueueService {
                     resolveTrack(first.songId()).whenComplete((track, trackThrowable) -> server.execute(() -> {
                         if (trackThrowable != null) {
                             MusicPlayerMod.LOGGER.warn("歌单首曲加载失败: {}", rootMessage(trackThrowable));
-                            advance(server, "歌单首曲加载失败，跳过到下一首。");
+                            advance(server, Component.translatable("musicplayer.playlist.first_track_failed"));
                             return;
                         }
                         startTrack(server, track, first.requesterId(), first.requesterName());
-                        source.sendSuccess(() -> Component.literal("歌单模式已启动: [" + playlist.title() + "]，共 " + playlistTotalTracks + " 首")
+                        source.sendSuccess(() -> Component.translatable("musicplayer.playlist.started", playlist.title(), playlistTotalTracks)
                                 .withStyle(ChatFormatting.GREEN), false);
 
                         if (reverse) {
@@ -667,7 +672,7 @@ public final class MusicQueueService {
                     MusicPlayerMod.netease().playlistTracksPage(playlistId, lastIndex, 1)
                             .whenComplete((tracks, t) -> server.execute(() -> {
                                 if (t != null || tracks == null || tracks.isEmpty()) {
-                                    source.sendFailure(Component.literal("无法加载歌单最后一首歌曲。"));
+                                    source.sendFailure(Component.translatable("musicplayer.playlist.last_track_failed"));
                                     return;
                                 }
                                 SearchEntry entry = tracks.getFirst();
@@ -681,7 +686,8 @@ public final class MusicQueueService {
                                     playlistTrackIndex = lastIndex - 1;
                                     server.execute(() -> loadAndStart.run());
                                 }).exceptionally(ex -> {
-                                    server.execute(() -> source.sendFailure(Component.literal("加载第一首歌曲失败: " + rootMessage(ex))));
+                                    server.execute(() -> source.sendFailure(Component.translatable("musicplayer.playlist.first_track_load_failed",
+                                            Messages.textOrTranslatable(rootMessage(ex)))));
                                     return null;
                                 });
                             }));
@@ -744,12 +750,12 @@ public final class MusicQueueService {
     public void requestProgram(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String programId) {
         enqueueRequest(() -> MusicPlayerMod.netease().programDetail(programId).thenCompose(program -> {
             if (program == null || program.mainTrackId().isBlank()) {
-                server.execute(() -> source.sendFailure(Component.literal("该节目没有可播放的音频。")));
+                server.execute(() -> source.sendFailure(Component.translatable("musicplayer.radio.program_no_audio")));
                 return CompletableFuture.<Void>completedFuture(null);
             }
             return MusicPlayerMod.netease().resolveRadioSong(program.mainTrackId()).thenApply(track -> {
                 if (track == null || track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
-                    server.execute(() -> source.sendFailure(Component.literal("无法获取节目音频源。")));
+                    server.execute(() -> source.sendFailure(Component.translatable("musicplayer.radio.program_no_source")));
                     return null;
                 }
                 String programTitle = program.name();
@@ -759,7 +765,8 @@ public final class MusicQueueService {
                 return null;
             });
         }).exceptionally(throwable -> {
-            server.execute(() -> source.sendFailure(Component.literal("加载节目失败: " + rootMessage(throwable))));
+            server.execute(() -> source.sendFailure(Component.translatable("musicplayer.radio.load_program_failed",
+                    Messages.textOrTranslatable(rootMessage(throwable)))));
             return null;
         }));
     }
@@ -767,13 +774,13 @@ public final class MusicQueueService {
     public void requestRadio(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String radioId, boolean reverse) {
         enqueueRequest(() -> MusicPlayerMod.netease().radioDetail(radioId).thenCompose(radio -> {
             if (radio == null || radio.programCount() <= 0) {
-                server.execute(() -> source.sendFailure(Component.literal("该播客没有可播放的节目。")));
+                server.execute(() -> source.sendFailure(Component.translatable("musicplayer.radio.no_programs")));
                 return CompletableFuture.<Void>completedFuture(null);
             }
             String radioName = radio.name();
             return MusicPlayerMod.netease().radioPrograms(radioId, 200, 0, reverse).thenCompose(programs -> {
                 if (programs == null || programs.isEmpty()) {
-                    server.execute(() -> source.sendFailure(Component.literal("该播客没有可播放的节目。")));
+                    server.execute(() -> source.sendFailure(Component.translatable("musicplayer.radio.no_programs")));
                     return CompletableFuture.<Void>completedFuture(null);
                 }
                 if (programs.size() > 100) {
@@ -800,18 +807,19 @@ public final class MusicQueueService {
                 return resolveAndEnqueueRadioProgram(server, source, requester, 0,
                         () -> server.execute(() -> {
                             if (playlistQueue.isEmpty()) {
-                                source.sendFailure(Component.literal("没有可播放的节目。"));
+                                source.sendFailure(Component.translatable("musicplayer.radio.no_playable_programs"));
                                 cleanUpRadioPlaylist();
                                 return;
                             }
-                            source.sendSuccess(() -> Component.literal("播客模式已启动: [" + radioName + "]，共 " + playlistTotalTracks + " 期")
+                            source.sendSuccess(() -> Component.translatable("musicplayer.radio.started", radioName, playlistTotalTracks)
                                     .withStyle(ChatFormatting.GREEN), false);
                             QueuedTrack first = playlistQueue.removeFirst();
                             advanceAndStart(server, null, first);
                         }));
             });
         }).exceptionally(throwable -> {
-            server.execute(() -> source.sendFailure(Component.literal("加载播客失败: " + rootMessage(throwable))));
+            server.execute(() -> source.sendFailure(Component.translatable("musicplayer.radio.load_failed",
+                    Messages.textOrTranslatable(rootMessage(throwable)))));
             return null;
         }));
     }
@@ -956,51 +964,67 @@ public final class MusicQueueService {
 
     public void voteSkip(MinecraftServer server, ServerPlayer voter) {
         if (currentPlayback == null) {
-            Messages.sendFailurePlayer(voter.createCommandSourceStack(), Component.literal("当前没有歌曲在播放。").withStyle(ChatFormatting.RED));
+            Messages.sendFailurePlayer(voter.createCommandSourceStack(), Component.translatable("musicplayer.queue.nothing_playing").withStyle(ChatFormatting.RED));
             return;
         }
         if (voter.getUUID().equals(currentPlayback.requesterId())) {
-            advance(server, "点歌人跳过了自己的歌曲。");
+            advance(server, Component.translatable("musicplayer.vote.requester_skipped"));
             return;
         }
         if (!voteSkipPlayers.add(voter.getUUID())) {
-            Messages.sendFailurePlayer(voter.createCommandSourceStack(), Component.literal("你已经为当前歌曲投过票了。").withStyle(ChatFormatting.YELLOW));
+            Messages.sendFailurePlayer(voter.createCommandSourceStack(), Component.translatable("musicplayer.vote.already_voted").withStyle(ChatFormatting.YELLOW));
             return;
         }
         int activeListeners = activeListeners(server);
         int requiredVotes = Math.max(1, (int) Math.ceil(activeListeners * MusicPlayerConfigManager.get().voteSkipPercent));
         int currentVotes = voteSkipPlayers.size();
-        broadcast(server, Component.literal("投票跳过: " + currentVotes + "/" + requiredVotes).withStyle(ChatFormatting.GOLD));
+        broadcast(server, Component.translatable("musicplayer.vote.progress", currentVotes, requiredVotes).withStyle(ChatFormatting.GOLD));
         if (currentVotes >= requiredVotes) {
-            advance(server, "投票通过，正在切换到下一首。");
+            advance(server, Component.translatable("musicplayer.vote.passed"));
         }
     }
 
     public void skipNow(MinecraftServer server, CommandSourceStack source) {
         if (currentPlayback == null) {
-            source.sendFailure(Component.literal("当前没有歌曲在播放。"));
+            source.sendFailure(Component.translatable("musicplayer.queue.nothing_playing"));
             return;
         }
-        advance(server, "管理员跳过了当前歌曲。");
+        advance(server, Component.translatable("musicplayer.play.admin_skipped"));
     }
 
     public void stop(MinecraftServer server, String reason) {
+        stopPlayback(server, reason == null || reason.isBlank() ? null : Messages.textOrTranslatable(reason));
+    }
+
+    private void stopPlayback(MinecraftServer server, Component reason) {
         currentPlayback = null;
         voteSkipPlayers.clear();
         clearLyrics(server);
         playlistQueue.clear();
         resetPlaylistState();
         refreshTrackCache();
-        server.getPlayerList().getPlayers().forEach(player -> sendStop(player, reason));
-        if (reason != null && !reason.isBlank()) {
-            broadcast(server, Component.literal(reason).withStyle(ChatFormatting.YELLOW));
+        String payload = payloadReason(reason);
+        server.getPlayerList().getPlayers().forEach(player -> sendStop(player, payload));
+        if (reason != null && !reason.getString().isBlank()) {
+            broadcast(server, reason.copy().withStyle(ChatFormatting.YELLOW));
         }
+    }
+
+    /** 停止原因发给客户端时仅用于日志：翻译组件取其翻译键，其余取纯文本。 */
+    private static String payloadReason(Component reason) {
+        if (reason == null) {
+            return "";
+        }
+        if (reason.getContents() instanceof TranslatableContents contents) {
+            return contents.getKey();
+        }
+        return reason.getString();
     }
 
     public void clearQueue(CommandSourceStack source) {
         queue.clear();
         refreshTrackCache();
-        source.sendSuccess(() -> Component.literal("单点队列已清空。"), false);
+        source.sendSuccess(() -> Component.translatable("musicplayer.queue.cleared"), false);
     }
 
     public boolean moveQueuedTrackToFront(String songId) {
@@ -1046,8 +1070,8 @@ public final class MusicQueueService {
         playlistQueue.clear();
         resetPlaylistState();
         refreshTrackCache();
-        server.getPlayerList().getPlayers().forEach(player -> sendStop(player, "歌单模式已停止。"));
-        broadcast(server, Component.literal("歌单模式已停止。").withStyle(ChatFormatting.YELLOW));
+        server.getPlayerList().getPlayers().forEach(player -> sendStop(player, "musicplayer.playlist.stopped"));
+        broadcast(server, Component.translatable("musicplayer.playlist.stopped").withStyle(ChatFormatting.YELLOW));
     }
 
     // ── Queue display ────────────────────────────────────────────────
@@ -1059,13 +1083,13 @@ public final class MusicQueueService {
     public List<Component> describeQueue(int page, int pageSize) {
         List<Component> lines = new ArrayList<>();
         if (currentPlayback == null) {
-            lines.add(Component.literal("当前没有歌曲在播放。").withStyle(ChatFormatting.GRAY));
+            lines.add(Component.translatable("musicplayer.queue.nothing_playing").withStyle(ChatFormatting.GRAY));
         } else {
             lines.add(renderCurrentTrackLine(currentPlayback.track()));
         }
         if (queue.isEmpty()) {
             if (!playlistMode) {
-                lines.add(Component.literal("单点队列为空。").withStyle(ChatFormatting.GRAY));
+                lines.add(Component.translatable("musicplayer.queue.empty").withStyle(ChatFormatting.GRAY));
             }
         } else {
             List<QueuedTrack> all = queue.stream().toList();
@@ -1074,14 +1098,14 @@ public final class MusicQueueService {
             int safePage = Math.max(1, Math.min(page, totalPages));
             int start = (safePage - 1) * safePageSize;
             int end = Math.min(all.size(), start + safePageSize);
-            lines.add(Component.literal("单点队列 · 第 " + safePage + "/" + totalPages + " 页").withStyle(ChatFormatting.YELLOW));
+            lines.add(Component.translatable("musicplayer.queue.page", safePage, totalPages).withStyle(ChatFormatting.YELLOW));
             for (int index = start; index < end; index++) {
                 QueuedTrack queuedTrack = all.get(index);
                 MutableComponent line = Component.literal((index + 1) + ". ").withStyle(ChatFormatting.DARK_GRAY)
-                        .append(Messages.clickableCommand(queuedTrack.title(), "重新播放这首歌曲", "/music play song " + queuedTrack.songId(), ChatFormatting.GREEN))
+                        .append(Messages.clickableCommand(Component.literal(queuedTrack.title()), Component.translatable("musicplayer.queue.replay_hover"), "/music play song " + queuedTrack.songId(), ChatFormatting.GREEN))
                         .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
                 if (queuedTrack.artistCommand() != null && !queuedTrack.artistCommand().isBlank()) {
-                    line.append(Messages.clickableCommand(queuedTrack.artist(), "查看作者详情", queuedTrack.artistCommand(), ChatFormatting.GRAY));
+                    line.append(Messages.clickableCommand(Component.literal(queuedTrack.artist()), Component.translatable("musicplayer.common.view_artist_hover"), queuedTrack.artistCommand(), ChatFormatting.GRAY));
                 } else {
                     line.append(Component.literal(queuedTrack.artist()).withStyle(ChatFormatting.GRAY));
                 }
@@ -1090,14 +1114,14 @@ public final class MusicQueueService {
         }
         if (playlistMode) {
             int remaining = playlistRemainingCount();
-            lines.add(Component.literal("歌单模式 · 剩余 " + remaining + " 首").withStyle(ChatFormatting.DARK_GRAY));
+            lines.add(Component.translatable("musicplayer.playlist.remaining", remaining).withStyle(ChatFormatting.DARK_GRAY));
         }
         return lines;
     }
 
     public Component describeNowPlaying() {
         if (currentPlayback == null) {
-            return Component.literal("当前没有歌曲在播放。").withStyle(ChatFormatting.GRAY);
+            return Component.translatable("musicplayer.queue.nothing_playing").withStyle(ChatFormatting.GRAY);
         }
         return renderCurrentTrackLine(currentPlayback.track());
     }
@@ -1106,7 +1130,7 @@ public final class MusicQueueService {
 
     private void enqueueOrStart(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, TrackInfo track) {
         if (isTrackActiveOrQueued(track.id())) {
-            source.sendSuccess(() -> Component.literal("该歌曲正在播放或已在队列中。").withStyle(ChatFormatting.YELLOW), false);
+            source.sendSuccess(() -> Component.translatable("musicplayer.request.duplicate").withStyle(ChatFormatting.YELLOW), false);
             return;
         }
         if (currentPlayback == null) {
@@ -1124,19 +1148,19 @@ public final class MusicQueueService {
         ));
         refreshTrackCache();
         if (MusicPlayerConfigManager.get().announceQueueChanges) {
-            broadcast(server, Component.literal(requester.getGameProfile().name() + " 点歌: ").withStyle(ChatFormatting.GOLD)
-                    .append(Messages.clickableCommand(track.title(), "重新播放这首歌曲", "/music play song " + track.id(), ChatFormatting.AQUA))
+            broadcast(server, Component.translatable("musicplayer.queue.requested", requester.getGameProfile().name()).withStyle(ChatFormatting.GOLD)
+                    .append(Messages.clickableCommand(Component.literal(track.title()), Component.translatable("musicplayer.queue.replay_hover"), "/music play song " + track.id(), ChatFormatting.AQUA))
                     .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
                     .append(track.artistId() != null && !track.artistId().isBlank()
-                            ? Messages.clickableCommand(track.artist(), "查看作者详情", "/music view artist " + track.artistId(), ChatFormatting.GRAY)
+                            ? Messages.clickableCommand(Component.literal(track.artist()), Component.translatable("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY)
                             : Component.literal(track.artist()).withStyle(ChatFormatting.GRAY)));
         } else {
-            source.sendSuccess(() -> Component.literal("已加入队列: ").withStyle(ChatFormatting.GRAY)
-                    .append(Messages.clickableCommand(track.title(), "重新播放这首歌曲", "/music play song " + track.id(), ChatFormatting.AQUA)), false);
+            source.sendSuccess(() -> Component.translatable("musicplayer.queue.added").withStyle(ChatFormatting.GRAY)
+                    .append(Messages.clickableCommand(Component.literal(track.title()), Component.translatable("musicplayer.queue.replay_hover"), "/music play song " + track.id(), ChatFormatting.AQUA)), false);
         }
     }
 
-    private void advance(MinecraftServer server, String reason) {
+    private void advance(MinecraftServer server, Component reason) {
         currentPlayback = null;
         voteSkipPlayers.clear();
         clearLyrics(server);
@@ -1190,10 +1214,10 @@ public final class MusicQueueService {
             playlistMode = false;
             cleanUpRadioPlaylist();
         }
-        stop(server, reason == null ? "播放已全部完成。" : reason);
+        stopPlayback(server, reason == null ? Component.translatable("musicplayer.stop.all_done") : reason);
     }
 
-    private void advanceAndStart(MinecraftServer server, String reason, QueuedTrack next) {
+    private void advanceAndStart(MinecraftServer server, Component reason, QueuedTrack next) {
         refreshTrackCache(next.songId());
         CompletableFuture<TrackInfo> future;
         if (radioPlaylistMode) {
@@ -1223,12 +1247,12 @@ public final class MusicQueueService {
                 return;
             }
             if (throwable != null) {
-                broadcast(server, Component.literal("跳过了无法播放的歌曲: " + next.title()).withStyle(ChatFormatting.RED));
+                broadcast(server, Component.translatable("musicplayer.queue.skipped_unplayable", next.title()).withStyle(ChatFormatting.RED));
                 advance(server, null);
                 return;
             }
-            if (reason != null && !reason.isBlank()) {
-                broadcast(server, Component.literal(reason).withStyle(ChatFormatting.YELLOW));
+            if (reason != null && !reason.getString().isBlank()) {
+                broadcast(server, reason.copy().withStyle(ChatFormatting.YELLOW));
             }
             try {
                 TrackInfo trackToPlay = track;
@@ -1243,7 +1267,7 @@ public final class MusicQueueService {
                 }
             } catch (Exception e) {
                 MusicPlayerMod.LOGGER.error("播放歌曲失败: {}", track == null ? next.title() : track.title(), e);
-                advance(server, "播放失败，正在跳过到下一首。");
+                advance(server, Component.translatable("musicplayer.play.playback_failed_skip"));
             }
         }));
     }
@@ -1251,7 +1275,7 @@ public final class MusicQueueService {
     private void startTrack(MinecraftServer server, TrackInfo track, UUID requesterId, String requesterName) {
         if (track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
             MusicPlayerMod.LOGGER.warn("跳过无播放源的歌曲: {} - {}", track.title(), track.artist());
-            advance(server, "该歌曲没有可用的播放源，已跳过。");
+            advance(server, Component.translatable("musicplayer.play.skip_no_source"));
             return;
         }
         long now = System.currentTimeMillis();
@@ -1382,38 +1406,38 @@ public final class MusicQueueService {
     // ── Render ───────────────────────────────────────────────────────
 
     private Component renderNowPlayingBroadcast(TrackInfo track) {
-        MutableComponent line = Component.literal("正在播放: ").withStyle(ChatFormatting.GOLD)
-                .append(Messages.clickableUrl(track.title(), "在浏览器中打开", Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
+        MutableComponent line = Component.translatable("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
+                .append(Messages.clickableUrl(Component.literal(track.title()), Component.translatable("musicplayer.common.open_browser_hover"), Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
         if (track.artistId() != null && !track.artistId().isBlank()) {
-            line.append(Messages.clickableCommand(track.artist(), "查看作者详情", "/music view artist " + track.artistId(), ChatFormatting.GRAY));
+            line.append(Messages.clickableCommand(Component.literal(track.artist()), Component.translatable("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY));
         } else {
             line.append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY));
         }
         line.append(Component.literal("\n"));
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
-            line.append(Messages.clickableUrl("[下载]", "在浏览器中打开歌曲直链", track.sourceUrls().getFirst(), ChatFormatting.GREEN));
+            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().getFirst(), ChatFormatting.GREEN));
         }
         line.append(Component.literal(" "));
-        line.append(Messages.clickableCommand("[跳过]", "投票跳过当前歌曲", "/music skip", ChatFormatting.YELLOW));
+        line.append(Messages.clickableCommand(Component.translatable("musicplayer.common.skip_label"), Component.translatable("musicplayer.common.skip_hover"), "/music skip", ChatFormatting.YELLOW));
         line.append(Component.literal(" "));
-        line.append(Messages.clickableCommand("[队列]", "查看播放队列", "/music queue", ChatFormatting.GRAY));
+        line.append(Messages.clickableCommand(Component.translatable("musicplayer.common.queue_label"), Component.translatable("musicplayer.common.queue_hover"), "/music queue", ChatFormatting.GRAY));
         return line;
     }
 
     private Component renderCurrentTrackLine(TrackInfo track) {
-        MutableComponent line = Component.literal("当前播放: ").withStyle(ChatFormatting.GOLD)
-                .append(Messages.clickableUrl(track.title(), "在浏览器中打开", Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
+        MutableComponent line = Component.translatable("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
+                .append(Messages.clickableUrl(Component.literal(track.title()), Component.translatable("musicplayer.common.open_browser_hover"), Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
         if (track.artistId() != null && !track.artistId().isBlank()) {
-            line.append(Messages.clickableCommand(track.artist(), "查看作者详情", "/music view artist " + track.artistId(), ChatFormatting.GRAY));
+            line.append(Messages.clickableCommand(Component.literal(track.artist()), Component.translatable("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY));
         } else {
             line.append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY));
         }
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
-            line.append(Messages.clickableUrl("[下载]", "在浏览器中打开歌曲直链", track.sourceUrls().getFirst(), ChatFormatting.GREEN));
+            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().getFirst(), ChatFormatting.GREEN));
         }
         return line;
     }
@@ -1527,7 +1551,7 @@ public final class MusicQueueService {
     }
 
     private static String rootMessage(Throwable throwable) {
-        if (throwable == null) return "未知错误";
+        if (throwable == null) return "musicplayer.common.unknown_error";
         Throwable current = throwable;
         int depth = 0;
         while (current.getCause() != null && depth < 100) {
