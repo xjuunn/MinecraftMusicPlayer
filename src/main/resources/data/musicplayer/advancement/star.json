@@ -1,0 +1,19 @@
+{
+  "criteria": {
+    "star": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "title": {"translate": "musicplayer.advancement.star.title"},
+    "description": {"translate": "musicplayer.advancement.star.description"},
+    "icon": {
+      "id": "minecraft:torch"
+    },
+    "frame": "goal",
+    "show_toast": false,
+    "announce_to_chat": true,
+    "background": "minecraft:gui/advancements/backgrounds/adventure"
+  },
+  "rewards": {}
+}
