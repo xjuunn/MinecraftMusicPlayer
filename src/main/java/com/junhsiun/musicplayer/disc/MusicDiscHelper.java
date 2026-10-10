@@ -102,9 +102,9 @@ public final class MusicDiscHelper {
         wrapper.putBoolean(PENDING_KEY, true);
         wrapper.putString(PENDING_TOKEN_KEY, safe(token));
         CustomData.set(DataComponents.CUSTOM_DATA, pendingDisc, wrapper);
-        pendingDisc.set(DataComponents.CUSTOM_NAME, Component.literal("随机音乐唱片").withStyle(ChatFormatting.LIGHT_PURPLE));
+        pendingDisc.set(DataComponents.CUSTOM_NAME, Component.translatable("musicplayer.disc.random").withStyle(ChatFormatting.LIGHT_PURPLE));
         pendingDisc.set(DataComponents.LORE, new ItemLore(List.of(
-                Component.literal("右键使用以生成随机音乐").withStyle(ChatFormatting.DARK_GRAY)
+                // Component.translatable("musicplayer.disc.random_hint").withStyle(ChatFormatting.DARK_GRAY)
         )));
         pendingDisc.remove(DataComponents.JUKEBOX_PLAYABLE);
         return pendingDisc;
@@ -182,19 +182,19 @@ public final class MusicDiscHelper {
 
     private static ItemLore buildLore(TrackInfo track, int sourceCount) {
         List<Component> lines = new ArrayList<>();
-        lines.add(Component.literal("音乐播放器").withStyle(ChatFormatting.GOLD));
-        lines.add(Component.literal("歌曲: " + track.title()).withStyle(ChatFormatting.WHITE));
-        lines.add(Component.literal("作者: " + track.artist()).withStyle(ChatFormatting.GRAY));
+        lines.add(Component.translatable("musicplayer.disc.brand").withStyle(ChatFormatting.GOLD));
+        lines.add(Component.translatable("musicplayer.disc.song", track.title()).withStyle(ChatFormatting.WHITE));
+        lines.add(Component.translatable("musicplayer.disc.artist", track.artist()).withStyle(ChatFormatting.GRAY));
         if (track.artistId() != null && !track.artistId().isBlank()) {
-            lines.add(Component.literal("作者 ID: " + track.artistId()).withStyle(ChatFormatting.DARK_GRAY));
+            lines.add(Component.translatable("musicplayer.disc.artist_id", track.artistId()).withStyle(ChatFormatting.DARK_GRAY));
         }
         if (track.id() != null && !track.id().isBlank()) {
-            lines.add(Component.literal("歌曲 ID: " + track.id()).withStyle(ChatFormatting.DARK_GRAY));
+            lines.add(Component.translatable("musicplayer.disc.song_id", track.id()).withStyle(ChatFormatting.DARK_GRAY));
         }
         if (track.durationMillis() > 0L) {
-            lines.add(Component.literal("时长: " + Messages.formatDuration(track.durationMillis())).withStyle(ChatFormatting.DARK_AQUA));
+            lines.add(Component.translatable("musicplayer.disc.duration", Messages.formatDuration(track.durationMillis())).withStyle(ChatFormatting.DARK_AQUA));
         }
-        lines.add(Component.literal("音源数量: " + sourceCount).withStyle(ChatFormatting.DARK_AQUA));
+        lines.add(Component.translatable("musicplayer.disc.source_count", sourceCount).withStyle(ChatFormatting.DARK_AQUA));
         return new ItemLore(lines);
     }
 

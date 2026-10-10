@@ -108,7 +108,7 @@ public final class ClientMusicController {
     private void playWithFallback(List<String> urls, String trackId, String title, String subtitle) {
         if (urls == null || urls.isEmpty()) {
             MusicPlayerMod.LOGGER.warn("没有可用的播放源: {} - {}", title, subtitle);
-            reportFailed(trackId, "没有可用的播放源");
+            reportFailed(trackId, "musicplayer.playback.no_source");
             return;
         }
 
@@ -141,7 +141,7 @@ public final class ClientMusicController {
         }
 
         MusicPlayerMod.LOGGER.warn("所有播放源都不可用: {} - {}", title, subtitle, lastException);
-        reportFailed(trackId, lastException == null ? "所有播放源都不可用" : lastException.getMessage());
+        reportFailed(trackId, lastException == null ? "musicplayer.playback.all_sources_failed" : lastException.getMessage());
     }
 
     private void playSingle(String url, String title, String subtitle) throws IOException, JavaLayerException {
@@ -158,11 +158,11 @@ public final class ClientMusicController {
             }
             ResponseBody body = response.body();
             if (body == null) {
-                throw new IOException("空响应体");
+                throw new IOException("musicplayer.playback.empty_response");
             }
             byte[] audioBytes = body.bytes();
             if (audioBytes.length == 0) {
-                throw new IOException("音频数据为空");
+                throw new IOException("musicplayer.playback.empty_audio");
             }
 
             audioDevice.reset();

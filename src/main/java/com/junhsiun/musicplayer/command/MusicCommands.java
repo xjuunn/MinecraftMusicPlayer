@@ -79,34 +79,34 @@ public final class MusicCommands {
 
     private static int sendHelpOverview(CommandSourceStack source) {
         sendHeader(source);
-        Messages.sendSuccess(source, sectionHeader("音乐播放器", null), false);
-        helpEntry(source, "now", "查看当前播放与进度");
-        helpEntry(source, "play", "点播单曲或歌单");
-        helpEntry(source, "skip", "跳过当前歌曲（投票/直接）");
-        helpEntry(source, "stop", "管理员 - 完全停止播放");
-        helpEntry(source, "queue", "管理单点队列");
-        helpEntry(source, "playlist", "管理歌单播放模式");
-        helpEntry(source, "search", "搜索歌曲、作者、歌单、播客或用户");
-        helpEntry(source, "view", "查看歌单、作者、播客、节目或用户详情");
-        helpEntry(source, "join", "加入当前播放");
-        helpEntry(source, "leave", "退出当前播放");
-        helpEntry(source, "mute", "暂时静音当前歌曲，下一首自动恢复");
-        helpEntry(source, "burn", "将歌曲刻录到唱片");
-        helpEntry(source, "random", "随机生成热门音乐");
-        helpEntry(source, "lyrics", "切换实时歌词显示");
-        helpEntry(source, "radio", "浏览热门播客与分类");
-        helpEntry(source, "help", "显示本帮助页面");
-        helpEntry(source, "config", "管理员 - 配置与管理");
+        Messages.sendSuccess(source, sectionHeader(Component.translatable("musicplayer.help.title"), null), false);
+        helpEntry(source, "now", Component.translatable("musicplayer.help.desc.now"));
+        helpEntry(source, "play", Component.translatable("musicplayer.help.desc.play"));
+        helpEntry(source, "skip", Component.translatable("musicplayer.help.desc.skip"));
+        helpEntry(source, "stop", Component.translatable("musicplayer.help.desc.stop"));
+        helpEntry(source, "queue", Component.translatable("musicplayer.help.desc.queue"));
+        helpEntry(source, "playlist", Component.translatable("musicplayer.help.desc.playlist"));
+        helpEntry(source, "search", Component.translatable("musicplayer.help.desc.search"));
+        helpEntry(source, "view", Component.translatable("musicplayer.help.desc.view"));
+        helpEntry(source, "join", Component.translatable("musicplayer.help.desc.join"));
+        helpEntry(source, "leave", Component.translatable("musicplayer.help.desc.leave"));
+        helpEntry(source, "mute", Component.translatable("musicplayer.help.desc.mute"));
+        helpEntry(source, "burn", Component.translatable("musicplayer.help.desc.burn"));
+        helpEntry(source, "random", Component.translatable("musicplayer.help.desc.random"));
+        helpEntry(source, "lyrics", Component.translatable("musicplayer.help.desc.lyrics"));
+        helpEntry(source, "radio", Component.translatable("musicplayer.help.desc.radio"));
+        helpEntry(source, "help", Component.translatable("musicplayer.help.desc.help"));
+        helpEntry(source, "config", Component.translatable("musicplayer.help.desc.config"));
         Messages.sendSuccess(source, spacer(), false);
-        Messages.sendSuccess(source, Component.literal("提示: 使用 /music help <命令> 查看详细用法，例如 /music help radio").withStyle(ChatFormatting.DARK_GRAY), false);
+        Messages.sendSuccess(source, Component.translatable("musicplayer.help.tip").withStyle(ChatFormatting.DARK_GRAY), false);
         Messages.sendSuccess(source, spacer(), false);
         return 1;
     }
 
-    private static void helpEntry(CommandSourceStack source, String command, String description) {
-        MutableComponent line = Messages.clickableCommand(command, "查看 " + command + " 的详细用法", "/music help " + command, ChatFormatting.GOLD);
+    private static void helpEntry(CommandSourceStack source, String command, Component description) {
+        MutableComponent line = Messages.clickableCommand(Component.literal(command), Component.translatable("musicplayer.help.view_usage", command), "/music help " + command, ChatFormatting.GOLD);
         line.append(Component.literal("  ").withStyle(ChatFormatting.DARK_GRAY));
-        line.append(Component.literal(description).withStyle(ChatFormatting.GRAY));
+        line.append(description.copy().withStyle(ChatFormatting.GRAY));
         Messages.sendSuccess(source, line, false);
     }
 
@@ -114,104 +114,104 @@ public final class MusicCommands {
         sendHeader(source);
         switch (subcommand) {
             case "now" -> {
-                Messages.sendSuccess(source,  sectionHeader("now", null), false);
-                detailLine(source, "/music now", "查看正在播放的歌曲、播放进度和点歌人");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("now"), null), false);
+                detailLine(source, "/music now", Component.translatable("musicplayer.help.usage.now"));
             }
             case "queue" -> {
-                Messages.sendSuccess(source,  sectionHeader("queue", null), false);
-                detailLine(source, "/music queue", "查看待播歌曲列表");
-                detailLine(source, "/music queue promote <歌曲ID>", "将歌曲提升到下一首播放");
-                detailLine(source, "/music queue remove <歌曲ID>", "从队列中移除指定歌曲");
-                detailLine(source, "/music queue clear", "管理员 - 清空单点队列");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("queue"), null), false);
+                detailLine(source, "/music queue", Component.translatable("musicplayer.help.usage.queue"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.queue_promote"), Component.translatable("musicplayer.help.usage.queue_promote"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.queue_remove"), Component.translatable("musicplayer.help.usage.queue_remove"));
+                detailLine(source, "/music queue clear", Component.translatable("musicplayer.help.usage.queue_clear"));
             }
             case "play" -> {
-                Messages.sendSuccess(source,  sectionHeader("play", null), false);
-                detailLine(source, "/music play song <歌曲ID>", "点播一首单曲");
-                detailLine(source, "/music play playlist <歌单ID>", "切换到歌单播放模式，从第一首开始顺序播放");
-                detailLine(source, "/music play playlist <歌单ID> reverse", "从最后一首开始播放");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("play"), null), false);
+                detailLine(source, Component.translatable("musicplayer.help.cmd.play_song"), Component.translatable("musicplayer.help.usage.play_song"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.play_playlist"), Component.translatable("musicplayer.help.usage.play_playlist"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.play_playlist_reverse"), Component.translatable("musicplayer.help.usage.play_playlist_reverse"));
             }
             case "playlist" -> {
-                Messages.sendSuccess(source,  sectionHeader("playlist", null), false);
-                detailLine(source, "/music playlist", "查看歌单播放状态");
-                detailLine(source, "/music playlist list", "查看当前歌单已加载的曲目");
-                detailLine(source, "/music playlist stop", "停止歌单播放模式");
-                detailLine(source, "/music playlist order", "查看/切换播放顺序");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("playlist"), null), false);
+                detailLine(source, "/music playlist", Component.translatable("musicplayer.help.usage.playlist"));
+                detailLine(source, "/music playlist list", Component.translatable("musicplayer.help.usage.playlist_list"));
+                detailLine(source, "/music playlist stop", Component.translatable("musicplayer.help.usage.playlist_stop"));
+                detailLine(source, "/music playlist order", Component.translatable("musicplayer.help.usage.playlist_order"));
             }
             case "skip" -> {
-                Messages.sendSuccess(source,  sectionHeader("skip", null), false);
-                detailLine(source, "/music skip", "跳过当前歌曲");
-                detailLine(source, "  · 点歌人直接跳过", "无需投票");
-                detailLine(source, "  · 管理员直接跳过", "无需投票");
-                detailLine(source, "  · 其他玩家发起投票", "达到阈值后自动切换");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("skip"), null), false);
+                detailLine(source, "/music skip", Component.translatable("musicplayer.help.usage.skip"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.skip_requester"), Component.translatable("musicplayer.help.usage.skip_no_vote"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.skip_admin"), Component.translatable("musicplayer.help.usage.skip_no_vote"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.skip_vote"), Component.translatable("musicplayer.help.usage.skip_vote"));
             }
             case "search" -> {
-                Messages.sendSuccess(source,  sectionHeader("search", null), false);
-                detailLine(source, "/music search song <关键词>", "搜索歌曲");
-                detailLine(source, "/music search artist <关键词>", "搜索作者");
-                detailLine(source, "/music search playlist <关键词>", "搜索歌单");
-                detailLine(source, "/music search user <关键词>", "搜索用户");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("search"), null), false);
+                detailLine(source, Component.translatable("musicplayer.help.cmd.search_song"), Component.translatable("musicplayer.help.usage.search_song"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.search_artist"), Component.translatable("musicplayer.help.usage.search_artist"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.search_playlist"), Component.translatable("musicplayer.help.usage.search_playlist"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.search_user"), Component.translatable("musicplayer.help.usage.search_user"));
             }
             case "view" -> {
-                Messages.sendSuccess(source,  sectionHeader("view", null), false);
-                detailLine(source, "/music view playlist <歌单ID>", "查看歌单详情与曲目列表");
-                detailLine(source, "/music view artist <作者ID>", "查看作者详情与热门歌曲");
-                detailLine(source, "/music view user <用户ID>", "查看用户创建的歌单");
-                detailLine(source, "/music view <音乐/歌单链接>", "通过链接直接查看歌曲或歌单");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("view"), null), false);
+                detailLine(source, Component.translatable("musicplayer.help.cmd.view_playlist"), Component.translatable("musicplayer.help.usage.view_playlist"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.view_artist"), Component.translatable("musicplayer.help.usage.view_artist"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.view_user"), Component.translatable("musicplayer.help.usage.view_user"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.view_url"), Component.translatable("musicplayer.help.usage.view_url"));
             }
             case "join" -> {
-                Messages.sendSuccess(source,  sectionHeader("join", null), false);
-                detailLine(source, "/music join", "加入当前播放，开始接收音乐");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("join"), null), false);
+                detailLine(source, "/music join", Component.translatable("musicplayer.help.usage.join"));
             }
             case "leave" -> {
-                Messages.sendSuccess(source,  sectionHeader("leave", null), false);
-                detailLine(source, "/music leave", "退出当前播放，不再接收音乐");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("leave"), null), false);
+                detailLine(source, "/music leave", Component.translatable("musicplayer.help.usage.leave"));
             }
             case "mute" -> {
-                Messages.sendSuccess(source,  sectionHeader("mute", null), false);
-                detailLine(source, "/music mute once", "暂时静音当前歌曲，下一首歌自动恢复，可用 /music join 立即重新加入");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("mute"), null), false);
+                detailLine(source, "/music mute once", Component.translatable("musicplayer.help.usage.mute_once"));
             }
             case "burn" -> {
-                Messages.sendSuccess(source,  sectionHeader("burn", null), false);
-                detailLine(source, "/music burn song <歌曲ID>", "将歌曲刻录到主手持有的空白唱片");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("burn"), null), false);
+                detailLine(source, Component.translatable("musicplayer.help.cmd.burn_song"), Component.translatable("musicplayer.help.usage.burn_song"));
             }
             case "random" -> {
-                Messages.sendSuccess(source,  sectionHeader("random", null), false);
-                detailLine(source, "/music random", "随机生成 10 首热门音乐，可直接点播");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("random"), null), false);
+                detailLine(source, "/music random", Component.translatable("musicplayer.help.usage.random"));
             }
             case "help" -> {
                 return sendHelpOverview(source);
             }
             case "lyrics" -> {
-                Messages.sendSuccess(source,  sectionHeader("lyrics", null), false);
-                detailLine(source, "/music lyrics", "切换实时歌词显示");
-                detailLine(source, "/music lyrics on", "开启歌词显示");
-                detailLine(source, "/music lyrics off", "关闭歌词显示");
-                detailLine(source, "/music lyrics status", "查看当前歌词显示状态");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("lyrics"), null), false);
+                detailLine(source, "/music lyrics", Component.translatable("musicplayer.help.usage.lyrics"));
+                detailLine(source, "/music lyrics on", Component.translatable("musicplayer.help.usage.lyrics_on"));
+                detailLine(source, "/music lyrics off", Component.translatable("musicplayer.help.usage.lyrics_off"));
+                detailLine(source, "/music lyrics status", Component.translatable("musicplayer.help.usage.lyrics_status"));
             }
             case "stop" -> {
-                Messages.sendSuccess(source,  sectionHeader("stop", null), false);
-                detailLine(source, "/music stop", "停止所有播放并清空当前播放状态");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("stop"), null), false);
+                detailLine(source, "/music stop", Component.translatable("musicplayer.help.usage.stop"));
             }
             case "config" -> {
-                Messages.sendSuccess(source,  sectionHeader("config", null), false);
-                detailLine(source, "/music config reload", "重新加载配置并清空音源缓存");
-                detailLine(source, "/music config status", "查看当前配置状态");
-                detailLine(source, "/music config clearqueue", "清空单点队列");
-                detailLine(source, "/music config set <配置项> <值>", "修改配置项");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("config"), null), false);
+                detailLine(source, "/music config reload", Component.translatable("musicplayer.help.usage.config_reload"));
+                detailLine(source, "/music config status", Component.translatable("musicplayer.help.usage.config_status"));
+                detailLine(source, "/music config clearqueue", Component.translatable("musicplayer.help.usage.config_clearqueue"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.config_set"), Component.translatable("musicplayer.help.usage.config_set"));
             }
             case "radio" -> {
-                Messages.sendSuccess(source,  sectionHeader("radio", null), false);
-                detailLine(source, "/music radio hot [页码]", "热门播客列表");
-                detailLine(source, "/music radio categories", "播客分类列表");
-                detailLine(source, "/music view radio <id>", "查看播客详情与节目列表");
-                detailLine(source, "/music view program <id>", "查看节目详情");
-                detailLine(source, "/music search radio <关键词>", "搜索播客");
-                detailLine(source, "/music play program <id>", "播放单个节目");
-                detailLine(source, "/music play radio <id>", "播放整个播客（自动播放所有期数）");
-                detailLine(source, "/music play radio <id> reverse", "从最后一页开始播放");
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("radio"), null), false);
+                detailLine(source, Component.translatable("musicplayer.help.cmd.radio_hot"), Component.translatable("musicplayer.help.usage.radio_hot"));
+                detailLine(source, "/music radio categories", Component.translatable("musicplayer.help.usage.radio_categories"));
+                detailLine(source, "/music view radio <id>", Component.translatable("musicplayer.help.usage.view_radio"));
+                detailLine(source, "/music view program <id>", Component.translatable("musicplayer.help.usage.view_program"));
+                detailLine(source, Component.translatable("musicplayer.help.cmd.search_radio"), Component.translatable("musicplayer.help.usage.search_radio"));
+                detailLine(source, "/music play program <id>", Component.translatable("musicplayer.help.usage.play_program"));
+                detailLine(source, "/music play radio <id>", Component.translatable("musicplayer.help.usage.play_radio"));
+                detailLine(source, "/music play radio <id> reverse", Component.translatable("musicplayer.help.usage.play_radio_reverse"));
             }
             default -> {
-                Messages.sendSuccess(source,  Component.literal("未知子命令: " + subcommand).withStyle(ChatFormatting.RED), false);
+                Messages.sendSuccess(source,  Component.translatable("musicplayer.help.unknown_subcommand", subcommand).withStyle(ChatFormatting.RED), false);
                 Messages.sendSuccess(source,  spacer(), false);
                 return sendHelpOverview(source);
             }
@@ -220,10 +220,14 @@ public final class MusicCommands {
         return 1;
     }
 
-    private static void detailLine(CommandSourceStack source, String command, String description) {
-        MutableComponent line = Component.literal(command).withStyle(ChatFormatting.GOLD);
+    private static void detailLine(CommandSourceStack source, String command, Component description) {
+        detailLine(source, Component.literal(command), description);
+    }
+
+    private static void detailLine(CommandSourceStack source, Component command, Component description) {
+        MutableComponent line = command.copy().withStyle(ChatFormatting.GOLD);
         line.append(Component.literal("  ").withStyle(ChatFormatting.DARK_GRAY));
-        line.append(Component.literal(description).withStyle(ChatFormatting.GRAY));
+        line.append(description.copy().withStyle(ChatFormatting.GRAY));
         Messages.sendSuccess(source,  line, false);
     }
 
@@ -239,15 +243,15 @@ public final class MusicCommands {
         boolean isAdmin = context.getSource().permissions().hasPermission(Permissions.COMMANDS_ADMIN);
         boolean isPaused = MusicPlayerMod.queueService().isPaused();
         sendQuickBar(context.getSource(),
-                Messages.clickableCommand("[快退 5s]", "后退 5 秒", "/music seek -5", ChatFormatting.GRAY),
+                Messages.clickableCommand(Component.translatable("musicplayer.now.rewind_label"), Component.translatable("musicplayer.now.rewind_hover"), "/music seek -5", ChatFormatting.GRAY),
                 isPaused
-                        ? (isAdmin ? Messages.clickableCommand("[继续]", "继续播放", "/music resume", ChatFormatting.GREEN) : null)
-                        : (isAdmin ? Messages.clickableCommand("[暂停]", "暂停播放", "/music pause", ChatFormatting.YELLOW) : null),
-                Messages.clickableCommand("[快进 5s]", "前进 5 秒", "/music seek 5", ChatFormatting.GRAY),
-                Messages.clickableCommand("[跳过]", "投票或直接跳过当前歌曲", "/music skip", ChatFormatting.YELLOW),
-                Messages.clickableCommand("[队列]", "查看队列", "/music queue", ChatFormatting.GRAY),
-                Messages.clickableCommand("[歌单]", "查看歌单状态", "/music playlist", ChatFormatting.AQUA),
-                Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.DARK_GRAY));
+                        ? (isAdmin ? Messages.clickableCommand(Component.translatable("musicplayer.now.resume_label"), Component.translatable("musicplayer.now.resume_hover"), "/music resume", ChatFormatting.GREEN) : null)
+                        : (isAdmin ? Messages.clickableCommand(Component.translatable("musicplayer.now.pause_label"), Component.translatable("musicplayer.now.pause_hover"), "/music pause", ChatFormatting.YELLOW) : null),
+                Messages.clickableCommand(Component.translatable("musicplayer.now.forward_label"), Component.translatable("musicplayer.now.forward_hover"), "/music seek 5", ChatFormatting.GRAY),
+                Messages.clickableCommand(Component.translatable("musicplayer.common.skip_label"), Component.translatable("musicplayer.common.skip_hover"), "/music skip", ChatFormatting.YELLOW),
+                Messages.clickableCommand(Component.translatable("musicplayer.common.queue_label"), Component.translatable("musicplayer.common.queue_hover"), "/music queue", ChatFormatting.GRAY),
+                Messages.clickableCommand(Component.translatable("musicplayer.common.playlist_label"), Component.translatable("musicplayer.now.playlist_hover"), "/music playlist", ChatFormatting.AQUA),
+                Messages.clickableCommand(Component.translatable("musicplayer.common.help_label"), Component.translatable("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
         context.getSource().sendSuccess(() -> spacer(), false);
         long elapsedMs = MusicPlayerMod.queueService().playbackElapsedMillis();
         long durationMs = MusicPlayerMod.queueService().playbackDurationMillis();
@@ -267,7 +271,8 @@ public final class MusicCommands {
                     MusicPlayerMod.queueService().seek(context.getSource().getServer(), delta);
                     if (context.getSource().getEntity() instanceof ServerPlayer player) {
                         String icon = delta >= 0 ? "⏩" : "⏪";
-                        player.sendSystemMessage(Component.literal(icon + "  " + Math.abs(delta) + " 秒").withStyle(ChatFormatting.GRAY));
+                        player.sendSystemMessage(Component.literal(icon + "  ").withStyle(ChatFormatting.GRAY)
+                                .append(Component.translatable("musicplayer.seek.seconds", Math.abs(delta)).withStyle(ChatFormatting.GRAY)));
                     }
                     return 1;
                 }));
@@ -298,20 +303,20 @@ public final class MusicCommands {
                         .then(Commands.argument("song_id", StringArgumentType.string()).executes(context -> {
                             String songId = StringArgumentType.getString(context, "song_id");
                             if (!MusicPlayerMod.queueService().moveQueuedTrackToFront(songId)) {
-                                Messages.warning(context.getSource(), "未找到这首待播歌曲，无法调整到下一首。");
+                                Messages.warning(context.getSource(), Component.translatable("musicplayer.queue.promote_not_found"));
                                 return 0;
                             }
-                            Messages.success(context.getSource(), "已将这首歌调整为下一首播放。", false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.queue.promoted"), false);
                             return showQueue(context.getSource(), 1);
                         })))
                 .then(Commands.literal("remove")
                         .then(Commands.argument("song_id", StringArgumentType.string()).executes(context -> {
                             String songId = StringArgumentType.getString(context, "song_id");
                             if (!MusicPlayerMod.queueService().removeFromQueue(songId)) {
-                                Messages.warning(context.getSource(), "未找到这首待播歌曲。");
+                                Messages.warning(context.getSource(), Component.translatable("musicplayer.queue.not_found"));
                                 return 0;
                             }
-                            Messages.success(context.getSource(), "已从队列中移除。", false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.queue.removed"), false);
                             return showQueue(context.getSource(), 1);
                         })))
                 .then(Commands.literal("clear")
@@ -330,12 +335,12 @@ public final class MusicCommands {
         TrackInfo currentTrack = MusicPlayerMod.queueService().currentTrack();
         sendHeader(source);
         sendQuickBar(source,
-                Messages.clickableCommand("[当前播放]", "查看当前播放", "/music now", ChatFormatting.AQUA),
-                Messages.clickableCommand("[刷新]", "重新查看当前页队列", "/music queue " + page.page(), ChatFormatting.YELLOW),
-                Messages.clickableCommand("[跳过]", "投票或直接跳过当前歌曲", "/music skip", ChatFormatting.GRAY),
-                Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.DARK_GRAY));
+                Messages.clickableCommand(Component.translatable("musicplayer.queue.now_label"), Component.translatable("musicplayer.queue.now_hover"), "/music now", ChatFormatting.AQUA),
+                Messages.clickableCommand(Component.translatable("musicplayer.queue.refresh_label"), Component.translatable("musicplayer.queue.refresh_hover"), "/music queue " + page.page(), ChatFormatting.YELLOW),
+                Messages.clickableCommand(Component.translatable("musicplayer.common.skip_label"), Component.translatable("musicplayer.common.skip_hover"), "/music skip", ChatFormatting.GRAY),
+                Messages.clickableCommand(Component.translatable("musicplayer.common.help_label"), Component.translatable("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
         if (currentTrack == null) {
-            Messages.sendSuccess(source,  Component.literal("当前没有歌曲在播放。").withStyle(ChatFormatting.GRAY), false);
+            Messages.sendSuccess(source,  Component.translatable("musicplayer.queue.nothing_playing").withStyle(ChatFormatting.GRAY), false);
         } else {
             long elapsedMs = MusicPlayerMod.queueService().playbackElapsedMillis();
             long durationMs = MusicPlayerMod.queueService().playbackDurationMillis();
@@ -346,22 +351,22 @@ public final class MusicCommands {
             Messages.sendSuccess(source,  renderProgressLine(elapsed, duration, requesterName, MusicPlayerMod.queueService().isPaused(), elapsedMs, durationMs), false);
         }
         if (totalEntries == 0) {
-            Messages.sendSuccess(source,  Component.literal("队列为空。").withStyle(ChatFormatting.GRAY), false);
+            Messages.sendSuccess(source,  Component.translatable("musicplayer.queue.empty").withStyle(ChatFormatting.GRAY), false);
             return 1;
         }
         Messages.sendSuccess(source,  spacer(), false);
-        Messages.sendSuccess(source,  sectionHeader("单点队列", "点击「置顶」可将歌曲提升到队列顶部"), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.queue.title"), Component.translatable("musicplayer.queue.hint")), false);
         List<SearchEntry> entries = MusicPlayerMod.queueService().queuedEntries(page.page(), page.pageSize());
         for (int index = 0; index < entries.size(); index++) {
             SearchEntry entry = entries.get(index);
             int order = (page.page() - 1) * page.pageSize() + index + 1;
             MutableComponent line = Component.literal(order + ". ").withStyle(ChatFormatting.DARK_GRAY)
-                    .append(Messages.clickableCommand("[下一首]", "将这首歌调整为下一首播放", "/music queue promote " + entry.id(), ChatFormatting.GREEN))
+                    .append(Messages.clickableCommand(Component.translatable("musicplayer.queue.next_label"), Component.translatable("musicplayer.queue.next_hover"), "/music queue promote " + entry.id(), ChatFormatting.GREEN))
                     .append(Component.literal(" "))
-                    .append(clickableText(entry.title(), entry.titleCommand(), "重新播放这首歌曲", ChatFormatting.AQUA));
-            if (entry.subtitle() != null && !entry.subtitle().isBlank()) {
+                    .append(clickableText(entry.title(), entry.titleCommand(), Component.translatable("musicplayer.queue.replay_hover"), ChatFormatting.AQUA));
+            if (entry.hasSubtitle()) {
                 line.append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
-                line.append(clickableText(entry.subtitle(), entry.subtitleCommand(), "查看作者详情", ChatFormatting.GRAY));
+                line.append(clickableText(entry.subtitle(), entry.subtitleCommand(), Component.translatable("musicplayer.common.view_artist_hover"), ChatFormatting.GRAY));
             }
             Messages.sendSuccess(source,  line, false);
         }
@@ -384,22 +389,22 @@ public final class MusicCommands {
                 .then(Commands.literal("order")
                         .executes(context -> {
                             PlayOrder current = MusicPlayerMod.queueService().playOrder();
-                            Messages.info(context.getSource(), "当前播放顺序: " + current.displayName(), false);
+                            Messages.info(context.getSource(), Component.translatable("musicplayer.playlist.current_order", Component.translatable(current.translationKey())), false);
                             return 1;
                         })
                         .then(Commands.literal("sequential").executes(context -> {
                             MusicPlayerMod.queueService().setPlayOrder(PlayOrder.SEQUENTIAL);
-                            Messages.success(context.getSource(), "播放顺序已切换为: 正序", false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.playlist.order_changed", Component.translatable("musicplayer.play_order.sequential")), false);
                             return 1;
                         }))
                         .then(Commands.literal("reverse").executes(context -> {
                             MusicPlayerMod.queueService().setPlayOrder(PlayOrder.REVERSE);
-                            Messages.success(context.getSource(), "播放顺序已切换为: 倒序", false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.playlist.order_changed", Component.translatable("musicplayer.play_order.reverse")), false);
                             return 1;
                         }))
                         .then(Commands.literal("shuffle").executes(context -> {
                             MusicPlayerMod.queueService().setPlayOrder(PlayOrder.SHUFFLE);
-                            Messages.success(context.getSource(), "播放顺序已切换为: 随机", false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.playlist.order_changed", Component.translatable("musicplayer.play_order.shuffle")), false);
                             return 1;
                         })));
     }
@@ -411,10 +416,10 @@ public final class MusicCommands {
         int remaining = MusicPlayerMod.queueService().playlistRemainingCount();
 
         sendQuickBar(source,
-                Messages.clickableCommand("[队列]", "查看队列", "/music queue", ChatFormatting.YELLOW),
-                Messages.clickableCommand("[加载列表]", "查看当前歌单已加载的曲目", "/music playlist list", ChatFormatting.AQUA),
-                isPlaylistMode ? Messages.clickableCommand("[停止歌单]", "停止歌单播放模式", "/music playlist stop", ChatFormatting.DARK_GRAY) : null,
-                Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.DARK_GRAY));
+                Messages.clickableCommand(Component.translatable("musicplayer.common.queue_label"), Component.translatable("musicplayer.common.queue_hover"), "/music queue", ChatFormatting.YELLOW),
+                Messages.clickableCommand(Component.translatable("musicplayer.playlist.loaded_label"), Component.translatable("musicplayer.playlist.loaded_hover"), "/music playlist list", ChatFormatting.AQUA),
+                isPlaylistMode ? Messages.clickableCommand(Component.translatable("musicplayer.playlist.stop_label"), Component.translatable("musicplayer.playlist.stop_hover"), "/music playlist stop", ChatFormatting.DARK_GRAY) : null,
+                Messages.clickableCommand(Component.translatable("musicplayer.common.help_label"), Component.translatable("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
 
         TrackInfo currentTrack = MusicPlayerMod.queueService().currentTrack();
         if (currentTrack != null) {
@@ -429,20 +434,21 @@ public final class MusicCommands {
         }
 
         Messages.sendSuccess(source,  spacer(), false);
-        MutableComponent statusLine = Component.literal("单点队列: ").withStyle(ChatFormatting.GOLD)
-                .append(Component.literal(String.valueOf(queueSize)).withStyle(ChatFormatting.AQUA))
-                .append(Component.literal(" 首").withStyle(ChatFormatting.GRAY));
+        MutableComponent statusLine = Component.translatable("musicplayer.playlist.queue_status",
+                Component.literal(String.valueOf(queueSize)).withStyle(ChatFormatting.AQUA)).withStyle(ChatFormatting.GOLD);
         if (isPlaylistMode) {
-            statusLine.append(Component.literal("  ·  歌单队列: ").withStyle(ChatFormatting.GOLD))
-                    .append(Component.literal(String.valueOf(remaining)).withStyle(ChatFormatting.AQUA))
-                    .append(Component.literal(" 首").withStyle(ChatFormatting.GRAY))
-                    .append(Component.literal("  ·  方向: ").withStyle(ChatFormatting.GOLD))
-                    .append(Component.literal(MusicPlayerMod.queueService().isPlaylistReversed() ? "倒序" : "正序").withStyle(ChatFormatting.AQUA));
+            statusLine.append(Component.literal("  ·  ").withStyle(ChatFormatting.GOLD))
+                    .append(Component.translatable("musicplayer.playlist.playlist_queue_status",
+                            Component.literal(String.valueOf(remaining)).withStyle(ChatFormatting.AQUA)).withStyle(ChatFormatting.GOLD))
+                    .append(Component.literal("  ·  ").withStyle(ChatFormatting.GOLD))
+                    .append(Component.translatable("musicplayer.playlist.direction_prefix").withStyle(ChatFormatting.GOLD))
+                    .append(Component.translatable(MusicPlayerMod.queueService().isPlaylistReversed() ? "musicplayer.play_order.reverse" : "musicplayer.play_order.sequential").withStyle(ChatFormatting.AQUA));
         }
-        statusLine.append(Component.literal("  ·  顺序: ").withStyle(ChatFormatting.GOLD))
+        statusLine.append(Component.literal("  ·  ").withStyle(ChatFormatting.GOLD))
+                .append(Component.translatable("musicplayer.playlist.order_prefix").withStyle(ChatFormatting.GOLD))
                 .append(Messages.clickableCommand(
-                        MusicPlayerMod.queueService().playOrder().displayName(),
-                        "切换播放顺序: /music playlist order [sequential|reverse|shuffle]",
+                        Component.translatable(MusicPlayerMod.queueService().playOrder().translationKey()),
+                        Component.translatable("musicplayer.playlist.order_hover"),
                         "/music playlist order",
                         ChatFormatting.AQUA));
         Messages.sendSuccess(source,  statusLine, false);
@@ -453,7 +459,7 @@ public final class MusicCommands {
     private static int showPlaylistTracks(CommandSourceStack source) {
         sendHeader(source);
         if (!MusicPlayerMod.queueService().isPlaylistMode()) {
-            Messages.sendSuccess(source,  Component.literal("当前没有正在播放的歌单。").withStyle(ChatFormatting.GRAY), false);
+            Messages.sendSuccess(source,  Component.translatable("musicplayer.playlist.none").withStyle(ChatFormatting.GRAY), false);
             Messages.sendSuccess(source,  spacer(), false);
             return 1;
         }
@@ -463,23 +469,23 @@ public final class MusicCommands {
         int remaining = MusicPlayerMod.queueService().playlistRemainingCount();
 
         sendQuickBar(source,
-                Messages.clickableCommand("[歌单状态]", "查看歌单播放状态", "/music playlist", ChatFormatting.AQUA),
-                Messages.clickableCommand("[停止歌单]", "停止歌单播放模式", "/music playlist stop", ChatFormatting.DARK_GRAY),
-                Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.DARK_GRAY));
+                Messages.clickableCommand(Component.translatable("musicplayer.playlist.status_label"), Component.translatable("musicplayer.playlist.status_hover"), "/music playlist", ChatFormatting.AQUA),
+                Messages.clickableCommand(Component.translatable("musicplayer.playlist.stop_label"), Component.translatable("musicplayer.playlist.stop_hover"), "/music playlist stop", ChatFormatting.DARK_GRAY),
+                Messages.clickableCommand(Component.translatable("musicplayer.common.help_label"), Component.translatable("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
 
         Messages.sendSuccess(source,  spacer(), false);
-        Messages.sendSuccess(source,  Component.literal("歌单队列: " + totalEntries + " 首，剩余 " + remaining + " 首").withStyle(ChatFormatting.DARK_GRAY), false);
+        Messages.sendSuccess(source,  Component.translatable("musicplayer.playlist.list_status", totalEntries, remaining).withStyle(ChatFormatting.DARK_GRAY), false);
         Messages.sendSuccess(source,  spacer(), false);
 
         for (int index = 0; index < entries.size(); index++) {
             SearchEntry entry = entries.get(index);
             MutableComponent line = Component.literal((index + 1) + ". ").withStyle(ChatFormatting.DARK_GRAY)
-                    .append(Messages.clickableCommand("[点歌]", "点击重新点播这首歌曲", "/music play song " + entry.id(), ChatFormatting.GREEN))
+                    .append(Messages.clickableCommand(Component.translatable("musicplayer.common.request_label"), Component.translatable("musicplayer.common.rerequest_hover"), "/music play song " + entry.id(), ChatFormatting.GREEN))
                     .append(Component.literal(" "))
-                    .append(clickableText(entry.title(), entry.titleCommand(), "在浏览器中打开", ChatFormatting.AQUA));
-            if (entry.subtitle() != null && !entry.subtitle().isBlank()) {
+                    .append(clickableText(entry.title(), entry.titleCommand(), Component.translatable("musicplayer.common.open_browser_hover"), ChatFormatting.AQUA));
+            if (entry.hasSubtitle()) {
                 line.append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
-                line.append(clickableText(entry.subtitle(), entry.subtitleCommand(), "查看作者详情", ChatFormatting.GRAY));
+                line.append(clickableText(entry.subtitle(), entry.subtitleCommand(), Component.translatable("musicplayer.common.view_artist_hover"), ChatFormatting.GRAY));
             }
             Messages.sendSuccess(source,  line, false);
         }
@@ -492,25 +498,25 @@ public final class MusicCommands {
                 .executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
                     boolean now = MusicPlayerMod.queueService().toggleLyrics(player);
-                    Messages.success(context.getSource(), now ? "歌词已开启。" : "歌词已关闭。", false);
+                    Messages.success(context.getSource(), Component.translatable(now ? "musicplayer.lyrics.enabled" : "musicplayer.lyrics.disabled"), false);
                     return 1;
                 })
                 .then(Commands.literal("on").executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
                     MusicPlayerMod.queueService().toggleLyrics(player, true);
-                    Messages.success(context.getSource(), "歌词已开启。", false);
+                    Messages.success(context.getSource(), Component.translatable("musicplayer.lyrics.enabled"), false);
                     return 1;
                 }))
                 .then(Commands.literal("off").executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
                     MusicPlayerMod.queueService().toggleLyrics(player, false);
-                    Messages.success(context.getSource(), "歌词已关闭。", false);
+                    Messages.success(context.getSource(), Component.translatable("musicplayer.lyrics.disabled"), false);
                     return 1;
                 }))
                 .then(Commands.literal("status").executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
                     boolean on = MusicPlayerMod.queueService().isLyricsEnabled(player);
-                    Messages.info(context.getSource(), "歌词显示: " + (on ? "开启" : "关闭"), false);
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.lyrics.status", yesNo(on)), false);
                     return 1;
                 }));
     }
@@ -519,7 +525,7 @@ public final class MusicCommands {
         return Commands.literal("join").executes(context -> {
             ServerPlayer player = context.getSource().getPlayerOrException();
             MusicPlayerMod.queueService().joinPlayer(player);
-            Messages.success(context.getSource(), "你已加入当前播放。", false);
+            Messages.success(context.getSource(), Component.translatable("musicplayer.join.done"), false);
             return 1;
         });
     }
@@ -528,7 +534,7 @@ public final class MusicCommands {
         return Commands.literal("leave").executes(context -> {
             ServerPlayer player = context.getSource().getPlayerOrException();
             MusicPlayerMod.queueService().leavePlayer(player);
-            Messages.success(context.getSource(), "你已退出当前播放。", false);
+            Messages.success(context.getSource(), Component.translatable("musicplayer.leave.done"), false);
             return 1;
         });
     }
@@ -538,7 +544,7 @@ public final class MusicCommands {
                 .then(Commands.literal("once").executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
                     MusicPlayerMod.queueService().mutePlayerOnce(player);
-                    Messages.success(context.getSource(), "你已静音当前歌曲，下一首歌将自动恢复播放。", false);
+                    Messages.success(context.getSource(), Component.translatable("musicplayer.mute.done"), false);
                     return 1;
                 }));
     }
@@ -563,7 +569,7 @@ public final class MusicCommands {
                         .then(Commands.argument("song_id", StringArgumentType.string()).executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
                             String songId = StringArgumentType.getString(context, "song_id");
-                            loading(context.getSource(), MusicPlayerMod.queueService().isPlaying() ? "正在解析音乐并加入队列..." : "正在解析音乐并准备播放...");
+                            loading(context.getSource(), MusicPlayerMod.queueService().isPlaying() ? Component.translatable("musicplayer.play.loading_queue") : Component.translatable("musicplayer.play.loading_prepare"));
                             MusicPlayerMod.queueService().requestSong(context.getSource().getServer(), context.getSource(), player, songId);
                             return 1;
                         })))
@@ -571,13 +577,13 @@ public final class MusicCommands {
                             .then(Commands.argument("playlist_id", StringArgumentType.string()).executes(context -> {
                                 ServerPlayer player = context.getSource().getPlayerOrException();
                                 String playlistId = StringArgumentType.getString(context, "playlist_id");
-                                loading(context.getSource(), "正在加载歌单并切换到歌单播放模式，请稍候...");
+                                loading(context.getSource(), Component.translatable("musicplayer.play.loading_playlist"));
                                 MusicPlayerMod.queueService().requestPlaylist(context.getSource().getServer(), context.getSource(), player, playlistId);
                                 return 1;
                             }).then(Commands.literal("reverse").executes(context -> {
                                 ServerPlayer player = context.getSource().getPlayerOrException();
                                 String playlistId = StringArgumentType.getString(context, "playlist_id");
-                                loading(context.getSource(), "正在倒序加载歌单，请稍候...");
+                                loading(context.getSource(), Component.translatable("musicplayer.play.loading_playlist_reverse"));
                                 MusicPlayerMod.queueService().requestPlaylist(context.getSource().getServer(), context.getSource(), player, playlistId, true);
                                 return 1;
                             }))))
@@ -585,7 +591,7 @@ public final class MusicCommands {
                             .then(Commands.argument("program_id", StringArgumentType.string()).executes(context -> {
                                 ServerPlayer player = context.getSource().getPlayerOrException();
                                 String programId = StringArgumentType.getString(context, "program_id");
-                                loading(context.getSource(), "正在解析节目并加入队列...");
+                                loading(context.getSource(), Component.translatable("musicplayer.play.loading_program"));
                                 MusicPlayerMod.queueService().requestProgram(context.getSource().getServer(), context.getSource(), player, programId);
                                 return 1;
                             })))
@@ -593,13 +599,13 @@ public final class MusicCommands {
                             .then(Commands.argument("radio_id", StringArgumentType.string()).executes(context -> {
                                 ServerPlayer player = context.getSource().getPlayerOrException();
                                 String radioId = StringArgumentType.getString(context, "radio_id");
-                                loading(context.getSource(), "正在加载播客节目...");
+                                loading(context.getSource(), Component.translatable("musicplayer.play.loading_radio"));
                                 MusicPlayerMod.queueService().requestRadio(context.getSource().getServer(), context.getSource(), player, radioId, false);
                                 return 1;
                             }).then(Commands.literal("reverse").executes(context -> {
                                 ServerPlayer player = context.getSource().getPlayerOrException();
                                 String radioId = StringArgumentType.getString(context, "radio_id");
-                                loading(context.getSource(), "正在倒序加载播客节目...");
+                                loading(context.getSource(), Component.translatable("musicplayer.play.loading_radio_reverse"));
                                 MusicPlayerMod.queueService().requestRadio(context.getSource().getServer(), context.getSource(), player, radioId, true);
                                 return 1;
                             }))));
@@ -611,15 +617,15 @@ public final class MusicCommands {
                         .then(Commands.argument("song_id", StringArgumentType.string()).executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
                             if (!MusicDiscHelper.isBurnableDisc(player.getItemInHand(InteractionHand.MAIN_HAND))) {
-                                Messages.warning(context.getSource(), "请先在主手持有一张可刻录的唱片。");
+                                Messages.warning(context.getSource(), Component.translatable("musicplayer.burn.need_disc"));
                                 return 0;
                             }
                             String songId = StringArgumentType.getString(context, "song_id");
-                            loading(context.getSource(), "正在刻录音乐唱片，请稍候...");
+                            loading(context.getSource(), Component.translatable("musicplayer.burn.loading"));
                             MinecraftServer server = context.getSource().getServer();
                             MusicPlayerMod.netease().resolveSong(songId).whenComplete((track, throwable) -> server.execute(() -> {
                                 if (throwable != null) {
-                                    Messages.warning(context.getSource(), "刻录失败: " + rootMessage(throwable));
+                                    Messages.warning(context.getSource(), Component.translatable("musicplayer.burn.failed", Messages.textOrTranslatable(rootMessage(throwable))));
                                     return;
                                 }
                                 burnHeldDisc(context.getSource(), player, track);
@@ -635,7 +641,7 @@ public final class MusicCommands {
     }
 
     private static int generateRandomList(CommandSourceStack source) {
-        loading(source, "正在从热门歌单中随机挑选音乐，请稍候...");
+        loading(source, Component.translatable("musicplayer.random.loading"));
         MinecraftServer server = source.getServer();
         MusicPlayerMod.netease().randomHotTracks(10).whenComplete((tracks, throwable) ->
                 server.execute(() -> showRandomTracks(source, tracks, throwable)));
@@ -646,7 +652,7 @@ public final class MusicCommands {
         return Commands.literal("radio")
                 .executes(context -> {
                     sendHeader(context.getSource());
-                    context.getSource().sendSuccess(() -> sectionHeader("播客中心", "浏览和发现播客"), false);
+                    context.getSource().sendSuccess(() -> sectionHeader(Component.translatable("musicplayer.radio.title"), Component.translatable("musicplayer.radio.subtitle")), false);
                     return 1;
                 })
                 .then(Commands.literal("hot")
@@ -664,41 +670,41 @@ public final class MusicCommands {
     }
 
     private static void showHotRadios(CommandSourceStack source, int page) {
-        loading(source, "正在获取热门播客...");
+        loading(source, Component.translatable("musicplayer.radio.loading_hot"));
         MinecraftServer server = source.getServer();
         int offset = (page - 1) * 30;
         MusicPlayerMod.netease().hotRadios(30, offset).whenComplete((results, throwable) -> server.execute(() -> {
             if (throwable != null) {
-                Messages.warning(source, "获取热门播客失败: " + rootMessage(throwable));
+                Messages.warning(source, Component.translatable("musicplayer.radio.hot_failed", Messages.textOrTranslatable(rootMessage(throwable))));
                 return;
             }
             if (results.isEmpty()) {
-                Messages.warning(source, "没有更多热门播客。");
+                Messages.warning(source, Component.translatable("musicplayer.radio.no_more_hot"));
                 return;
             }
             sendHeader(source);
-            Messages.sendSuccess(source,  sectionHeader("热门播客", "第 " + page + " 页"), false);
+            Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.radio.hot_title"), Component.translatable("musicplayer.radio.page_hint", page)), false);
             Messages.sendSuccess(source,  spacer(), false);
             for (SearchEntry entry : results) {
-                Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand("[查看]", "查看播客详情", "/music view radio " + entry.id(), ChatFormatting.GREEN), "查看播客详情", ""), false);
+                Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_radio_hover"), "/music view radio " + entry.id(), ChatFormatting.GREEN), Component.translatable("musicplayer.common.view_radio_hover"), Component.empty()), false);
             }
             Messages.sendSuccess(source,  spacer(), false);
         }));
     }
 
     private static int showRadioCategories(CommandSourceStack source) {
-        loading(source, "正在获取播客分类...");
+        loading(source, Component.translatable("musicplayer.radio.loading_categories"));
         MinecraftServer server = source.getServer();
         MusicPlayerMod.netease().radioCategories().whenComplete((categories, throwable) -> server.execute(() -> {
             if (throwable != null) {
-                Messages.warning(source, "获取播客分类失败: " + rootMessage(throwable));
+                Messages.warning(source, Component.translatable("musicplayer.radio.categories_failed", Messages.textOrTranslatable(rootMessage(throwable))));
                 return;
             }
             sendHeader(source);
-            Messages.sendSuccess(source,  sectionHeader("播客推荐分类", "点播播客: /music play radio <id>"), false);
+            Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.radio.categories_title"), Component.translatable("musicplayer.radio.categories_hint")), false);
             Messages.sendSuccess(source,  spacer(), false);
             for (SearchEntry entry : categories) {
-                Messages.sendSuccess(source,  renderEntry(entry, Component.literal("").withStyle(ChatFormatting.GREEN), "播客分类", ""), false);
+                Messages.sendSuccess(source,  renderEntry(entry, Component.literal("").withStyle(ChatFormatting.GREEN), Component.translatable("musicplayer.radio.category_hover"), Component.empty()), false);
             }
             Messages.sendSuccess(source,  spacer(), false);
         }));
@@ -707,27 +713,27 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> search() {
         return Commands.literal("search")
-                .then(pagedSearch("song", "正在搜索歌曲，请稍候...", (source, keyword, page, literal) -> {
+                .then(pagedSearch("song", Component.translatable("musicplayer.search.loading_song"), (source, keyword, page, literal) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().searchSongs(keyword, page).whenComplete((results, throwable) -> server.execute(() -> sendSongResults(source, keyword, page, literal, results, throwable)));
                 }))
-                .then(pagedSearch("artist", "正在搜索作者，请稍候...", (source, keyword, page, literal) -> {
+                .then(pagedSearch("artist", Component.translatable("musicplayer.search.loading_artist"), (source, keyword, page, literal) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().searchArtists(keyword, page).whenComplete((results, throwable) -> server.execute(() -> sendArtistResults(source, keyword, page, literal, results, throwable)));
                 }))
-                .then(pagedSearch("author", "正在搜索作者，请稍候...", (source, keyword, page, literal) -> {
+                .then(pagedSearch("author", Component.translatable("musicplayer.search.loading_artist"), (source, keyword, page, literal) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().searchArtists(keyword, page).whenComplete((results, throwable) -> server.execute(() -> sendArtistResults(source, keyword, page, literal, results, throwable)));
                 }))
-                .then(pagedSearch("playlist", "正在搜索歌单，请稍候...", (source, keyword, page, literal) -> {
+                .then(pagedSearch("playlist", Component.translatable("musicplayer.search.loading_playlist"), (source, keyword, page, literal) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().searchPlaylists(keyword, page).whenComplete((results, throwable) -> server.execute(() -> sendPlaylistResults(source, keyword, page, literal, results, throwable)));
                 }))
-                .then(pagedSearch("user", "正在搜索用户，请稍候...", (source, keyword, page, literal) -> {
+                .then(pagedSearch("user", Component.translatable("musicplayer.search.loading_user"), (source, keyword, page, literal) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().searchUsers(keyword, page).whenComplete((results, throwable) -> server.execute(() -> sendUserResults(source, keyword, page, literal, results, throwable)));
                 }))
-                .then(pagedSearch("radio", "正在搜索播客，请稍候...", (source, keyword, page, literal) -> {
+                .then(pagedSearch("radio", Component.translatable("musicplayer.search.loading_radio"), (source, keyword, page, literal) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().searchRadios(keyword, page).whenComplete((results, throwable) -> server.execute(() -> sendRadioResults(source, keyword, page, literal, results, throwable)));
                 }));
@@ -735,29 +741,29 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> view() {
         return Commands.literal("view")
-                .then(pagedView("playlist", "playlist_id", "正在加载歌单详情...", (source, id, page) -> {
+                .then(pagedView("playlist", "playlist_id", Component.translatable("musicplayer.view.loading_playlist"), (source, id, page) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().playlistDetail(id).whenComplete((playlist, throwable) -> server.execute(() -> showPlaylist(source, id, page, playlist, throwable)));
                 }))
-                .then(pagedView("user", "user_id", "正在加载用户歌单...", (source, id, page) -> {
+                .then(pagedView("user", "user_id", Component.translatable("musicplayer.view.loading_user"), (source, id, page) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().userPlaylists(id).whenComplete((user, throwable) -> server.execute(() -> showUserPlaylists(source, id, page, user, throwable)));
                 }))
-                .then(pagedView("artist", "artist_id", "正在加载作者详情...", (source, id, page) -> {
+                .then(pagedView("artist", "artist_id", Component.translatable("musicplayer.view.loading_artist"), (source, id, page) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().artistDetail(id).whenComplete((artist, throwable) -> server.execute(() -> showArtist(source, id, page, artist, throwable, "artist")));
                 }))
-                .then(pagedView("author", "artist_id", "正在加载作者详情...", (source, id, page) -> {
+                .then(pagedView("author", "artist_id", Component.translatable("musicplayer.view.loading_artist"), (source, id, page) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().artistDetail(id).whenComplete((artist, throwable) -> server.execute(() -> showArtist(source, id, page, artist, throwable, "author")));
                 }))
                 .then(viewUrl())
-                .then(pagedView("radio", "radio_id", "正在加载播客详情...", (source, id, page) -> {
+                .then(pagedView("radio", "radio_id", Component.translatable("musicplayer.view.loading_radio"), (source, id, page) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().radioDetail(id).whenComplete((radio, throwable) ->
                             server.execute(() -> showRadioDetail(source, id, page, radio, throwable)));
                 }))
-                .then(pagedView("program", "program_id", "正在加载节目详情...", (source, id, page) -> {
+                .then(pagedView("program", "program_id", Component.translatable("musicplayer.view.loading_program"), (source, id, page) -> {
                     MinecraftServer server = source.getServer();
                     MusicPlayerMod.netease().programDetail(id).whenComplete((program, throwable) ->
                             server.execute(() -> showProgramDetail(source, program, throwable)));
@@ -771,26 +777,26 @@ public final class MusicCommands {
             String url = StringArgumentType.getString(context, "url");
             Matcher m = URL_ID_PATTERN.matcher(url);
             if (!m.find()) {
-                Messages.warning(context.getSource(), "无法从链接中解析出音乐 ID。");
+                Messages.warning(context.getSource(), Component.translatable("musicplayer.view.url_no_id"));
                 return 0;
             }
             String id = m.group(1);
             MinecraftServer server = context.getSource().getServer();
 
             if (url.contains("/song")) {
-                loading(context.getSource(), "正在加载歌曲详情...");
+                loading(context.getSource(), Component.translatable("musicplayer.view.loading_song"));
                 MusicPlayerMod.netease().resolveSong(id).whenComplete((track, throwable) ->
                         server.execute(() -> showSong(context.getSource(), track, throwable)));
             } else if (url.contains("/playlist")) {
-                loading(context.getSource(), "正在加载歌单详情...");
+                loading(context.getSource(), Component.translatable("musicplayer.view.loading_playlist"));
                 MusicPlayerMod.netease().playlistDetail(id).whenComplete((playlist, throwable) ->
                         server.execute(() -> showPlaylist(context.getSource(), id, 1, playlist, throwable)));
             } else if (url.contains("/djradio") || url.contains("/dj")) {
-                loading(context.getSource(), "正在加载播客详情...");
+                loading(context.getSource(), Component.translatable("musicplayer.view.loading_radio"));
                 MusicPlayerMod.netease().radioDetail(id).whenComplete((radio, throwable) ->
                         server.execute(() -> showRadioDetail(context.getSource(), id, 1, radio, throwable)));
             } else {
-                Messages.warning(context.getSource(), "不支持的链接类型，仅支持 music.163.com 的单曲、歌单和播客链接。");
+                Messages.warning(context.getSource(), Component.translatable("musicplayer.view.unsupported_url"));
                 return 0;
             }
             return 1;
@@ -801,7 +807,7 @@ public final class MusicCommands {
         return Commands.literal("stop")
                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                 .executes(context -> {
-                    MusicPlayerMod.queueService().stop(context.getSource().getServer(), "管理员已停止播放。");
+                    MusicPlayerMod.queueService().stop(context.getSource().getServer(), "musicplayer.stop.admin");
                     return 1;
                 });
     }
@@ -812,20 +818,23 @@ public final class MusicCommands {
                 .then(Commands.literal("reload").executes(context -> {
                     MusicPlayerConfigManager.load();
                     MusicPlayerMod.queueService().clearTrackCache();
-                    Messages.success(context.getSource(), "配置已重新加载，音源缓存已清空。", false);
+                    Messages.success(context.getSource(), Component.translatable("musicplayer.config.reloaded"), false);
                     return 1;
                 }))
                 .then(Commands.literal("status").executes(context -> {
                     MusicPlayerConfig config = MusicPlayerConfigManager.get();
-                    Messages.info(context.getSource(), "当前音乐服务地址: " + config.neteaseBaseUrl, false);
-                    Messages.info(context.getSource(), "歌曲点播: " + yesNo(config.allowSongRequest) + "，歌单点播: " + yesNo(config.allowPlaylistRequest), false);
-                    Messages.info(context.getSource(), "自动切歌: " + yesNo(config.autoAdvance) + "，加载提示: " + yesNo(config.showLoadingHints), false);
-                    Messages.info(context.getSource(), "实时歌词: " + yesNo(config.showLyrics), false);
-                    Messages.info(context.getSource(), "代理模式: " + (!config.proxy.isBlank() ? ("手动代理 " + config.proxy) : (config.useSystemProxy ? "自动系统代理" : "直连")), false);
-                    Messages.info(context.getSource(), "IPv4 优先: " + yesNo(config.preferIpv4) + "，连接超时: " + config.connectTimeoutSeconds + "s，读取超时: " + config.readTimeoutSeconds + "s", false);
-                    Messages.info(context.getSource(), "搜索上限: " + config.searchLimit + "，队列上限: " + config.maxQueueSize + "，每玩家点数上限: " + config.maxSongsPerPlayer + "，歌单导入上限: " + config.playlistQueueLimit + "，预缓存数量: " + config.queueCacheSize, false);
-                    Messages.info(context.getSource(), "投票切歌阈值: " + config.voteSkipPercent, false);
-                    Messages.info(context.getSource(), "战利品音乐唱片: " + yesNo(config.enableLootMusicDiscs) + "，生成概率: " + config.lootMusicDiscChance + "，每个容器数量: " + config.lootMusicDiscCount, false);
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_base_url", config.neteaseBaseUrl), false);
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_requests", yesNo(config.allowSongRequest), yesNo(config.allowPlaylistRequest)), false);
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_auto", yesNo(config.autoAdvance), yesNo(config.showLoadingHints)), false);
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_lyrics", yesNo(config.showLyrics)), false);
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_proxy",
+                            !config.proxy.isBlank()
+                                    ? Component.translatable("musicplayer.config.proxy_manual", config.proxy)
+                                    : Component.translatable(config.useSystemProxy ? "musicplayer.config.proxy_auto" : "musicplayer.config.proxy_direct")), false);
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_network", yesNo(config.preferIpv4), config.connectTimeoutSeconds, config.readTimeoutSeconds), false);
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_limits", config.searchLimit, config.maxQueueSize, config.maxSongsPerPlayer, config.playlistQueueLimit, config.queueCacheSize), false);
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_vote_skip", config.voteSkipPercent), false);
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_loot", yesNo(config.enableLootMusicDiscs), config.lootMusicDiscChance, config.lootMusicDiscCount), false);
                     return 1;
                 }))
                 .then(Commands.literal("clearqueue").executes(context -> {
@@ -837,12 +846,12 @@ public final class MusicCommands {
                             MusicPlayerConfig config = MusicPlayerConfigManager.get();
                             String value = StringArgumentType.getString(context, "value").trim();
                             if (!config.allowCustomServer && !"default".equalsIgnoreCase(value) && !MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL.equalsIgnoreCase(value)) {
-                                Messages.warning(context.getSource(), "管理员已禁用自定义音乐服务地址。");
+                                Messages.warning(context.getSource(), Component.translatable("musicplayer.config.custom_server_disabled"));
                                 return 0;
                             }
                             config.neteaseBaseUrl = "default".equalsIgnoreCase(value) ? MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL : value;
                             MusicPlayerConfigManager.save();
-                            Messages.success(context.getSource(), "音乐服务地址已更新为: " + config.neteaseBaseUrl, false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.config.base_url_updated", config.neteaseBaseUrl), false);
                             return 1;
                         })))
                         .then(boolSetting("allowCustomServer", value -> MusicPlayerConfigManager.get().allowCustomServer = value))
@@ -858,7 +867,7 @@ public final class MusicCommands {
                             String value = StringArgumentType.getString(context, "value").trim();
                             MusicPlayerConfigManager.get().proxy = "none".equalsIgnoreCase(value) ? "" : value;
                             MusicPlayerConfigManager.save();
-                            Messages.success(context.getSource(), "已更新 proxy = " + (MusicPlayerConfigManager.get().proxy.isBlank() ? "<none>" : MusicPlayerConfigManager.get().proxy), false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.config.proxy_updated", MusicPlayerConfigManager.get().proxy.isBlank() ? "<none>" : MusicPlayerConfigManager.get().proxy), false);
                             return 1;
                         })))
                         .then(intSetting("connectTimeoutSeconds", 3, 60, value -> MusicPlayerConfigManager.get().connectTimeoutSeconds = value))
@@ -877,7 +886,7 @@ public final class MusicCommands {
                         .then(doubleSetting("voteSkipPercent", 0.1D, 1.0D, value -> MusicPlayerConfigManager.get().voteSkipPercent = value)));
     }
 
-    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> pagedSearch(String literal, String loadingText, PagedSearchExecutor executor) {
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> pagedSearch(String literal, Component loadingText, PagedSearchExecutor executor) {
         return Commands.literal(literal)
                 .then(Commands.argument("keyword", StringArgumentType.string()).executes(context -> {
                     loading(context.getSource(), loadingText);
@@ -893,7 +902,7 @@ public final class MusicCommands {
                         }))));
     }
 
-    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> pagedView(String literal, String idArgument, String loadingText, PagedViewExecutor executor) {
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> pagedView(String literal, String idArgument, Component loadingText, PagedViewExecutor executor) {
         return Commands.literal(literal)
                 .then(Commands.argument(idArgument, StringArgumentType.string()).executes(context -> {
                     loading(context.getSource(), loadingText);
@@ -913,7 +922,7 @@ public final class MusicCommands {
             boolean value = BoolArgumentType.getBool(context, "value");
             setter.accept(value);
             MusicPlayerConfigManager.save();
-            Messages.success(context.getSource(), "已更新 " + name + " = " + value, false);
+            Messages.success(context.getSource(), Component.translatable("musicplayer.config.updated", name, value), false);
             return 1;
         }));
     }
@@ -923,7 +932,7 @@ public final class MusicCommands {
             int value = IntegerArgumentType.getInteger(context, "value");
             setter.accept(value);
             MusicPlayerConfigManager.save();
-            Messages.success(context.getSource(), "已更新 " + name + " = " + value, false);
+            Messages.success(context.getSource(), Component.translatable("musicplayer.config.updated", name, value), false);
             return 1;
         }));
     }
@@ -933,25 +942,25 @@ public final class MusicCommands {
             double value = DoubleArgumentType.getDouble(context, "value");
             setter.accept(value);
             MusicPlayerConfigManager.save();
-            Messages.success(context.getSource(), "已更新 " + name + " = " + value, false);
+            Messages.success(context.getSource(), Component.translatable("musicplayer.config.updated", name, value), false);
             return 1;
         }));
     }
 
     private static void sendSongResults(CommandSourceStack source, String keyword, int page, String literal, List<SearchEntry> results, Throwable throwable) {
         if (throwable != null) {
-            Messages.warning(source, "搜索歌曲失败: " + rootMessage(throwable));
+            Messages.warning(source, Component.translatable("musicplayer.search.song_failed", Messages.textOrTranslatable(rootMessage(throwable))));
             return;
         }
         if (results.isEmpty()) {
-            Messages.warning(source, "没有搜索到匹配的歌曲。");
+            Messages.warning(source, Component.translatable("musicplayer.search.no_songs"));
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader("歌曲搜索结果", "歌曲名、作者名与操作按钮均可点击"), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.songs_title"), Component.translatable("musicplayer.search.songs_hint")), false);
         Messages.sendSuccess(source,  spacer(), false);
         for (SearchEntry entry : results) {
-            Messages.sendSuccess(source,  renderEntry(entry, trackActions(source, entry.id(), "[点歌]", "点击点歌", ChatFormatting.GREEN), "点击点歌", "点击查看作者详情"), false);
+            Messages.sendSuccess(source,  renderEntry(entry, trackActions(source, entry.id(), Component.translatable("musicplayer.common.request_label"), Component.translatable("musicplayer.common.request_hover"), ChatFormatting.GREEN), Component.translatable("musicplayer.common.request_hover"), Component.translatable("musicplayer.common.click_artist_hover")), false);
         }
         Messages.sendSuccess(source,  spacer(), false);
         sendSearchNavigation(source, literal, keyword, page, results.size());
@@ -959,18 +968,18 @@ public final class MusicCommands {
 
     private static void sendArtistResults(CommandSourceStack source, String keyword, int page, String literal, List<SearchEntry> results, Throwable throwable) {
         if (throwable != null) {
-            Messages.warning(source, "搜索作者失败: " + rootMessage(throwable));
+            Messages.warning(source, Component.translatable("musicplayer.search.artist_failed", Messages.textOrTranslatable(rootMessage(throwable))));
             return;
         }
         if (results.isEmpty()) {
-            Messages.warning(source, "没有搜索到匹配的作者。");
+            Messages.warning(source, Component.translatable("musicplayer.search.no_artists"));
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader("作者搜索结果", "点击作者名或查看按钮进入详情"), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.artists_title"), Component.translatable("musicplayer.search.artists_hint")), false);
         Messages.sendSuccess(source,  spacer(), false);
         for (SearchEntry entry : results) {
-            Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand("[查看]", "查看作者详情", "/music view artist " + entry.id(), ChatFormatting.GREEN), "查看作者详情", ""), false);
+            Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_artist_hover"), "/music view artist " + entry.id(), ChatFormatting.GREEN), Component.translatable("musicplayer.common.view_artist_hover"), Component.empty()), false);
         }
         Messages.sendSuccess(source,  spacer(), false);
         sendSearchNavigation(source, literal, keyword, page, results.size());
@@ -978,18 +987,18 @@ public final class MusicCommands {
 
     private static void sendPlaylistResults(CommandSourceStack source, String keyword, int page, String literal, List<SearchEntry> results, Throwable throwable) {
         if (throwable != null) {
-            Messages.warning(source, "搜索歌单失败: " + rootMessage(throwable));
+            Messages.warning(source, Component.translatable("musicplayer.search.playlist_failed", Messages.textOrTranslatable(rootMessage(throwable))));
             return;
         }
         if (results.isEmpty()) {
-            Messages.warning(source, "没有搜索到匹配的歌单。");
+            Messages.warning(source, Component.translatable("musicplayer.search.no_playlists"));
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader("歌单搜索结果", "可查看歌单详情或创建者信息"), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.playlists_title"), Component.translatable("musicplayer.search.playlists_hint")), false);
         Messages.sendSuccess(source,  spacer(), false);
         for (SearchEntry entry : results) {
-            Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand("[查看]", "查看歌单详情", "/music view playlist " + entry.id(), ChatFormatting.GREEN), "查看歌单详情", "点击查看创建者详情"), false);
+            Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_playlist_hover"), "/music view playlist " + entry.id(), ChatFormatting.GREEN), Component.translatable("musicplayer.common.view_playlist_hover"), Component.translatable("musicplayer.common.click_creator_hover")), false);
         }
         Messages.sendSuccess(source,  spacer(), false);
         sendSearchNavigation(source, literal, keyword, page, results.size());
@@ -997,18 +1006,18 @@ public final class MusicCommands {
 
     private static void sendUserResults(CommandSourceStack source, String keyword, int page, String literal, List<SearchEntry> results, Throwable throwable) {
         if (throwable != null) {
-            Messages.warning(source, "搜索用户失败: " + rootMessage(throwable));
+            Messages.warning(source, Component.translatable("musicplayer.search.user_failed", Messages.textOrTranslatable(rootMessage(throwable))));
             return;
         }
         if (results.isEmpty()) {
-            Messages.warning(source, "没有搜索到匹配的用户。");
+            Messages.warning(source, Component.translatable("musicplayer.search.no_users"));
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader("用户搜索结果", "点击用户可进入歌单列表"), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.users_title"), Component.translatable("musicplayer.search.users_hint")), false);
         Messages.sendSuccess(source,  spacer(), false);
         for (SearchEntry entry : results) {
-            Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand("[查看]", "查看用户歌单", "/music view user " + entry.id(), ChatFormatting.GREEN), "查看用户歌单", ""), false);
+            Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_user_playlists_hover"), "/music view user " + entry.id(), ChatFormatting.GREEN), Component.translatable("musicplayer.common.view_user_playlists_hover"), Component.empty()), false);
         }
         Messages.sendSuccess(source,  spacer(), false);
         sendSearchNavigation(source, literal, keyword, page, results.size());
@@ -1016,15 +1025,15 @@ public final class MusicCommands {
 
     private static void showRandomTracks(CommandSourceStack source, List<TrackInfo> tracks, Throwable throwable) {
         if (throwable != null) {
-            Messages.warning(source, "生成随机热门音乐列表失败: " + rootMessage(throwable));
+            Messages.warning(source, Component.translatable("musicplayer.random.failed", Messages.textOrTranslatable(rootMessage(throwable))));
             return;
         }
         if (tracks == null || tracks.isEmpty()) {
-            Messages.warning(source, "这次没有抽到可播放的热门音乐。");
+            Messages.warning(source, Component.translatable("musicplayer.random.empty"));
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader("随机热门音乐", "每次随机生成 10 首，可直接点歌、刻录、查看作者"), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.random.title"), Component.translatable("musicplayer.random.hint")), false);
         Messages.sendSuccess(source,  spacer(), false);
         for (TrackInfo track : tracks) {
             Messages.sendSuccess(source,  renderRandomTrack(source, track), false);
@@ -1034,11 +1043,11 @@ public final class MusicCommands {
 
     private static void showPlaylist(CommandSourceStack source, String playlistId, int requestedPage, PlaylistInfo playlist, Throwable throwable) {
         if (throwable != null) {
-            Messages.warning(source, "加载歌单失败: " + rootMessage(throwable));
+            Messages.warning(source, Component.translatable("musicplayer.playlist.load_failed", Messages.textOrTranslatable(rootMessage(throwable))));
             return;
         }
         if (playlist == null) {
-            Messages.warning(source, "未找到歌单详情。");
+            Messages.warning(source, Component.translatable("musicplayer.playlist.not_found"));
             return;
         }
 
@@ -1052,24 +1061,25 @@ public final class MusicCommands {
         MusicPlayerMod.netease().playlistTracksPage(playlistId, offset, pageSize)
                 .whenComplete((tracks, t) -> server.execute(() -> {
                     sendHeader(source);
-                    Messages.sendSuccess(source,  Component.literal("歌单: ").withStyle(ChatFormatting.GOLD)
-                            .append(clickableText(playlist.title(), "/music view playlist " + playlist.id(), "查看歌单详情", ChatFormatting.AQUA))
-                            .append(Component.literal(" · 创建者: ").withStyle(ChatFormatting.GRAY))
-                            .append(clickableText(playlist.ownerName(), "/music view user " + playlist.ownerId(), "查看创建者信息", ChatFormatting.YELLOW))
+                    Messages.sendSuccess(source,  Component.translatable("musicplayer.playlist.header_prefix").withStyle(ChatFormatting.GOLD)
+                            .append(clickableText(playlist.title(), "/music view playlist " + playlist.id(), Component.translatable("musicplayer.common.view_playlist_hover"), ChatFormatting.AQUA))
+                            .append(Component.literal(" · ").withStyle(ChatFormatting.GRAY))
+                            .append(Component.translatable("musicplayer.playlist.owner_prefix").withStyle(ChatFormatting.GRAY))
+                            .append(clickableText(playlist.ownerName(), "/music view user " + playlist.ownerId(), Component.translatable("musicplayer.common.view_creator_hover"), ChatFormatting.YELLOW))
                             .append(Component.literal(" "))
-                            .append(Messages.clickableCommand("[播放歌单]", "从第一首开始顺序播放", "/music play playlist " + playlist.id(), ChatFormatting.GREEN))
+                            .append(Messages.clickableCommand(Component.translatable("musicplayer.playlist.play_label"), Component.translatable("musicplayer.playlist.play_hover"), "/music play playlist " + playlist.id(), ChatFormatting.GREEN))
                             .append(Component.literal(" "))
-                            .append(Messages.clickableCommand("[倒序播放]", "从最后一首开始播放", "/music play playlist " + playlist.id() + " reverse", ChatFormatting.GOLD)), false);
+                            .append(Messages.clickableCommand(Component.translatable("musicplayer.playlist.reverse_label"), Component.translatable("musicplayer.playlist.reverse_hover"), "/music play playlist " + playlist.id() + " reverse", ChatFormatting.GOLD)), false);
                     Messages.sendSuccess(source,  spacer(), false);
 
                     if (t != null) {
-                        Messages.warning(source, "加载曲目失败: " + rootMessage(t));
+                        Messages.warning(source, Component.translatable("musicplayer.playlist.tracks_failed", Messages.textOrTranslatable(rootMessage(t))));
                         return;
                     }
                     for (SearchEntry track : tracks) {
                         Messages.sendSuccess(source,  renderEntry(track,
-                                trackActions(source, track.id(), "[点歌]", "点播这首歌曲", ChatFormatting.GREEN),
-                                "点播这首歌曲", "点击查看作者详情"), false);
+                                trackActions(source, track.id(), Component.translatable("musicplayer.common.request_label"), Component.translatable("musicplayer.play.request_hover"), ChatFormatting.GREEN),
+                                Component.translatable("musicplayer.play.request_hover"), Component.translatable("musicplayer.common.click_artist_hover")), false);
                     }
                     Messages.sendSuccess(source,  spacer(), false);
                     sendNavigation(source, page, totalPages,
@@ -1081,28 +1091,28 @@ public final class MusicCommands {
 
     private static void showUserPlaylists(CommandSourceStack source, String userId, int requestedPage, UserPlaylistView user, Throwable throwable) {
         if (throwable != null) {
-            Messages.warning(source, "加载用户歌单失败: " + rootMessage(throwable));
+            Messages.warning(source, Component.translatable("musicplayer.view.user_playlists_failed", Messages.textOrTranslatable(rootMessage(throwable))));
             return;
         }
         if (user == null) {
-            Messages.warning(source, "未找到用户歌单。");
+            Messages.warning(source, Component.translatable("musicplayer.view.user_playlists_not_found"));
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  Component.literal("用户: ").withStyle(ChatFormatting.GOLD)
-                .append(clickableText(user.name(), "/music view user " + user.id(), "查看用户歌单", ChatFormatting.AQUA)), false);
+        Messages.sendSuccess(source,  Component.translatable("musicplayer.view.user_prefix").withStyle(ChatFormatting.GOLD)
+                .append(clickableText(user.name(), "/music view user " + user.id(), Component.translatable("musicplayer.common.view_user_playlists_hover"), ChatFormatting.AQUA)), false);
         if (user.signature() != null && !user.signature().isBlank()) {
             Messages.sendSuccess(source,  spacer(), false);
             Messages.sendSuccess(source,  Component.literal(user.signature()).withStyle(ChatFormatting.GRAY), false);
         }
         if (user.playlists().isEmpty()) {
-            Messages.warning(source, "该用户没有可显示的歌单。");
+            Messages.warning(source, Component.translatable("musicplayer.view.user_no_playlists"));
             return;
         }
         Messages.sendSuccess(source,  spacer(), false);
         PageWindow page = pageWindow(user.playlists().size(), requestedPage, pageSize());
         for (SearchEntry playlist : slicePage(user.playlists(), page)) {
-            Messages.sendSuccess(source,  renderEntry(playlist, Messages.clickableCommand("[查看]", "查看歌单详情", "/music view playlist " + playlist.id(), ChatFormatting.GREEN), "查看歌单详情", ""), false);
+            Messages.sendSuccess(source,  renderEntry(playlist, Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_playlist_hover"), "/music view playlist " + playlist.id(), ChatFormatting.GREEN), Component.translatable("musicplayer.common.view_playlist_hover"), Component.empty()), false);
         }
         Messages.sendSuccess(source,  spacer(), false);
         sendNavigation(source, page.page(), page.totalPages(), "/music view user " + userId + " page %d", true, "/music view user " + userId + " page ");
@@ -1111,11 +1121,11 @@ public final class MusicCommands {
 
     private static void showArtist(CommandSourceStack source, String artistId, int requestedPage, ArtistInfo artist, Throwable throwable, String literal) {
         if (throwable != null) {
-            Messages.warning(source, "加载作者详情失败: " + rootMessage(throwable));
+            Messages.warning(source, Component.translatable("musicplayer.view.artist_failed", Messages.textOrTranslatable(rootMessage(throwable))));
             return;
         }
         if (artist == null) {
-            Messages.warning(source, "未找到作者详情。");
+            Messages.warning(source, Component.translatable("musicplayer.view.artist_not_found"));
             return;
         }
 
@@ -1128,25 +1138,25 @@ public final class MusicCommands {
         MusicPlayerMod.netease().artistSongsPage(artistId, offset, pageSize)
                 .whenComplete((tracks, t) -> server.execute(() -> {
                     sendHeader(source);
-                    Messages.sendSuccess(source,  Component.literal("作者: ").withStyle(ChatFormatting.GOLD)
-                            .append(clickableText(artist.name(), "/music view " + literal + " " + artist.id(), "查看作者详情", ChatFormatting.AQUA)), false);
+                    Messages.sendSuccess(source,  Component.translatable("musicplayer.view.artist_prefix").withStyle(ChatFormatting.GOLD)
+                            .append(clickableText(artist.name(), "/music view " + literal + " " + artist.id(), Component.translatable("musicplayer.common.view_artist_hover"), ChatFormatting.AQUA)), false);
                     if (artist.description() != null && !artist.description().isBlank()) {
                         Messages.sendSuccess(source,  spacer(), false);
                         Messages.sendSuccess(source,  Component.literal(artist.description()).withStyle(ChatFormatting.GRAY), false);
                     }
                     if (t != null) {
-                        Messages.warning(source, "加载歌曲失败: " + rootMessage(t));
+                        Messages.warning(source, Component.translatable("musicplayer.view.songs_failed", Messages.textOrTranslatable(rootMessage(t))));
                         return;
                     }
                     if (tracks.isEmpty()) {
-                        Messages.warning(source, "该作者没有可显示的歌曲。");
+                        Messages.warning(source, Component.translatable("musicplayer.view.artist_no_songs"));
                         return;
                     }
                     Messages.sendSuccess(source,  spacer(), false);
                     for (SearchEntry track : tracks) {
                         Messages.sendSuccess(source,  renderEntry(track,
-                                trackActions(source, track.id(), "[点歌]", "点播这首歌曲", ChatFormatting.GREEN),
-                                "点播这首歌曲", ""), false);
+                                trackActions(source, track.id(), Component.translatable("musicplayer.common.request_label"), Component.translatable("musicplayer.play.request_hover"), ChatFormatting.GREEN),
+                                Component.translatable("musicplayer.play.request_hover"), Component.empty()), false);
                     }
                     Messages.sendSuccess(source,  spacer(), false);
                     sendNavigation(source, page, totalPages, "/music view " + literal + " " + artistId + " page %d", true, "/music view " + literal + " " + artistId + " page ");
@@ -1156,44 +1166,44 @@ public final class MusicCommands {
 
     private static void showSong(CommandSourceStack source, TrackInfo track, Throwable throwable) {
         if (throwable != null) {
-            Messages.warning(source, "加载歌曲详情失败: " + rootMessage(throwable));
+            Messages.warning(source, Component.translatable("musicplayer.view.song_failed", Messages.textOrTranslatable(rootMessage(throwable))));
             return;
         }
         if (track == null || track.title() == null || track.title().isBlank()) {
-            Messages.warning(source, "未找到歌曲详情。");
+            Messages.warning(source, Component.translatable("musicplayer.view.song_not_found"));
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader("歌曲详情", null), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.view.song_title"), null), false);
         Messages.sendSuccess(source,  spacer(), false);
 
-        Messages.sendSuccess(source,  Component.literal("歌曲: ").withStyle(ChatFormatting.GOLD)
-                .append(clickableText(track.title(), "/music play song " + track.id(), "点击点播", ChatFormatting.AQUA))
+        Messages.sendSuccess(source,  Component.translatable("musicplayer.view.song_prefix").withStyle(ChatFormatting.GOLD)
+                .append(clickableText(track.title(), "/music play song " + track.id(), Component.translatable("musicplayer.common.tap_request_hover"), ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
                 .append(clickableText(track.artist(),
                         track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
-                        "点击查看作者详情", ChatFormatting.GRAY)), false);
+                        Component.translatable("musicplayer.common.click_artist_hover"), ChatFormatting.GRAY)), false);
 
         if (track.durationMillis() > 0L) {
-            Messages.sendSuccess(source,  Component.literal("时长: ").withStyle(ChatFormatting.GRAY)
+            Messages.sendSuccess(source,  Component.translatable("musicplayer.view.duration_prefix").withStyle(ChatFormatting.GRAY)
                     .append(Component.literal(Messages.formatDuration(track.durationMillis())).withStyle(ChatFormatting.WHITE)), false);
         }
 
         if (track.coverUrl() != null && !track.coverUrl().isBlank()) {
-            Messages.sendSuccess(source,  Component.literal("封面: ").withStyle(ChatFormatting.GRAY)
-                    .append(Messages.clickableUrl("[点击查看]", "在浏览器中打开封面图片", track.coverUrl(), ChatFormatting.BLUE)), false);
+            Messages.sendSuccess(source,  Component.translatable("musicplayer.view.cover_prefix").withStyle(ChatFormatting.GRAY)
+                    .append(Messages.clickableUrl(Component.translatable("musicplayer.common.click_view_label"), Component.translatable("musicplayer.view.cover_hover"), track.coverUrl(), ChatFormatting.BLUE)), false);
         }
 
         Messages.sendSuccess(source,  Component.literal("ID: ").withStyle(ChatFormatting.GRAY)
                 .append(Component.literal(track.id()).withStyle(style -> style
                         .withClickEvent(new ClickEvent.CopyToClipboard(track.id()))
                         .withColor(ChatFormatting.WHITE)
-                        .withHoverEvent(new HoverEvent.ShowText(Component.literal("点击复制"))))), false);
+                        .withHoverEvent(new HoverEvent.ShowText(Component.translatable("musicplayer.common.copy_hover"))))), false);
 
         MutableComponent burnAction = buildBurnAction(source, track.id());
         if (burnAction != null) {
             Messages.sendSuccess(source,  spacer(), false);
-            Messages.sendSuccess(source,  Component.literal("操作: ").withStyle(ChatFormatting.GOLD)
+            Messages.sendSuccess(source,  Component.translatable("musicplayer.common.actions_prefix").withStyle(ChatFormatting.GOLD)
                     .append(burnAction), false);
         }
 
@@ -1202,21 +1212,21 @@ public final class MusicCommands {
 
     private static void sendRadioResults(CommandSourceStack source, String keyword, int page, String literal, List<SearchEntry> results, Throwable throwable) {
         if (throwable != null) {
-            Messages.warning(source, "搜索播客失败: " + rootMessage(throwable));
+            Messages.warning(source, Component.translatable("musicplayer.search.radio_failed", Messages.textOrTranslatable(rootMessage(throwable))));
             return;
         }
         if (results.isEmpty()) {
-            Messages.warning(source, "没有搜索到匹配的播客。");
+            Messages.warning(source, Component.translatable("musicplayer.search.no_radios"));
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader("播客搜索结果", "点击播客名播放，点击[查看]查看详情"), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.radios_title"), Component.translatable("musicplayer.search.radios_hint")), false);
         Messages.sendSuccess(source,  spacer(), false);
         for (SearchEntry entry : results) {
-            MutableComponent actions = Messages.clickableCommand("[播放播客]", "按照顺序播放", "/music play radio " + entry.id(), ChatFormatting.GREEN)
+            MutableComponent actions = Messages.clickableCommand(Component.translatable("musicplayer.radio.play_label"), Component.translatable("musicplayer.common.play_in_order_hover"), "/music play radio " + entry.id(), ChatFormatting.GREEN)
                     .append(Component.literal(" "))
-                    .append(Messages.clickableCommand("[查看]", "查看播客详情", "/music view radio " + entry.id(), ChatFormatting.GRAY));
-            Messages.sendSuccess(source,  renderEntry(entry, actions, "点击播放此播客", "点击播放此播客"), false);
+                    .append(Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_radio_hover"), "/music view radio " + entry.id(), ChatFormatting.GRAY));
+            Messages.sendSuccess(source,  renderEntry(entry, actions, Component.translatable("musicplayer.radio.play_hover"), Component.translatable("musicplayer.radio.play_hover")), false);
         }
         Messages.sendSuccess(source,  spacer(), false);
         sendSearchNavigation(source, literal, keyword, page, results.size());
@@ -1224,7 +1234,7 @@ public final class MusicCommands {
 
     private static void showRadioDetail(CommandSourceStack source, String radioId, int requestedPage, RadioInfo radio, Throwable throwable) {
         if (throwable != null || radio == null) {
-            Messages.warning(source, "加载播客详情失败。");
+            Messages.warning(source, Component.translatable("musicplayer.radio.load_failed"));
             return;
         }
 
@@ -1240,11 +1250,11 @@ public final class MusicCommands {
                 .whenComplete((pagePrograms, t) -> server.execute(() -> {
                     sendHeader(source);
                     sendQuickBar(source,
-                            Messages.clickableCommand("[播放全部]", "按照顺序播放", "/music play radio " + radioId, ChatFormatting.GREEN),
-                            Messages.clickableCommand("[倒序播放]", "从最后一页开始播放", "/music play radio " + radioId + " reverse", ChatFormatting.GOLD),
-                            Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.DARK_GRAY));
+                            Messages.clickableCommand(Component.translatable("musicplayer.radio.play_all_label"), Component.translatable("musicplayer.common.play_in_order_hover"), "/music play radio " + radioId, ChatFormatting.GREEN),
+                            Messages.clickableCommand(Component.translatable("musicplayer.radio.reverse_label"), Component.translatable("musicplayer.radio.reverse_hover"), "/music play radio " + radioId + " reverse", ChatFormatting.GOLD),
+                            Messages.clickableCommand(Component.translatable("musicplayer.common.help_label"), Component.translatable("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
                     MutableComponent headerLine = Component.literal("──").withStyle(ChatFormatting.GOLD)
-                            .append(Component.literal("播客详情").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+                            .append(Component.translatable("musicplayer.radio.detail_title").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
                     if (!radio.name().isBlank()) {
                         headerLine.append(Component.literal("  " + radio.name()).withStyle(ChatFormatting.GRAY));
                     }
@@ -1252,11 +1262,11 @@ public final class MusicCommands {
                     Messages.sendSuccess(source,  spacer(), false);
 
                     if (radio.playCount() > 0) {
-                        Messages.sendSuccess(source,  Component.literal("播放: ").withStyle(ChatFormatting.GRAY)
+                        Messages.sendSuccess(source,  Component.translatable("musicplayer.radio.play_count_prefix").withStyle(ChatFormatting.GRAY)
                                 .append(Component.literal(String.valueOf(radio.playCount())).withStyle(ChatFormatting.WHITE)), false);
                     }
                     if (radio.radioFeeType() != 0) {
-                        Messages.sendSuccess(source,  Component.literal("付费播客，部分节目可能需要订阅后才能播放。").withStyle(ChatFormatting.RED), false);
+                        Messages.sendSuccess(source,  Component.translatable("musicplayer.radio.paid_notice").withStyle(ChatFormatting.RED), false);
                     }
                     if (radio.description() != null && !radio.description().isBlank()) {
                         Messages.sendSuccess(source,  spacer(), false);
@@ -1265,12 +1275,12 @@ public final class MusicCommands {
 
                     if (t != null || pagePrograms == null || pagePrograms.isEmpty()) {
                         Messages.sendSuccess(source,  spacer(), false);
-                        Messages.sendSuccess(source,  Component.literal("该播客暂无节目列表。").withStyle(ChatFormatting.GRAY), false);
+                        Messages.sendSuccess(source,  Component.translatable("musicplayer.radio.no_programs").withStyle(ChatFormatting.GRAY), false);
                         return;
                     }
 
                     Messages.sendSuccess(source,  spacer(), false);
-                    Messages.sendSuccess(source,  sectionHeader("节目列表 (第" + page + "/" + totalPages + "页)", "点击节目名可直接播放"), false);
+                    Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.radio.programs_title", page, totalPages), Component.translatable("musicplayer.radio.programs_hint")), false);
                     for (ProgramInfo prog : pagePrograms) {
                         Messages.sendSuccess(source,  renderProgramEntry(source, prog), false);
                     }
@@ -1285,74 +1295,74 @@ public final class MusicCommands {
 
     private static void showProgramDetail(CommandSourceStack source, ProgramInfo program, Throwable throwable) {
         if (throwable != null || program == null) {
-            Messages.warning(source, "加载节目详情失败。");
+            Messages.warning(source, Component.translatable("musicplayer.view.program_failed"));
             return;
         }
         sendHeader(source);
         sendQuickBar(source,
-                Messages.clickableCommand("[播放]", "播放此节目", "/music play program " + program.id(), ChatFormatting.GREEN),
-                program.radioId().isBlank() ? null : Messages.clickableCommand("[播客]", "查看所属播客", "/music view radio " + program.radioId(), ChatFormatting.AQUA),
-                Messages.clickableCommand("[帮助]", "查看音乐模组帮助", "/music help", ChatFormatting.DARK_GRAY));
-        Messages.sendSuccess(source,  sectionHeader("节目详情", program.name()), false);
+                Messages.clickableCommand(Component.translatable("musicplayer.common.play_label"), Component.translatable("musicplayer.view.play_program_hover"), "/music play program " + program.id(), ChatFormatting.GREEN),
+                program.radioId().isBlank() ? null : Messages.clickableCommand(Component.translatable("musicplayer.view.radio_label"), Component.translatable("musicplayer.view.owning_radio_hover"), "/music view radio " + program.radioId(), ChatFormatting.AQUA),
+                Messages.clickableCommand(Component.translatable("musicplayer.common.help_label"), Component.translatable("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.view.program_title"), Component.literal(program.name())), false);
         Messages.sendSuccess(source,  spacer(), false);
-        Messages.sendSuccess(source,  Component.literal("节目: ").withStyle(ChatFormatting.GOLD)
+        Messages.sendSuccess(source,  Component.translatable("musicplayer.view.program_prefix").withStyle(ChatFormatting.GOLD)
                 .append(Component.literal(program.name()).withStyle(ChatFormatting.WHITE)), false);
         if (!program.radioName().isBlank()) {
-            Messages.sendSuccess(source,  Component.literal("播客: ").withStyle(ChatFormatting.GRAY)
-                    .append(clickableText(program.radioName(), "/music view radio " + program.radioId(), "查看播客详情", ChatFormatting.AQUA)), false);
+            Messages.sendSuccess(source,  Component.translatable("musicplayer.view.radio_prefix").withStyle(ChatFormatting.GRAY)
+                    .append(clickableText(program.radioName(), "/music view radio " + program.radioId(), Component.translatable("musicplayer.common.view_radio_hover"), ChatFormatting.AQUA)), false);
         }
         if (program.durationMillis() > 0L) {
-            Messages.sendSuccess(source,  Component.literal("时长: ").withStyle(ChatFormatting.GRAY)
+            Messages.sendSuccess(source,  Component.translatable("musicplayer.view.duration_prefix").withStyle(ChatFormatting.GRAY)
                     .append(Component.literal(Messages.formatDuration(program.durationMillis())).withStyle(ChatFormatting.WHITE)), false);
         }
         if (program.coverUrl() != null && !program.coverUrl().isBlank()) {
-            Messages.sendSuccess(source,  Component.literal("封面: ").withStyle(ChatFormatting.GRAY)
-                    .append(Messages.clickableUrl("[点击查看]", "在浏览器中打开封面图片", program.coverUrl(), ChatFormatting.BLUE)), false);
+            Messages.sendSuccess(source,  Component.translatable("musicplayer.view.cover_prefix").withStyle(ChatFormatting.GRAY)
+                    .append(Messages.clickableUrl(Component.translatable("musicplayer.common.click_view_label"), Component.translatable("musicplayer.view.cover_hover"), program.coverUrl(), ChatFormatting.BLUE)), false);
         }
         if (program.description() != null && !program.description().isBlank()) {
             Messages.sendSuccess(source,  spacer(), false);
             Messages.sendSuccess(source,  Component.literal(program.description()).withStyle(ChatFormatting.GRAY), false);
         }
         Messages.sendSuccess(source,  spacer(), false);
-        Messages.sendSuccess(source,  Component.literal("操作: ").withStyle(ChatFormatting.GOLD)
-                .append(Messages.clickableCommand("[播放]", "播放此节目", "/music play program " + program.id(), ChatFormatting.GREEN)), false);
+        Messages.sendSuccess(source,  Component.translatable("musicplayer.common.actions_prefix").withStyle(ChatFormatting.GOLD)
+                .append(Messages.clickableCommand(Component.translatable("musicplayer.common.play_label"), Component.translatable("musicplayer.view.play_program_hover"), "/music play program " + program.id(), ChatFormatting.GREEN)), false);
         Messages.sendSuccess(source,  spacer(), false);
     }
 
     private static MutableComponent renderProgramEntry(CommandSourceStack source, ProgramInfo program) {
-        MutableComponent line = Messages.clickableCommand("[播放]", "直接播放此节目", "/music play program " + program.id(), ChatFormatting.GREEN);
+        MutableComponent line = Messages.clickableCommand(Component.translatable("musicplayer.common.play_label"), Component.translatable("musicplayer.view.play_now_hover"), "/music play program " + program.id(), ChatFormatting.GREEN);
         line.append(Component.literal(" "));
-        line.append(Messages.clickableCommand(program.name(), "直接播放此节目", "/music play program " + program.id(), ChatFormatting.AQUA));
+        line.append(Messages.clickableCommand(Component.literal(program.name()), Component.translatable("musicplayer.view.play_now_hover"), "/music play program " + program.id(), ChatFormatting.AQUA));
         if (program.durationMillis() > 0L) {
             line.append(Component.literal("  ").withStyle(ChatFormatting.DARK_GRAY));
             line.append(Component.literal(Messages.formatDuration(program.durationMillis())).withStyle(ChatFormatting.GRAY));
         }
         line.append(Component.literal(" "));
-        line.append(Messages.clickableCommand("[详情]", "查看节目详情", "/music view program " + program.id(), ChatFormatting.GRAY));
+        line.append(Messages.clickableCommand(Component.translatable("musicplayer.view.detail_label"), Component.translatable("musicplayer.view.program_detail_hover"), "/music view program " + program.id(), ChatFormatting.GRAY));
         return line;
     }
 
     private static MutableComponent renderRandomTrack(CommandSourceStack source, TrackInfo track) {
-        MutableComponent line = trackActions(source, track.id(), "[点歌]", "点播这首随机热门歌曲", ChatFormatting.GREEN);
+        MutableComponent line = trackActions(source, track.id(), Component.translatable("musicplayer.common.request_label"), Component.translatable("musicplayer.random.request_hover"), ChatFormatting.GREEN);
         line.append(Component.literal(" "));
-        line.append(clickableText(track.title(), "/music play song " + track.id(), "点播这首随机热门歌曲", ChatFormatting.AQUA));
+        line.append(clickableText(track.title(), "/music play song " + track.id(), Component.translatable("musicplayer.random.request_hover"), ChatFormatting.AQUA));
         line.append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
         line.append(clickableText(track.artist(),
                 track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
-                "查看作者详情",
+                Component.translatable("musicplayer.common.view_artist_hover"),
                 ChatFormatting.GRAY));
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
-            line.append(Messages.clickableUrl("[下载]", "在浏览器中打开当前音乐直链", track.sourceUrls().getFirst(), ChatFormatting.BLUE));
+            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().getFirst(), ChatFormatting.BLUE));
         }
         return line;
     }
 
     private static MutableComponent renderCurrentTrack(CommandSourceStack source, TrackInfo track, String elapsed, String duration, String requesterName) {
-        MutableComponent line = Component.literal("当前播放: ").withStyle(ChatFormatting.GOLD)
-                .append(clickableText(track.title(), "/music play song " + track.id(), "点击重新点播这首歌曲", ChatFormatting.AQUA))
+        MutableComponent line = Component.translatable("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
+                .append(clickableText(track.title(), "/music play song " + track.id(), Component.translatable("musicplayer.common.rerequest_hover"), ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
-                .append(clickableText(track.artist(), track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(), "点击查看作者详情", ChatFormatting.GRAY));
+                .append(clickableText(track.artist(), track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(), Component.translatable("musicplayer.common.click_artist_hover"), ChatFormatting.GRAY));
         MutableComponent burnAction = buildBurnAction(source, track.id());
         if (burnAction != null) {
             line.append(Component.literal(" "));
@@ -1360,7 +1370,7 @@ public final class MusicCommands {
         }
         if (!track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
-            line.append(Messages.clickableUrl("[打开直链]", "点击在浏览器中打开当前歌曲直链", track.sourceUrls().getFirst(), ChatFormatting.GREEN));
+            line.append(Messages.clickableUrl(Component.translatable("musicplayer.now.open_url_label"), Component.translatable("musicplayer.now.open_url_hover"), track.sourceUrls().getFirst(), ChatFormatting.GREEN));
         }
         return line;
     }
@@ -1389,13 +1399,13 @@ public final class MusicCommands {
 
         if (requesterName != null && !requesterName.isEmpty()) {
             line.append(Component.literal("  ·  ").withStyle(ChatFormatting.DARK_GRAY));
-            line.append(Component.literal("点歌: ").withStyle(ChatFormatting.GRAY));
+            line.append(Component.translatable("musicplayer.progress.requester_prefix").withStyle(ChatFormatting.GRAY));
             line.append(Component.literal(requesterName).withStyle(ChatFormatting.AQUA));
         }
         return line;
     }
 
-    private static MutableComponent trackActions(CommandSourceStack source, String songId, String primaryLabel, String primaryHover, ChatFormatting primaryColor) {
+    private static MutableComponent trackActions(CommandSourceStack source, String songId, Component primaryLabel, Component primaryHover, ChatFormatting primaryColor) {
         MutableComponent actions = Messages.clickableCommand(primaryLabel, primaryHover, "/music play song " + songId, primaryColor);
         MutableComponent burnAction = buildBurnAction(source, songId);
         if (burnAction != null) {
@@ -1412,24 +1422,28 @@ public final class MusicCommands {
         if (!MusicDiscHelper.isBurnableDisc(player.getItemInHand(InteractionHand.MAIN_HAND))) {
             return null;
         }
-        return Messages.clickableCommand("[刻录]", "将这首歌刻录到主手唱片", "/music burn song " + songId, ChatFormatting.LIGHT_PURPLE);
+        return Messages.clickableCommand(Component.translatable("musicplayer.burn.action_label"), Component.translatable("musicplayer.burn.action_hover"), "/music burn song " + songId, ChatFormatting.LIGHT_PURPLE);
     }
 
-    private static MutableComponent renderEntry(SearchEntry entry, MutableComponent action, String titleHover, String subtitleHover) {
+    private static MutableComponent renderEntry(SearchEntry entry, MutableComponent action, Component titleHover, Component subtitleHover) {
         MutableComponent line = action.copy();
         line.append(Component.literal(" "));
         line.append(clickableText(entry.title(), entry.titleCommand(), titleHover, ChatFormatting.AQUA));
-        if (entry.subtitle() != null && !entry.subtitle().isBlank()) {
+        if (entry.hasSubtitle()) {
             line.append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
             line.append(clickableText(entry.subtitle(), entry.subtitleCommand(), subtitleHover, ChatFormatting.GRAY));
         }
         return line;
     }
 
-    private static MutableComponent clickableText(String text, String command, String hover, ChatFormatting color) {
+    private static MutableComponent clickableText(String text, String command, Component hover, ChatFormatting color) {
+        return clickableText(Component.literal(text), command, hover, color);
+    }
+
+    private static MutableComponent clickableText(Component text, String command, Component hover, ChatFormatting color) {
         return command != null && !command.isBlank()
-                ? Messages.clickableCommand(text, hover == null || hover.isBlank() ? text : hover, command, color)
-                : Component.literal(text).withStyle(color);
+                ? Messages.clickableCommand(text, hover == null || hover.getString().isBlank() ? text : hover, command, color)
+                : text.copy().withStyle(color);
     }
 
     private static void sendSearchNavigation(CommandSourceStack source, String type, String keyword, int page, int resultSize) {
@@ -1442,23 +1456,25 @@ public final class MusicCommands {
     private static void sendNavigation(CommandSourceStack source, int page, int totalPages, String commandPattern, boolean hasKnownNext, String suggestCommand) {
         MutableComponent nav = Component.literal("");
         if (page > 1) {
-            nav.append(Messages.clickableCommand("[‹ 上一页]", "查看上一页", String.format(commandPattern, page - 1), ChatFormatting.YELLOW));
+            nav.append(Messages.clickableCommand(Component.translatable("musicplayer.common.prev_label"), Component.translatable("musicplayer.common.prev_hover"), String.format(commandPattern, page - 1), ChatFormatting.YELLOW));
             nav.append(Component.literal(" "));
         }
-        nav.append(Component.literal(hasKnownNext ? ("· 第 " + page + "/" + Math.max(page, totalPages) + " 页 ·") : ("· 第 " + page + " 页 ·")).withStyle(ChatFormatting.DARK_GRAY));
+        nav.append((hasKnownNext
+                ? Component.translatable("musicplayer.common.page_indicator", page, Math.max(page, totalPages))
+                : Component.translatable("musicplayer.common.page_indicator_single", page)).withStyle(ChatFormatting.DARK_GRAY));
         if (hasKnownNext && page < totalPages) {
             nav.append(Component.literal(" "));
-            nav.append(Messages.clickableCommand("[下一页 ›]", "查看下一页", String.format(commandPattern, page + 1), ChatFormatting.YELLOW));
+            nav.append(Messages.clickableCommand(Component.translatable("musicplayer.common.next_label"), Component.translatable("musicplayer.common.next_hover"), String.format(commandPattern, page + 1), ChatFormatting.YELLOW));
         }
         nav.append(Component.literal(" "));
-        nav.append(Messages.suggestable("[跳转]", "点击后输入页数", suggestCommand, ChatFormatting.GRAY));
+        nav.append(Messages.suggestable(Component.translatable("musicplayer.common.jump_label"), Component.translatable("musicplayer.common.jump_hover"), suggestCommand, ChatFormatting.GRAY));
         Messages.sendSuccess(source,  nav, false);
     }
 
     private static void burnHeldDisc(CommandSourceStack source, ServerPlayer player, TrackInfo track) {
         ItemStack mainHand = player.getItemInHand(InteractionHand.MAIN_HAND);
         if (!MusicDiscHelper.isBurnableDisc(mainHand)) {
-            Messages.warning(source, "主手中的唱片已变化，请重新手持唱片后再刻录。");
+            Messages.warning(source, Component.translatable("musicplayer.burn.disc_changed"));
             return;
         }
 
@@ -1472,7 +1488,7 @@ public final class MusicCommands {
             }
         }
 
-        Messages.sendSuccess(source,  Component.literal("已刻录音乐唱片: ").withStyle(ChatFormatting.GREEN)
+        Messages.sendSuccess(source,  Component.translatable("musicplayer.burn.done").withStyle(ChatFormatting.GREEN)
                 .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
                 .append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY)), false);
@@ -1514,11 +1530,12 @@ public final class MusicCommands {
         Messages.sendSuccess(source,  spacer(), false);
     }
 
-    private static MutableComponent sectionHeader(String title, String subtitle) {
+    private static MutableComponent sectionHeader(Component title, Component subtitle) {
         MutableComponent line = Component.literal("◆ ").withStyle(ChatFormatting.GOLD)
-                .append(Component.literal(title).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
-        if (subtitle != null && !subtitle.isBlank()) {
-            line.append(Component.literal("  " + subtitle).withStyle(ChatFormatting.DARK_GRAY));
+                .append(title.copy().withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+        if (subtitle != null && !subtitle.getString().isBlank()) {
+            line.append(Component.literal("  ").withStyle(ChatFormatting.DARK_GRAY));
+            line.append(subtitle.copy().withStyle(ChatFormatting.DARK_GRAY));
         }
         return line;
     }
@@ -1546,18 +1563,18 @@ public final class MusicCommands {
         return Math.max(3, MusicPlayerConfigManager.get().searchLimit);
     }
 
-    private static void loading(CommandSourceStack source, String text) {
+    private static void loading(CommandSourceStack source, Component text) {
         if (MusicPlayerConfigManager.get().showLoadingHints) {
             Messages.loading(source, text);
         }
     }
 
-    private static String yesNo(boolean value) {
-        return value ? "开启" : "关闭";
+    private static Component yesNo(boolean value) {
+        return Component.translatable(value ? "musicplayer.common.on" : "musicplayer.common.off");
     }
 
     private static String rootMessage(Throwable throwable) {
-        if (throwable == null) return "未知错误";
+        if (throwable == null) return "musicplayer.common.unknown_error";
         Throwable current = throwable;
         int depth = 0;
         while (current.getCause() != null && depth < 100) {
