@@ -16,6 +16,8 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.ConfirmLinkScreen;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -37,8 +39,17 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
                     if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
                         return;
                     }
+                    Minecraft client = context.client();
+                    if (!client.options.chatLinks().get()) {
+                        return;
+                    }
                     try {
-                        Blaze3D.openUri(URI.create(url));
+                        URI uri = URI.create(url);
+                        if (client.options.chatLinksPrompt().get()) {
+                            ConfirmLinkScreen.confirmLinkNow(client.gui.screen(), uri, false);
+                        } else {
+                            Blaze3D.openUri(uri);
+                        }
                     } catch (Exception exception) {
                         MusicPlayerMod.LOGGER.warn("打开链接失败: {}", url, exception);
                     }
