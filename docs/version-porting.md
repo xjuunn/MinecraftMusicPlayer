@@ -160,6 +160,26 @@
 - **`BufferBuilder` 的 `vertex(...)` 返回 `BufferBuilder`**（非 `VertexConsumer`），链式调用 `.color(...).uv(...).overlayCoords(...).uv2(...).normal(...).endVertex()` 可用。
 - **`PoseStack.last()` 返回 `PoseStack$Pose`**，与 1.16 一致。
 
+## 1.14.4 专项注意（基于 1.15.2 分支）
+
+- **fabric-api 版本后缀是 `+1.14`**（如 `0.28.5+1.14`）。
+- **`UseItemCallback` 返回 `InteractionResult` 而非 `InteractionResultHolder<ItemStack>`**：0.28.5+1.14 的回调签名为 `(Player, World, InteractionHand) -> InteractionResult`，直接返回 `InteractionResult.PASS/SUCCESS`，不能 `new InteractionResultHolder<>(...)`。
+- **`ClickEvent.Action.COPY_TO_CLIPBOARD` 不存在**（1.15.1 加入）：改用 `SUGGEST_COMMAND`。
+- **`StringTag.valueOf(String)` 不存在**：用 `new StringTag(String)` 构造器。
+- **`Entity.getX()/getY()/getZ()` 不存在**：用公开字段 `entity.x` / `entity.y` / `entity.z`（`LocalPlayer` 同理）。
+- **`ClientLevel` 不存在**：客户端世界类名为 `MultiPlayerLevel`（`net.minecraft.client.multiplayer.MultiPlayerLevel`）。
+- **无 `MatrixStack` / `PoseStack` / `RenderType` / `OverlayTexture`**（均 1.15 引入）：渲染系统为旧版立即模式 OpenGL。
+  - 世界渲染入口：`GameRenderer.renderLevel(float, long)`（非 `LevelRenderer.renderLevel`），Mixin 注入该方法 `TAIL`。
+  - 变换用 `GlStateManager.pushMatrix()/popMatrix()/translatef(x,y,z)/rotatef(degrees,x,y,z)`。
+  - 纹理绑定用 `Minecraft.getInstance().getTextureManager().bind(resourceLocation)`。
+  - 绘制：`BufferBuilder.begin(7, DefaultVertexFormat.POSITION_TEX_NORMAL)` + `vertex(double,double,double).color(r,g,b,a).uv(u,v).normal(nx,ny,nz).endVertex()` + `Tesselator.getInstance().end()`。
+  - `GlStateManager.enableBlend()/disableLighting()/color4f(...)` 控制状态；`GlStateManager.SourceFactor/DestFactor` 用于 `blendFunc`。
+  - `Vector3f` 无 `YP/XP/ZP` 常量（无 `rotationDegrees` 方法）：旋转直接用 `GlStateManager.rotatef`。
+- **`Options.chatLinks` / `chatLinksPrompt`**：公开布尔字段（与 1.15.2 一致，无 `.get()`）。
+- **`Player.inventory` 公开字段、`drop(ItemStack, boolean, boolean)`、`displayClientMessage(Component, boolean)`**：与 1.15.2 一致。
+- **`JukeboxBlockEntity`**：仅 `getRecord()` / `setRecord(ItemStack)`，无 `playRecord`（与 1.15.2 一致）。
+- **`ConfirmLinkScreen` 构造器** `(BooleanConsumer, String, boolean)`：与 1.15.2 一致。
+
 ## Java 8 对齐（1.16.5 分支）
 
 1.16.5 官方要求 Java 8；分支已完全对齐官方 Java 8，`options.release=8`、`sourceCompatibility/targetCompatibility=VERSION_1_8`、mixin `compatibilityLevel: JAVA_8`、`fabric.mod.json` `"java": ">=8"`。

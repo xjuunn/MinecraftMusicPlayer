@@ -13,7 +13,7 @@ import javazoom.jl.decoder.JavaLayerException;
 import javazoom.jl.player.AudioDeviceBase;
 import javazoom.jl.player.Player;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.multiplayer.MultiPlayerLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -172,9 +172,9 @@ public final class ClientJukeboxController {
         }
         for (Long key : playbackHandles.keySet()) {
             BlockPos pos = BlockPos.of(key);
-            double dx = player.getX() - (pos.getX() + 0.5D);
-            double dy = player.getY() - (pos.getY() + 0.5D);
-            double dz = player.getZ() - (pos.getZ() + 0.5D);
+            double dx = player.x - (pos.getX() + 0.5D);
+            double dy = player.y - (pos.getY() + 0.5D);
+            double dz = player.z - (pos.getZ() + 0.5D);
             if (dx * dx + dy * dy + dz * dz <= AUDIBLE_RANGE * AUDIBLE_RANGE) {
                 return true;
             }
@@ -444,7 +444,7 @@ public final class ClientJukeboxController {
         minecraft.gui.setNowPlaying(text);
     }
 
-    private String getInvalidStateReason(ClientLevel level, long jukeboxPos) {
+    private String getInvalidStateReason(MultiPlayerLevel level, long jukeboxPos) {
         BlockPos pos = BlockPos.of(jukeboxPos);
         if (!level.isLoaded(pos)) {
             return "chunk not loaded";
@@ -605,9 +605,9 @@ public final class ClientJukeboxController {
                 gainControl.setValue(gainControl.getMinimum());
                 return;
             }
-            double dx = player.getX() - (jukeboxPos.getX() + 0.5D);
-            double dy = player.getY() - (jukeboxPos.getY() + 0.5D);
-            double dz = player.getZ() - (jukeboxPos.getZ() + 0.5D);
+            double dx = player.x - (jukeboxPos.getX() + 0.5D);
+            double dy = player.y - (jukeboxPos.getY() + 0.5D);
+            double dz = player.z - (jukeboxPos.getZ() + 0.5D);
             double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
             double normalized = 1.0D - Math.min(1.0D, distance / AUDIBLE_RANGE);
             normalized *= normalized;

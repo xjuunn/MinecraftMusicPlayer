@@ -113,7 +113,7 @@ public final class MusicDiscHelper {
         ListTag urls = new ListTag();
         for (String url : track.sourceUrls()) {
             if (url != null && !Java8.isBlank(url)) {
-                urls.add(StringTag.valueOf(url));
+                urls.add(new StringTag(url));
             }
         }
         root.put(URLS_KEY, urls);
@@ -190,7 +190,7 @@ public final class MusicDiscHelper {
     }
 
     private static void addLoreLine(ListTag lore, Component line) {
-        lore.add(StringTag.valueOf(Component.Serializer.toJson(line)));
+        lore.add(new StringTag(Component.Serializer.toJson(line)));
     }
 
     private static String safe(String value) {
