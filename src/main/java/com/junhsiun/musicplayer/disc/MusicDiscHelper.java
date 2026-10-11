@@ -3,17 +3,15 @@ package com.junhsiun.musicplayer.disc;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.util.Messages;
 import net.minecraft.ChatFormatting;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.component.CustomData;
-import net.minecraft.world.item.component.ItemLore;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,10 +34,7 @@ public final class MusicDiscHelper {
             Items.MUSIC_DISC_CAT,
             Items.MUSIC_DISC_BLOCKS,
             Items.MUSIC_DISC_CHIRP,
-            Items.MUSIC_DISC_CREATOR,
-            Items.MUSIC_DISC_CREATOR_MUSIC_BOX,
             Items.MUSIC_DISC_FAR,
-            Items.MUSIC_DISC_LAVA_CHICKEN,
             Items.MUSIC_DISC_MALL,
             Items.MUSIC_DISC_MELLOHI,
             Items.MUSIC_DISC_STAL,
@@ -50,9 +45,7 @@ public final class MusicDiscHelper {
             Items.MUSIC_DISC_OTHERSIDE,
             Items.MUSIC_DISC_RELIC,
             Items.MUSIC_DISC_5,
-            Items.MUSIC_DISC_PIGSTEP,
-            Items.MUSIC_DISC_PRECIPICE,
-            Items.MUSIC_DISC_TEARS
+            Items.MUSIC_DISC_PIGSTEP
     );
 
     private MusicDiscHelper() {
@@ -67,26 +60,17 @@ public final class MusicDiscHelper {
     }
 
     public static boolean isPendingDisc(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
+        if (stack == null || stack.isEmpty() || !stack.hasTag()) {
             return false;
         }
-        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-        if (customData == null || customData.isEmpty()) {
-            return false;
-        }
-        CompoundTag wrapper = customData.copyTag();
-        return wrapper.getBooleanOr(PENDING_KEY, false);
+        return stack.getTag().getBoolean(PENDING_KEY);
     }
 
     public static String getPendingToken(ItemStack stack) {
         if (!isPendingDisc(stack)) {
             return "";
         }
-        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-        if (customData == null || customData.isEmpty()) {
-            return "";
-        }
-        return customData.copyTag().getStringOr(PENDING_TOKEN_KEY, "");
+        return stack.getTag().getString(PENDING_TOKEN_KEY);
     }
 
     public static ItemStack randomBaseDiscStack(RandomSource random) {
@@ -97,15 +81,10 @@ public final class MusicDiscHelper {
 
     public static ItemStack createPendingDisc(ItemStack baseDisc, String token) {
         ItemStack pendingDisc = baseDisc.copyWithCount(1);
-        CompoundTag wrapper = new CompoundTag();
-        wrapper.putBoolean(PENDING_KEY, true);
-        wrapper.putString(PENDING_TOKEN_KEY, safe(token));
-        CustomData.set(DataComponents.CUSTOM_DATA, pendingDisc, wrapper);
-        pendingDisc.set(DataComponents.CUSTOM_NAME, Component.translatable("musicplayer.disc.random").withStyle(ChatFormatting.LIGHT_PURPLE));
-        pendingDisc.set(DataComponents.LORE, new ItemLore(List.of(
-                // Component.translatable("musicplayer.disc.random_hint").withStyle(ChatFormatting.DARK_GRAY)
-        )));
-        pendingDisc.remove(DataComponents.JUKEBOX_PLAYABLE);
+        CompoundTag tag = pendingDisc.getOrCreateTag();
+        tag.putBoolean(PENDING_KEY, true);
+        tag.putString(PENDING_TOKEN_KEY, safe(token));
+        pendingDisc.setHoverName(Component.translatable("musicplayer.disc.random").withStyle(ChatFormatting.LIGHT_PURPLE));
         return pendingDisc;
     }
 
@@ -126,51 +105,47 @@ public final class MusicDiscHelper {
         }
         root.put(URLS_KEY, urls);
 
-        CompoundTag wrapper = new CompoundTag();
-        wrapper.put(ROOT_KEY, root);
-        CustomData.set(DataComponents.CUSTOM_DATA, burnedDisc, wrapper);
-        burnedDisc.set(DataComponents.CUSTOM_NAME, buildDisplayName(track));
-        burnedDisc.set(DataComponents.LORE, buildLore(track, urls.size()));
-        burnedDisc.remove(DataComponents.JUKEBOX_PLAYABLE);
+        burnedDisc.getOrCreateTag().put(ROOT_KEY, root);
+        burnedDisc.setHoverName(buildDisplayName(track));
+        ListTag lore = buildLore(track, urls.size());
+        if (!lore.isEmpty()) {
+            burnedDisc.getOrCreateTagElement("display").put("Lore", lore);
+        }
         return burnedDisc;
     }
 
     public static Optional<DiscTrackData> read(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
+        if (stack == null || stack.isEmpty() || !stack.hasTag()) {
             return Optional.empty();
         }
-        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-        if (customData == null || customData.isEmpty()) {
+        CompoundTag wrapper = stack.getTag();
+        if (!wrapper.contains(ROOT_KEY, Tag.TAG_COMPOUND)) {
             return Optional.empty();
         }
-        CompoundTag wrapper = customData.copyTag();
-        if (!wrapper.contains(ROOT_KEY)) {
-            return Optional.empty();
-        }
-        CompoundTag root = wrapper.getCompoundOrEmpty(ROOT_KEY);
-        String title = root.getStringOr(TITLE_KEY, "");
-        String artist = root.getStringOr(ARTIST_KEY, "");
+        CompoundTag root = wrapper.getCompound(ROOT_KEY);
+        String title = root.getString(TITLE_KEY);
+        String artist = root.getString(ARTIST_KEY);
         if (title.isBlank() || artist.isBlank()) {
             return Optional.empty();
         }
         List<String> urls = new ArrayList<>();
-        if (root.contains(URLS_KEY)) {
-            ListTag listTag = root.getListOrEmpty(URLS_KEY);
+        if (root.contains(URLS_KEY, Tag.TAG_LIST)) {
+            ListTag listTag = root.getList(URLS_KEY, Tag.TAG_STRING);
             for (int index = 0; index < listTag.size(); index++) {
-                String value = listTag.getStringOr(index, "");
+                String value = listTag.getString(index);
                 if (!value.isBlank()) {
                     urls.add(value);
                 }
             }
         }
         return Optional.of(new DiscTrackData(
-                root.getStringOr(TRACK_ID_KEY, ""),
+                root.getString(TRACK_ID_KEY),
                 title,
                 artist,
-                root.getStringOr(ARTIST_ID_KEY, ""),
-                root.getStringOr(COVER_URL_KEY, ""),
+                root.getString(ARTIST_ID_KEY),
+                root.getString(COVER_URL_KEY),
                 urls,
-                root.getLongOr(DURATION_KEY, 0L)
+                root.getLong(DURATION_KEY)
         ));
     }
 
@@ -179,22 +154,26 @@ public final class MusicDiscHelper {
                 .withStyle(ChatFormatting.AQUA);
     }
 
-    private static ItemLore buildLore(TrackInfo track, int sourceCount) {
-        List<Component> lines = new ArrayList<>();
-        lines.add(Component.translatable("musicplayer.disc.brand").withStyle(ChatFormatting.GOLD));
-        lines.add(Component.translatable("musicplayer.disc.song", track.title()).withStyle(ChatFormatting.WHITE));
-        lines.add(Component.translatable("musicplayer.disc.artist", track.artist()).withStyle(ChatFormatting.GRAY));
+    private static ListTag buildLore(TrackInfo track, int sourceCount) {
+        ListTag lore = new ListTag();
+        addLoreLine(lore, Component.translatable("musicplayer.disc.brand").withStyle(ChatFormatting.GOLD));
+        addLoreLine(lore, Component.translatable("musicplayer.disc.song", track.title()).withStyle(ChatFormatting.WHITE));
+        addLoreLine(lore, Component.translatable("musicplayer.disc.artist", track.artist()).withStyle(ChatFormatting.GRAY));
         if (track.artistId() != null && !track.artistId().isBlank()) {
-            lines.add(Component.translatable("musicplayer.disc.artist_id", track.artistId()).withStyle(ChatFormatting.DARK_GRAY));
+            addLoreLine(lore, Component.translatable("musicplayer.disc.artist_id", track.artistId()).withStyle(ChatFormatting.DARK_GRAY));
         }
         if (track.id() != null && !track.id().isBlank()) {
-            lines.add(Component.translatable("musicplayer.disc.song_id", track.id()).withStyle(ChatFormatting.DARK_GRAY));
+            addLoreLine(lore, Component.translatable("musicplayer.disc.song_id", track.id()).withStyle(ChatFormatting.DARK_GRAY));
         }
         if (track.durationMillis() > 0L) {
-            lines.add(Component.translatable("musicplayer.disc.duration", Messages.formatDuration(track.durationMillis())).withStyle(ChatFormatting.DARK_AQUA));
+            addLoreLine(lore, Component.translatable("musicplayer.disc.duration", Messages.formatDuration(track.durationMillis())).withStyle(ChatFormatting.DARK_AQUA));
         }
-        lines.add(Component.translatable("musicplayer.disc.source_count", sourceCount).withStyle(ChatFormatting.DARK_AQUA));
-        return new ItemLore(lines);
+        addLoreLine(lore, Component.translatable("musicplayer.disc.source_count", sourceCount).withStyle(ChatFormatting.DARK_AQUA));
+        return lore;
+    }
+
+    private static void addLoreLine(ListTag lore, Component line) {
+        lore.add(StringTag.valueOf(Component.Serializer.toJson(line)));
     }
 
     private static String safe(String value) {

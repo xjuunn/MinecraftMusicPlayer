@@ -65,7 +65,7 @@ public final class JukeboxPlaybackService {
         }
 
         ItemStack insertedDisc = heldStack.copyWithCount(1);
-        jukebox.setSongItemWithoutPlaying(insertedDisc);
+        jukebox.setRecordWithoutPlaying(insertedDisc);
         jukebox.setChanged();
         serverLevel.setBlock(pos, state.setValue(JukeboxBlock.HAS_RECORD, true), 2);
 
@@ -177,7 +177,7 @@ public final class JukeboxPlaybackService {
         if (!(blockEntity instanceof JukeboxBlockEntity jukebox)) {
             return "missing jukebox block entity";
         }
-        if (jukebox.getTheItem().isEmpty()) {
+        if (jukebox.getFirstItem().isEmpty()) {
             return "jukebox record item is empty";
         }
         return null;
@@ -229,7 +229,7 @@ public final class JukeboxPlaybackService {
     }
 
     private void sendPlay(ServerPlayer player, ActiveJukebox active) {
-        if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
+        if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.ID)) {
             MusicPlayerMod.LOGGER.debug("Sending custom jukebox play to {} at {}", player.getScoreboardName(), active.pos());
             long offset;
             if (active.tryMarkFirstPlaySent()) {
@@ -237,7 +237,7 @@ public final class JukeboxPlaybackService {
             } else {
                 offset = Math.max(0L, System.currentTimeMillis() - active.startedAtMillis());
             }
-            ServerPlayNetworking.send(player, JukeboxMusicPayload.play(
+            JukeboxMusicPayload.send(player, JukeboxMusicPayload.play(
                     active.key(),
                     active.discData().urls(),
                     active.discData().title(),
@@ -250,9 +250,9 @@ public final class JukeboxPlaybackService {
     }
 
     private void sendStop(ServerPlayer player, long key) {
-        if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
+        if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.ID)) {
             MusicPlayerMod.LOGGER.debug("Sending custom jukebox stop to {} at {}", player.getScoreboardName(), BlockPos.of(key));
-            ServerPlayNetworking.send(player, JukeboxMusicPayload.stop(key));
+            JukeboxMusicPayload.send(player, JukeboxMusicPayload.stop(key));
         }
     }
 
@@ -262,9 +262,9 @@ public final class JukeboxPlaybackService {
             if (player == null || player.level() != level) {
                 continue;
             }
-            if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
+            if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.ID)) {
                 if (urlsChanged) {
-                    ServerPlayNetworking.send(player, JukeboxMusicPayload.refresh(
+                    JukeboxMusicPayload.send(player, JukeboxMusicPayload.refresh(
                             active.key(),
                             active.discData().urls(),
                             active.discData().title(),
@@ -274,7 +274,7 @@ public final class JukeboxPlaybackService {
                             active.discData().trackId()
                     ));
                 } else {
-                    ServerPlayNetworking.send(player, JukeboxMusicPayload.update(
+                    JukeboxMusicPayload.send(player, JukeboxMusicPayload.update(
                             active.key(),
                             active.discData().title(),
                             active.discData().artist(),

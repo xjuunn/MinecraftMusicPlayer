@@ -19,9 +19,9 @@ import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -40,10 +40,6 @@ public final class MusicPlayerMod implements ModInitializer {
     @Override
     public void onInitialize() {
         MusicPlayerConfigManager.load();
-        PayloadTypeRegistry.playS2C().register(MusicControlPayload.TYPE, MusicControlPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(JukeboxMusicPayload.TYPE, JukeboxMusicPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(OpenUrlPayload.TYPE, OpenUrlPayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
 
         CommandRegistrationCallback.EVENT.register(MusicCommands::register);
         ServerTickEvents.END_SERVER_TICK.register(JUKEBOX_PLAYBACK_SERVICE::tick);
@@ -79,13 +75,13 @@ public final class MusicPlayerMod implements ModInitializer {
         });
         UseItemCallback.EVENT.register((player, world, hand) -> {
             if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
-                return InteractionResult.PASS;
+                return InteractionResultHolder.pass(player.getItemInHand(hand));
             }
             if (MusicDiscHelper.isPendingDisc(player.getItemInHand(hand))) {
                 LOOT_MUSIC_DISC_SERVICE.useRandomDisc(serverPlayer, hand);
-                return InteractionResult.SUCCESS;
+                return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), world.isClientSide());
             }
-            return InteractionResult.PASS;
+            return InteractionResultHolder.pass(player.getItemInHand(hand));
         });
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
             if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
@@ -93,10 +89,10 @@ public final class MusicPlayerMod implements ModInitializer {
             }
             return LOOT_MUSIC_DISC_SERVICE.tryInjectOnOpen(serverPlayer, entity);
         });
-        ServerPlayNetworking.registerGlobalReceiver(MusicPlaybackReportPayload.TYPE, (payload, context) ->
-                context.server().execute(() ->
-                        MUSIC_QUEUE_SERVICE.handlePlaybackReport(context.server(), context.player(), payload))
-        );
+        ServerPlayNetworking.registerGlobalReceiver(MusicPlaybackReportPayload.ID, (server, player, handler, buf, sender) -> {
+            MusicPlaybackReportPayload payload = MusicPlaybackReportPayload.decode(buf);
+            server.execute(() -> MUSIC_QUEUE_SERVICE.handlePlaybackReport(server, player, payload));
+        });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> MUSIC_QUEUE_SERVICE.handleJoin(handler.player));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> MUSIC_QUEUE_SERVICE.handleDisconnect(handler.player));
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {

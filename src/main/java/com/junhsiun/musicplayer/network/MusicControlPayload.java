@@ -1,24 +1,23 @@
 package com.junhsiun.musicplayer.network;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public record MusicControlPayload(String action, String trackId, List<String> urls, String title, String subtitle, String message, long offsetMillis) implements CustomPacketPayload {
-    public static final Type<MusicControlPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_control"));
-    public static final StreamCodec<RegistryFriendlyByteBuf, MusicControlPayload> CODEC =
-            CustomPacketPayload.codec(MusicControlPayload::write, MusicControlPayload::new);
+public record MusicControlPayload(String action, String trackId, List<String> urls, String title, String subtitle, String message, long offsetMillis) {
+    public static final ResourceLocation ID = new ResourceLocation(MusicPlayerMod.MOD_ID, "music_control");
 
-    public MusicControlPayload(RegistryFriendlyByteBuf buffer) {
-        this(buffer.readUtf(), buffer.readUtf(), readUrls(buffer), buffer.readUtf(), buffer.readUtf(), buffer.readUtf(), buffer.readLong());
+    public static MusicControlPayload decode(FriendlyByteBuf buffer) {
+        return new MusicControlPayload(buffer.readUtf(), buffer.readUtf(), readUrls(buffer), buffer.readUtf(), buffer.readUtf(), buffer.readUtf(), buffer.readLong());
     }
 
-    private void write(RegistryFriendlyByteBuf buffer) {
+    public void encode(FriendlyByteBuf buffer) {
         buffer.writeUtf(this.action);
         buffer.writeUtf(this.trackId);
         buffer.writeVarInt(this.urls.size());
@@ -31,18 +30,13 @@ public record MusicControlPayload(String action, String trackId, List<String> ur
         buffer.writeLong(this.offsetMillis);
     }
 
-    private static List<String> readUrls(RegistryFriendlyByteBuf buffer) {
+    private static List<String> readUrls(FriendlyByteBuf buffer) {
         int size = buffer.readVarInt();
         List<String> urls = new ArrayList<>(size);
         for (int index = 0; index < size; index++) {
             urls.add(buffer.readUtf());
         }
         return urls;
-    }
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
     }
 
     public static MusicControlPayload play(String trackId, List<String> urls, String title, String subtitle, long offsetMillis) {
@@ -57,5 +51,11 @@ public record MusicControlPayload(String action, String trackId, List<String> ur
 
     public static MusicControlPayload stop(String message) {
         return new MusicControlPayload("stop", "", List.of(), "", "", message == null ? "" : message, 0L);
+    }
+
+    public static void send(ServerPlayer player, MusicControlPayload payload) {
+        FriendlyByteBuf buf = PacketByteBufs.create();
+        payload.encode(buf);
+        ServerPlayNetworking.send(player, ID, buf);
     }
 }

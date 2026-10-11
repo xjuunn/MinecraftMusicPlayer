@@ -13,11 +13,11 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConfirmLinkScreen;
-import net.minecraft.util.Util;
+import net.minecraft.Util;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -27,34 +27,35 @@ import java.net.URI;
 public final class MusicPlayerClientMod implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        ClientPlayNetworking.registerGlobalReceiver(MusicControlPayload.TYPE, (payload, context) ->
-                context.client().execute(() -> ClientMusicController.getInstance().handle(payload))
-        );
-        ClientPlayNetworking.registerGlobalReceiver(JukeboxMusicPayload.TYPE, (payload, context) ->
-                context.client().execute(() -> ClientJukeboxController.getInstance().handle(payload))
-        );
-        ClientPlayNetworking.registerGlobalReceiver(OpenUrlPayload.TYPE, (payload, context) ->
-                context.client().execute(() -> {
-                    String url = payload.url();
-                    if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
-                        return;
+        ClientPlayNetworking.registerGlobalReceiver(MusicControlPayload.ID, (client, player, buf, sender) -> {
+            MusicControlPayload payload = MusicControlPayload.decode(buf);
+            client.execute(() -> ClientMusicController.getInstance().handle(payload));
+        });
+        ClientPlayNetworking.registerGlobalReceiver(JukeboxMusicPayload.ID, (client, player, buf, sender) -> {
+            JukeboxMusicPayload payload = JukeboxMusicPayload.decode(buf);
+            client.execute(() -> ClientJukeboxController.getInstance().handle(payload));
+        });
+        ClientPlayNetworking.registerGlobalReceiver(OpenUrlPayload.ID, (client, player, buf, sender) -> {
+            OpenUrlPayload payload = OpenUrlPayload.decode(buf);
+            client.execute(() -> {
+                String url = payload.url();
+                if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
+                    return;
+                }
+                if (!client.options.chatLinks().get()) {
+                    return;
+                }
+                try {
+                    if (client.options.chatLinksPrompt().get()) {
+                        ConfirmLinkScreen.confirmLinkNow(url, client.screen, false);
+                    } else {
+                        Util.getPlatform().openUri(URI.create(url));
                     }
-                    Minecraft client = context.client();
-                    if (!client.options.chatLinks().get()) {
-                        return;
-                    }
-                    try {
-                        URI uri = URI.create(url);
-                        if (client.options.chatLinksPrompt().get()) {
-                            ConfirmLinkScreen.confirmLinkNow(client.screen, uri, false);
-                        } else {
-                            Util.getPlatform().openUri(uri);
-                        }
-                    } catch (Exception exception) {
-                        MusicPlayerMod.LOGGER.warn("打开链接失败: {}", url, exception);
-                    }
-                })
-        );
+                } catch (Exception exception) {
+                    MusicPlayerMod.LOGGER.warn("打开链接失败: {}", url, exception);
+                }
+            });
+        });
         WorldRenderEvents.AFTER_ENTITIES.register(JukeboxCoverRenderer::render);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClientJukeboxController.getInstance().tick(client);

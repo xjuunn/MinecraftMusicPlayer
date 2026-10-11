@@ -432,7 +432,7 @@ public final class MusicQueueService {
 
     public void initLyricsState(MinecraftServer server) {
         lyricsPreferenceState = server.overworld().getDataStorage()
-                .computeIfAbsent(LyricsPreferenceState.TYPE);
+                .computeIfAbsent(LyricsPreferenceState::fromTag, LyricsPreferenceState::new, LyricsPreferenceState.storageId());
     }
 
     // ── Player join / leave / report ─────────────────────────────────
@@ -635,7 +635,7 @@ public final class MusicQueueService {
                 playlistReversed = reverse;
                 playlistTrackIndex = reverse ? playlistTotalTracks - 1 : 0;
                 playlistRequesterId = requester.getUUID();
-                playlistRequesterName = requester.getGameProfile().name();
+                playlistRequesterName = requester.getGameProfile().getName();
                 playlistMode = true;
 
                 MusicPlayerMod.LOGGER.info("歌单模式启动: [{}] ID={}, 共 {} 首{}",
@@ -675,7 +675,7 @@ public final class MusicQueueService {
                                     source.sendFailure(Component.translatable("musicplayer.playlist.last_track_failed"));
                                     return;
                                 }
-                                SearchEntry entry = tracks.getFirst();
+                                SearchEntry entry = tracks.get(0);
                                 resolveTrack(entry.id()).thenAccept(track -> {
                                     playlistQueue.addLast(new QueuedTrack(
                                             track.id(), track.title(), track.artist(),
@@ -800,7 +800,7 @@ public final class MusicQueueService {
                 playlistTotalTracks = programs.size();
                 playlistTrackIndex = 0;
                 playlistRequesterId = requester.getUUID();
-                playlistRequesterName = requester.getGameProfile().name();
+                playlistRequesterName = requester.getGameProfile().getName();
                 playlistMode = true;
 
                 // Load first program only — remaining are loaded on demand during playback
@@ -929,7 +929,7 @@ public final class MusicQueueService {
         MusicPlayerMod.netease().playlistTracksPage(playlistId, index, 1)
                 .whenComplete((tracks, t) -> server.execute(() -> {
                     if (t != null || tracks.isEmpty()) return;
-                    SearchEntry entry = tracks.getFirst();
+                    SearchEntry entry = tracks.get(0);
                     int trackNumber = index + 1;
                     resolveTrack(entry.id()).whenComplete((track, rt) -> server.execute(() -> {
                         if (rt != null) {
@@ -1134,7 +1134,7 @@ public final class MusicQueueService {
             return;
         }
         if (currentPlayback == null) {
-            startTrack(server, track, requester.getUUID(), requester.getGameProfile().name());
+            startTrack(server, track, requester.getUUID(), requester.getGameProfile().getName());
             return;
         }
         queue.addLast(new QueuedTrack(
@@ -1143,12 +1143,12 @@ public final class MusicQueueService {
                 track.artist(),
                 track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
                 requester.getUUID(),
-                requester.getGameProfile().name(),
+                requester.getGameProfile().getName(),
                 track.sourceUrls()
         ));
         refreshTrackCache();
         if (MusicPlayerConfigManager.get().announceQueueChanges) {
-            broadcast(server, Component.translatable("musicplayer.queue.requested", requester.getGameProfile().name()).withStyle(ChatFormatting.GOLD)
+            broadcast(server, Component.translatable("musicplayer.queue.requested", requester.getGameProfile().getName()).withStyle(ChatFormatting.GOLD)
                     .append(Messages.clickableCommand(Component.literal(track.title()), Component.translatable("musicplayer.queue.replay_hover"), "/music play song " + track.id(), ChatFormatting.AQUA))
                     .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
                     .append(track.artistId() != null && !track.artistId().isBlank()
@@ -1293,7 +1293,7 @@ public final class MusicQueueService {
         mutedOncePlayers.clear();
         server.getPlayerList().getPlayers().stream()
                 .filter(player -> !optedOutPlayers.contains(player.getUUID()))
-                .sorted(Comparator.comparing(player -> player.getGameProfile().name()))
+                .sorted(Comparator.comparing(player -> player.getGameProfile().getName()))
                 .forEach(player -> {
                     sendPlay(player, track, 0L);
                 });
@@ -1388,14 +1388,14 @@ public final class MusicQueueService {
     // ── Network ──────────────────────────────────────────────────────
 
     private void sendPlay(ServerPlayer player, TrackInfo track, long offsetMillis) {
-        if (ServerPlayNetworking.canSend(player, MusicControlPayload.TYPE)) {
-            ServerPlayNetworking.send(player, MusicControlPayload.play(track.id(), track.sourceUrls(), track.title(), track.artist(), offsetMillis));
+        if (ServerPlayNetworking.canSend(player, MusicControlPayload.ID)) {
+            MusicControlPayload.send(player, MusicControlPayload.play(track.id(), track.sourceUrls(), track.title(), track.artist(), offsetMillis));
         }
     }
 
     private void sendStop(ServerPlayer player, String reason) {
-        if (ServerPlayNetworking.canSend(player, MusicControlPayload.TYPE)) {
-            ServerPlayNetworking.send(player, MusicControlPayload.stop(reason));
+        if (ServerPlayNetworking.canSend(player, MusicControlPayload.ID)) {
+            MusicControlPayload.send(player, MusicControlPayload.stop(reason));
         }
     }
 
@@ -1417,7 +1417,7 @@ public final class MusicQueueService {
         line.append(Component.literal("\n"));
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
-            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().getFirst(), ChatFormatting.GREEN));
+            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().get(0), ChatFormatting.GREEN));
         }
         line.append(Component.literal(" "));
         line.append(Messages.clickableCommand(Component.translatable("musicplayer.common.skip_label"), Component.translatable("musicplayer.common.skip_hover"), "/music skip", ChatFormatting.YELLOW));
@@ -1437,7 +1437,7 @@ public final class MusicQueueService {
         }
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
-            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().getFirst(), ChatFormatting.GREEN));
+            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().get(0), ChatFormatting.GREEN));
         }
         return line;
     }

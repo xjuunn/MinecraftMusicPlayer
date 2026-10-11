@@ -10,7 +10,9 @@ import javazoom.jl.decoder.JavaLayerException;
 import javazoom.jl.player.AudioDeviceBase;
 import javazoom.jl.player.Player;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.sounds.SoundSource;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -59,7 +61,7 @@ public final class ClientMusicController {
         try {
             int pos = audioDevice.getPosition();
             if (pos > 0) {
-                ClientPlayNetworking.send(MusicPlaybackReportPayload.position(pos, currentTrackId));
+                sendReport(MusicPlaybackReportPayload.position(pos, currentTrackId));
             }
         } catch (Exception ignored) {
         }
@@ -193,14 +195,20 @@ public final class ClientMusicController {
         if (trackId == null || trackId.isBlank()) {
             return;
         }
-        ClientPlayNetworking.send(MusicPlaybackReportPayload.ended(trackId));
+        sendReport(MusicPlaybackReportPayload.ended(trackId));
     }
 
     private void reportFailed(String trackId, String message) {
         if (trackId == null || trackId.isBlank()) {
             return;
         }
-        ClientPlayNetworking.send(MusicPlaybackReportPayload.failed(trackId, message));
+        sendReport(MusicPlaybackReportPayload.failed(trackId, message));
+    }
+
+    private static void sendReport(MusicPlaybackReportPayload payload) {
+        FriendlyByteBuf buf = PacketByteBufs.create();
+        payload.encode(buf);
+        ClientPlayNetworking.send(MusicPlaybackReportPayload.ID, buf);
     }
 
     private static final class BackgroundMusicAudioDevice extends AudioDeviceBase {

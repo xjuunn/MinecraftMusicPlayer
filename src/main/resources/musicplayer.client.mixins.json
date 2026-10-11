@@ -1,11 +1,8 @@
 {
   "required": true,
   "package": "com.junhsiun.musicplayer.mixin.client",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_17",
   "client": [
-    "ClientLevelAccessor",
-    "LevelEventHandlerAccessor",
-    "LevelEventHandlerMixin",
     "MusicManagerMixin"
   ],
   "injectors": {

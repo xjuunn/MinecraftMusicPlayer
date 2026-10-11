@@ -19,13 +19,14 @@ import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
-import net.minecraft.advancements.AdvancementHolder;
+import net.minecraft.advancements.Advancement;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ClickEvent;
@@ -33,7 +34,6 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -95,8 +95,8 @@ public final class MusicCommands {
                 .withStyle(style -> style
                         .withColor(ChatFormatting.WHITE)
                         .withBold(true)
-                        .withClickEvent(new ClickEvent.RunCommand("/music star"))
-                        .withHoverEvent(new HoverEvent.ShowText(renderRepositoryHover()))));
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music star"))
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, renderRepositoryHover()))));
         Messages.sendSuccess(source, title, false);
         helpEntry(source, "now", Component.translatable("musicplayer.help.desc.now"));
         helpEntry(source, "play", Component.translatable("musicplayer.help.desc.play"));
@@ -126,15 +126,15 @@ public final class MusicCommands {
             return 0;
         }
         grantStarAchievement(source.getServer(), player);
-        if (ServerPlayNetworking.canSend(player, OpenUrlPayload.TYPE)) {
-            ServerPlayNetworking.send(player, new OpenUrlPayload(REPOSITORY_URL));
+        if (ServerPlayNetworking.canSend(player, OpenUrlPayload.ID)) {
+            OpenUrlPayload.send(player, new OpenUrlPayload(REPOSITORY_URL));
         }
         return 1;
     }
 
     private static void grantStarAchievement(MinecraftServer server, ServerPlayer player) {
-        Identifier advancementId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "star");
-        AdvancementHolder holder = server.getAdvancements().get(advancementId);
+        ResourceLocation advancementId = new ResourceLocation(MusicPlayerMod.MOD_ID, "star");
+        Advancement holder = server.getAdvancements().getAdvancement(advancementId);
         if (holder == null) {
             MusicPlayerMod.LOGGER.warn("未找到成就定义: {}", advancementId);
             return;
@@ -287,7 +287,7 @@ public final class MusicCommands {
                 return 1;
             }
         sendHeader(context.getSource());
-        boolean isAdmin = context.getSource().permissions().hasPermission(Permissions.COMMANDS_ADMIN);
+        boolean isAdmin = context.getSource().hasPermission(2);
         boolean isPaused = MusicPlayerMod.queueService().isPaused();
         sendQuickBar(context.getSource(),
                 Messages.clickableCommand(Component.translatable("musicplayer.now.rewind_label"), Component.translatable("musicplayer.now.rewind_hover"), "/music seek -5", ChatFormatting.GRAY),
@@ -327,7 +327,7 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> pause() {
         return Commands.literal("pause")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(source -> source.hasPermission(2))
                 .executes(context -> {
                     MusicPlayerMod.queueService().pause(context.getSource().getServer());
                     return 1;
@@ -336,7 +336,7 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> resume() {
         return Commands.literal("resume")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(source -> source.hasPermission(2))
                 .executes(context -> {
                     MusicPlayerMod.queueService().resume(context.getSource().getServer());
                     return 1;
@@ -367,7 +367,7 @@ public final class MusicCommands {
                             return showQueue(context.getSource(), 1);
                         })))
                 .then(Commands.literal("clear")
-                        .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                        .requires(source -> source.hasPermission(2))
                         .executes(context -> {
                             MusicPlayerMod.queueService().clearQueue(context.getSource());
                             return showQueue(context.getSource(), 1);
@@ -598,10 +598,10 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> skip() {
         return Commands.literal("skip")
-                .requires(source -> source.getEntity() instanceof ServerPlayer || source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(source -> source.getEntity() instanceof ServerPlayer || source.hasPermission(2))
                 .executes(context -> {
                     MinecraftServer server = context.getSource().getServer();
-                    if (context.getSource().permissions().hasPermission(Permissions.COMMANDS_ADMIN)) {
+                    if (context.getSource().hasPermission(2)) {
                         MusicPlayerMod.queueService().skipNow(server, context.getSource());
                     } else {
                         MusicPlayerMod.queueService().voteSkip(server, context.getSource().getPlayerOrException());
@@ -852,7 +852,7 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> stop() {
         return Commands.literal("stop")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(source -> source.hasPermission(2))
                 .executes(context -> {
                     MusicPlayerMod.queueService().stop(context.getSource().getServer(), "musicplayer.stop.admin");
                     return 1;
@@ -861,7 +861,7 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> config() {
         return Commands.literal("config")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("reload").executes(context -> {
                     MusicPlayerConfigManager.load();
                     MusicPlayerMod.queueService().clearTrackCache();
@@ -1243,9 +1243,9 @@ public final class MusicCommands {
 
         Messages.sendSuccess(source,  Component.literal("ID: ").withStyle(ChatFormatting.GRAY)
                 .append(Component.literal(track.id()).withStyle(style -> style
-                        .withClickEvent(new ClickEvent.CopyToClipboard(track.id()))
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, track.id()))
                         .withColor(ChatFormatting.WHITE)
-                        .withHoverEvent(new HoverEvent.ShowText(Component.translatable("musicplayer.common.copy_hover"))))), false);
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable("musicplayer.common.copy_hover"))))), false);
 
         MutableComponent burnAction = buildBurnAction(source, track.id());
         if (burnAction != null) {
@@ -1400,7 +1400,7 @@ public final class MusicCommands {
                 ChatFormatting.GRAY));
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
-            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().getFirst(), ChatFormatting.BLUE));
+            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().get(0), ChatFormatting.BLUE));
         }
         return line;
     }
@@ -1417,7 +1417,7 @@ public final class MusicCommands {
         }
         if (!track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
-            line.append(Messages.clickableUrl(Component.translatable("musicplayer.now.open_url_label"), Component.translatable("musicplayer.now.open_url_hover"), track.sourceUrls().getFirst(), ChatFormatting.GREEN));
+            line.append(Messages.clickableUrl(Component.translatable("musicplayer.now.open_url_label"), Component.translatable("musicplayer.now.open_url_hover"), track.sourceUrls().get(0), ChatFormatting.GREEN));
         }
         return line;
     }

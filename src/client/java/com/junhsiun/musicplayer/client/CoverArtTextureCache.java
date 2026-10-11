@@ -5,7 +5,7 @@ import com.junhsiun.musicplayer.util.HttpClientFactory;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -54,7 +54,7 @@ public final class CoverArtTextureCache {
         executor.execute(() -> downloadAndRegister(coverUrl));
     }
 
-    public synchronized Identifier getTextureId(String coverUrl) {
+    public synchronized ResourceLocation getTextureId(String coverUrl) {
         CacheEntry entry = entries.get(coverUrl);
         return entry == null ? null : entry.textureId();
     }
@@ -96,7 +96,7 @@ public final class CoverArtTextureCache {
 
             try (NativeImage image = readImage(bytes)) {
                 NativeImage processedImage = toCircularTexture(image);
-                Identifier textureId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "cover/" + hashUrl(coverUrl));
+                ResourceLocation textureId = new ResourceLocation(MusicPlayerMod.MOD_ID, "cover/" + hashUrl(coverUrl));
                 Minecraft.getInstance().execute(() -> registerTexture(coverUrl, textureId, processedImage));
             }
         } catch (Exception exception) {
@@ -107,10 +107,10 @@ public final class CoverArtTextureCache {
         }
     }
 
-    private synchronized void registerTexture(String coverUrl, Identifier textureId, NativeImage image) {
+    private synchronized void registerTexture(String coverUrl, ResourceLocation textureId, NativeImage image) {
         Minecraft client = Minecraft.getInstance();
         try {
-            DynamicTexture texture = new DynamicTexture(() -> "musicplayer_cover", image);
+            DynamicTexture texture = new DynamicTexture(image);
             texture.upload();
             client.getTextureManager().register(textureId, texture);
             entries.put(coverUrl, CacheEntry.ready(textureId));
@@ -142,7 +142,7 @@ public final class CoverArtTextureCache {
             for (int y = 0; y < bufferedImage.getHeight(); y++) {
                 for (int x = 0; x < bufferedImage.getWidth(); x++) {
                     int argb = bufferedImage.getRGB(x, y);
-                    image.setPixel(x, y, argb);
+                    image.setPixelRGBA(x, y, argb);
                 }
             }
             return image;
@@ -160,13 +160,13 @@ public final class CoverArtTextureCache {
         NativeImage result = new NativeImage(size, size, true);
         for (int y = 0; y < size; y++) {
             for (int x = 0; x < size; x++) {
-                int color = source.getPixel(offsetX + x, offsetY + y);
+                int color = source.getPixelRGBA(offsetX + x, offsetY + y);
                 float dx = x - center;
                 float dy = y - center;
                 float distance = (float) Math.sqrt(dx * dx + dy * dy);
                 float alphaFactor = clamp((radius - distance) / feather);
                 if (alphaFactor <= 0.0F) {
-                    result.setPixel(x, y, 0x00000000);
+                    result.setPixelRGBA(x, y, 0x00000000);
                     continue;
                 }
                 int alpha = (color >>> 24) & 0xFF;
@@ -174,7 +174,7 @@ public final class CoverArtTextureCache {
                 int green = (color >>> 8) & 0xFF;
                 int blue = color & 0xFF;
                 int maskedAlpha = Math.min(255, Math.max(0, Math.round(alpha * alphaFactor)));
-                result.setPixel(x, y, (maskedAlpha << 24) | (red << 16) | (green << 8) | blue);
+                result.setPixelRGBA(x, y, (maskedAlpha << 24) | (red << 16) | (green << 8) | blue);
             }
         }
         return result;
@@ -201,12 +201,12 @@ public final class CoverArtTextureCache {
         return Math.min(1.0F, value);
     }
 
-    private record CacheEntry(Identifier textureId, boolean loading, boolean failed) {
+    private record CacheEntry(ResourceLocation textureId, boolean loading, boolean failed) {
         public static CacheEntry pending() {
             return new CacheEntry(null, true, false);
         }
 
-        public static CacheEntry ready(Identifier textureId) {
+        public static CacheEntry ready(ResourceLocation textureId) {
             return new CacheEntry(textureId, false, false);
         }
 

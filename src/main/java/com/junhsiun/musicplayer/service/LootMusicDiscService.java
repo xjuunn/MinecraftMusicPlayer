@@ -18,8 +18,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.RandomizableContainer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.vehicle.ContainerEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -40,6 +40,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 public final class LootMusicDiscService {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -89,7 +90,7 @@ public final class LootMusicDiscService {
         return tryInjectOnOpen(
                 player,
                 randomizable,
-                randomizable,
+                p -> randomizable.unpackLootTable(p),
                 key(world, pos)
         );
     }
@@ -98,13 +99,13 @@ public final class LootMusicDiscService {
         if (entity.level().isClientSide()) {
             return InteractionResult.PASS;
         }
-        if (!(entity instanceof Container container) || !(entity instanceof RandomizableContainer randomizable)) {
+        if (!(entity instanceof Container container) || !(entity instanceof ContainerEntity containerEntity)) {
             return InteractionResult.PASS;
         }
         return tryInjectOnOpen(
                 player,
                 container,
-                randomizable,
+                p -> containerEntity.unpackChestVehicleLootTable(p),
                 key(entity)
         );
     }
@@ -150,7 +151,7 @@ public final class LootMusicDiscService {
                     player.sendSystemMessage(Component.translatable("musicplayer.loot.failed_returned").withStyle(ChatFormatting.RED));
                     return;
                 }
-                giveBurnedDisc(player, baseDisc, tracks.getFirst());
+                giveBurnedDisc(player, baseDisc, tracks.get(0));
                 refillPool();
             });
         });
@@ -254,13 +255,9 @@ public final class LootMusicDiscService {
     private InteractionResult tryInjectOnOpen(
             ServerPlayer player,
             Container container,
-            RandomizableContainer randomizable,
+            Consumer<ServerPlayer> unpackLoot,
             String containerKey
     ) {
-        if (randomizable.getLootTable() == null) {
-            return InteractionResult.PASS;
-        }
-
         MinecraftServer srv = player.level().getServer();
         if (srv == null) {
             return InteractionResult.PASS;
@@ -282,7 +279,7 @@ public final class LootMusicDiscService {
             return InteractionResult.PASS;
         }
 
-        randomizable.unpackLootTable(player);
+        unpackLoot.accept(player);
         int inserted = insertPendingDiscs(container, player.level().random, count);
         if (inserted > 0) {
             MusicPlayerMod.LOGGER.info("Injected {} random music disc(s) into loot container: {}", inserted, containerKey);

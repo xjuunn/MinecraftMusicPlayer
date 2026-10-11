@@ -1,24 +1,23 @@
 package com.junhsiun.musicplayer.network;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public record JukeboxMusicPayload(String action, long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis, String trackId) implements CustomPacketPayload {
-    public static final Type<JukeboxMusicPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "jukebox_music"));
-    public static final StreamCodec<RegistryFriendlyByteBuf, JukeboxMusicPayload> CODEC =
-            CustomPacketPayload.codec(JukeboxMusicPayload::write, JukeboxMusicPayload::new);
+public record JukeboxMusicPayload(String action, long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis, String trackId) {
+    public static final ResourceLocation ID = new ResourceLocation(MusicPlayerMod.MOD_ID, "jukebox_music");
 
-    public JukeboxMusicPayload(RegistryFriendlyByteBuf buffer) {
-        this(buffer.readUtf(), buffer.readLong(), readUrls(buffer), buffer.readUtf(), buffer.readUtf(), buffer.readUtf(), buffer.readLong(), buffer.readUtf());
+    public static JukeboxMusicPayload decode(FriendlyByteBuf buffer) {
+        return new JukeboxMusicPayload(buffer.readUtf(), buffer.readLong(), readUrls(buffer), buffer.readUtf(), buffer.readUtf(), buffer.readUtf(), buffer.readLong(), buffer.readUtf());
     }
 
-    private void write(RegistryFriendlyByteBuf buffer) {
+    public void encode(FriendlyByteBuf buffer) {
         buffer.writeUtf(this.action);
         buffer.writeLong(this.jukeboxPos);
         buffer.writeVarInt(this.urls.size());
@@ -32,18 +31,13 @@ public record JukeboxMusicPayload(String action, long jukeboxPos, List<String> u
         buffer.writeUtf(this.trackId);
     }
 
-    private static List<String> readUrls(RegistryFriendlyByteBuf buffer) {
+    private static List<String> readUrls(FriendlyByteBuf buffer) {
         int size = buffer.readVarInt();
         List<String> urls = new ArrayList<>(size);
         for (int index = 0; index < size; index++) {
             urls.add(buffer.readUtf());
         }
         return urls;
-    }
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
     }
 
     public static JukeboxMusicPayload play(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis, String trackId) {
@@ -60,5 +54,11 @@ public record JukeboxMusicPayload(String action, long jukeboxPos, List<String> u
 
     public static JukeboxMusicPayload stop(long jukeboxPos) {
         return new JukeboxMusicPayload("stop", jukeboxPos, List.of(), "", "", "", 0L, "");
+    }
+
+    public static void send(ServerPlayer player, JukeboxMusicPayload payload) {
+        FriendlyByteBuf buf = PacketByteBufs.create();
+        payload.encode(buf);
+        ServerPlayNetworking.send(player, ID, buf);
     }
 }

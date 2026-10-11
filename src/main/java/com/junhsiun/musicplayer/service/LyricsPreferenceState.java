@@ -1,11 +1,9 @@
 package com.junhsiun.musicplayer.service;
 
-import com.mojang.serialization.Codec;
-import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.util.datafix.DataFixTypes;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.saveddata.SavedData;
-import net.minecraft.world.level.saveddata.SavedDataType;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -13,23 +11,37 @@ import java.util.UUID;
 
 public final class LyricsPreferenceState extends SavedData {
     private static final String ID = "musicplayer/lyrics_preferences";
-    private static final Codec<LyricsPreferenceState> CODEC = RecordCodecBuilder.create(instance ->
-            instance.group(
-                    Codec.unboundedMap(UUIDUtil.STRING_CODEC, Codec.BOOL)
-                            .fieldOf("players")
-                            .forGetter(state -> state.preferences)
-            ).apply(instance, LyricsPreferenceState::new)
-    );
-    public static final SavedDataType<LyricsPreferenceState> TYPE =
-            new SavedDataType<>(ID, LyricsPreferenceState::new, CODEC, DataFixTypes.LEVEL);
 
     private final Map<UUID, Boolean> preferences = new HashMap<>();
 
-    private LyricsPreferenceState() {
+    public LyricsPreferenceState() {
     }
 
-    private LyricsPreferenceState(Map<UUID, Boolean> preferences) {
-        this.preferences.putAll(preferences);
+    public static LyricsPreferenceState fromTag(CompoundTag tag) {
+        LyricsPreferenceState state = new LyricsPreferenceState();
+        ListTag list = tag.getList("players", Tag.TAG_COMPOUND);
+        for (int index = 0; index < list.size(); index++) {
+            CompoundTag entry = list.getCompound(index);
+            try {
+                UUID playerId = UUID.fromString(entry.getString("uuid"));
+                state.preferences.put(playerId, entry.getBoolean("enabled"));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        return state;
+    }
+
+    @Override
+    public CompoundTag save(CompoundTag tag) {
+        ListTag list = new ListTag();
+        preferences.forEach((playerId, enabled) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putString("uuid", playerId.toString());
+            entry.putBoolean("enabled", enabled);
+            list.add(entry);
+        });
+        tag.put("players", list);
+        return tag;
     }
 
     public boolean isEnabled(UUID playerId) {
@@ -37,11 +49,11 @@ public final class LyricsPreferenceState extends SavedData {
     }
 
     public void setEnabled(UUID playerId, boolean enabled) {
-        if (enabled) {
-            preferences.put(playerId, true);
-        } else {
-            preferences.put(playerId, false);
-        }
+        preferences.put(playerId, enabled);
         setDirty();
+    }
+
+    public static String storageId() {
+        return ID;
     }
 }

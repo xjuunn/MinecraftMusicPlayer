@@ -2,22 +2,20 @@ package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
-import com.junhsiun.musicplayer.mixin.client.ClientLevelAccessor;
-import com.junhsiun.musicplayer.mixin.client.LevelEventHandlerAccessor;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
 import com.junhsiun.musicplayer.util.Messages;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import javazoom.jl.decoder.JavaLayerException;
 import javazoom.jl.player.AudioDeviceBase;
 import javazoom.jl.player.Player;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.LevelEventHandler;
-import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.block.JukeboxBlock;
@@ -118,7 +116,6 @@ public final class ClientJukeboxController {
             if (handle.finishedAtMillis > 0L) {
                 continue;
             }
-            silenceVanillaJukeboxSound(jukeboxPos, "tick suppression");
 
             if (handle.player != null && !handle.trackId.isBlank()) {
                 Long lastReport = lastPositionReportTime.get(jukeboxPos);
@@ -127,7 +124,7 @@ public final class ClientJukeboxController {
                     try {
                         int pos = handle.player.getPosition();
                         if (pos > 0) {
-                            ClientPlayNetworking.send(MusicPlaybackReportPayload.position(pos, handle.trackId));
+                            sendReport(MusicPlaybackReportPayload.position(pos, handle.trackId));
                         }
                     } catch (Exception ignored) {
                     }
@@ -153,11 +150,6 @@ public final class ClientJukeboxController {
     public void markPendingInsertion(BlockPos pos) {
         pendingInsertions.put(pos.asLong(), System.currentTimeMillis());
         MusicPlayerMod.LOGGER.debug("Marked custom jukebox insertion pending at {}", pos);
-    }
-
-    public boolean shouldSuppressVanillaSound(BlockPos pos) {
-        long key = pos.asLong();
-        return playbackHandles.containsKey(key) || pendingInsertions.containsKey(key);
     }
 
     public boolean isPlayerNearAnyActiveJukebox() {
@@ -203,7 +195,6 @@ public final class ClientJukeboxController {
         handle.coverUrl = coverUrl == null ? "" : coverUrl;
         handle.startedAtMillis = System.currentTimeMillis();
         CoverArtTextureCache.getInstance().request(handle.coverUrl);
-        silenceVanillaJukeboxSound(jukeboxPos, "custom play payload");
         showNowPlaying(handle.title, handle.subtitle);
         stopVanillaBackgroundMusic();
         long startOffset = offsetMillis;
@@ -233,7 +224,6 @@ public final class ClientJukeboxController {
             handle.coverUrl = coverUrl;
             CoverArtTextureCache.getInstance().request(coverUrl);
         }
-        silenceVanillaJukeboxSound(jukeboxPos, "custom refresh payload");
         stopVanillaBackgroundMusic();
         Thread thread = handle.thread;
         if (thread == null || !thread.isAlive()) {
@@ -251,7 +241,6 @@ public final class ClientJukeboxController {
     private void stop(long jukeboxPos) {
         pendingInsertions.remove(jukeboxPos);
         PlaybackHandle handle = playbackHandles.remove(jukeboxPos);
-        silenceVanillaJukeboxSound(jukeboxPos, "custom stop payload");
         if (handle == null) {
             return;
         }
@@ -431,27 +420,10 @@ public final class ClientJukeboxController {
         return null;
     }
 
-    private void silenceVanillaJukeboxSound(long jukeboxPos, String reason) {
-        Minecraft minecraft = Minecraft.getInstance();
-        ClientLevel level = minecraft.level;
-        if (level == null || !(level instanceof ClientLevelAccessor clientLevelAccessor)) {
-            return;
-        }
-
-        LevelEventHandler levelEventHandler = clientLevelAccessor.musicplayer$getLevelEventHandler();
-        if (!(levelEventHandler instanceof LevelEventHandlerAccessor accessor)) {
-            return;
-        }
-
-        BlockPos pos = BlockPos.of(jukeboxPos);
-        Map<BlockPos, SoundInstance> playingJukeboxSongs = accessor.musicplayer$getPlayingJukeboxSongs();
-        SoundInstance soundInstance = playingJukeboxSongs.remove(pos);
-        if (soundInstance == null) {
-            return;
-        }
-
-        minecraft.getSoundManager().stop(soundInstance);
-        MusicPlayerMod.LOGGER.debug("Stopped vanilla jukebox sound at {}: {}", pos, reason);
+    private static void sendReport(MusicPlaybackReportPayload payload) {
+        FriendlyByteBuf buf = PacketByteBufs.create();
+        payload.encode(buf);
+        ClientPlayNetworking.send(MusicPlaybackReportPayload.ID, buf);
     }
 
     private static final class SpatialAudioDevice extends AudioDeviceBase {

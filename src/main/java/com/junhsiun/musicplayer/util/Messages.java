@@ -9,8 +9,6 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.net.URI;
-
 public final class Messages {
     private Messages() {
     }
@@ -148,8 +146,8 @@ public final class Messages {
     public static MutableComponent clickableCommand(Component label, Component hover, String command, ChatFormatting color) {
         return label.copy().setStyle(
                 Style.EMPTY.withColor(color)
-                        .withClickEvent(new ClickEvent.RunCommand(command))
-                        .withHoverEvent(new HoverEvent.ShowText(hover))
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command))
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover))
         );
     }
 
@@ -164,8 +162,8 @@ public final class Messages {
         try {
             return label.copy().setStyle(
                     Style.EMPTY.withColor(color)
-                            .withClickEvent(new ClickEvent.OpenUrl(URI.create(url)))
-                            .withHoverEvent(new HoverEvent.ShowText(hover))
+                            .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))
+                            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover))
             );
         } catch (Exception ignored) {
             return label.copy().withStyle(color);
@@ -179,8 +177,8 @@ public final class Messages {
     public static MutableComponent suggestable(Component label, Component hover, String command, ChatFormatting color) {
         return label.copy().setStyle(
                 Style.EMPTY.withColor(color)
-                        .withClickEvent(new ClickEvent.SuggestCommand(command))
-                        .withHoverEvent(new HoverEvent.ShowText(hover))
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, command))
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover))
         );
     }
 }

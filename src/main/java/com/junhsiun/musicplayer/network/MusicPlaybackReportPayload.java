@@ -1,29 +1,20 @@
 package com.junhsiun.musicplayer.network;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 
-public record MusicPlaybackReportPayload(String action, String trackId, String message) implements CustomPacketPayload {
-    public static final Type<MusicPlaybackReportPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_playback_report"));
-    public static final StreamCodec<RegistryFriendlyByteBuf, MusicPlaybackReportPayload> CODEC =
-            CustomPacketPayload.codec(MusicPlaybackReportPayload::write, MusicPlaybackReportPayload::new);
+public record MusicPlaybackReportPayload(String action, String trackId, String message) {
+    public static final ResourceLocation ID = new ResourceLocation(MusicPlayerMod.MOD_ID, "music_playback_report");
 
-    public MusicPlaybackReportPayload(RegistryFriendlyByteBuf buffer) {
-        this(buffer.readUtf(), buffer.readUtf(), buffer.readUtf());
+    public static MusicPlaybackReportPayload decode(FriendlyByteBuf buffer) {
+        return new MusicPlaybackReportPayload(buffer.readUtf(), buffer.readUtf(), buffer.readUtf());
     }
 
-    private void write(RegistryFriendlyByteBuf buffer) {
+    public void encode(FriendlyByteBuf buffer) {
         buffer.writeUtf(this.action);
         buffer.writeUtf(this.trackId);
         buffer.writeUtf(this.message);
-    }
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
     }
 
     public static MusicPlaybackReportPayload ended(String trackId) {
