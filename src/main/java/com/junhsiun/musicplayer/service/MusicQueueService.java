@@ -542,7 +542,7 @@ public final class MusicQueueService {
             if (decision.kind() == SongRequestPolicy.Kind.REJECT) {
                 source.sendFailure(message);
             } else {
-                source.sendSuccess(() -> message.copy().withStyle(ChatFormatting.YELLOW), false);
+                source.sendSuccess(message.copy().withStyle(ChatFormatting.YELLOW), false);
             }
             return;
         }
@@ -655,7 +655,7 @@ public final class MusicQueueService {
                             return;
                         }
                         startTrack(server, track, first.requesterId(), first.requesterName());
-                        source.sendSuccess(() -> Component.translatable("musicplayer.playlist.started", playlist.title(), playlistTotalTracks)
+                        source.sendSuccess(Component.translatable("musicplayer.playlist.started", playlist.title(), playlistTotalTracks)
                                 .withStyle(ChatFormatting.GREEN), false);
 
                         if (reverse) {
@@ -811,7 +811,7 @@ public final class MusicQueueService {
                                 cleanUpRadioPlaylist();
                                 return;
                             }
-                            source.sendSuccess(() -> Component.translatable("musicplayer.radio.started", radioName, playlistTotalTracks)
+                            source.sendSuccess(Component.translatable("musicplayer.radio.started", radioName, playlistTotalTracks)
                                     .withStyle(ChatFormatting.GREEN), false);
                             QueuedTrack first = playlistQueue.removeFirst();
                             advanceAndStart(server, null, first);
@@ -1024,7 +1024,7 @@ public final class MusicQueueService {
     public void clearQueue(CommandSourceStack source) {
         queue.clear();
         refreshTrackCache();
-        source.sendSuccess(() -> Component.translatable("musicplayer.queue.cleared"), false);
+        source.sendSuccess(Component.translatable("musicplayer.queue.cleared"), false);
     }
 
     public boolean moveQueuedTrackToFront(String songId) {
@@ -1130,7 +1130,7 @@ public final class MusicQueueService {
 
     private void enqueueOrStart(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, TrackInfo track) {
         if (isTrackActiveOrQueued(track.id())) {
-            source.sendSuccess(() -> Component.translatable("musicplayer.request.duplicate").withStyle(ChatFormatting.YELLOW), false);
+            source.sendSuccess(Component.translatable("musicplayer.request.duplicate").withStyle(ChatFormatting.YELLOW), false);
             return;
         }
         if (currentPlayback == null) {
@@ -1155,7 +1155,7 @@ public final class MusicQueueService {
                             ? Messages.clickableCommand(Component.literal(track.artist()), Component.translatable("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY)
                             : Component.literal(track.artist()).withStyle(ChatFormatting.GRAY)));
         } else {
-            source.sendSuccess(() -> Component.translatable("musicplayer.queue.added").withStyle(ChatFormatting.GRAY)
+            source.sendSuccess(Component.translatable("musicplayer.queue.added").withStyle(ChatFormatting.GRAY)
                     .append(Messages.clickableCommand(Component.literal(track.title()), Component.translatable("musicplayer.queue.replay_hover"), "/music play song " + track.id(), ChatFormatting.AQUA)), false);
         }
     }

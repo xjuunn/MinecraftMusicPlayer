@@ -283,7 +283,7 @@ public final class MusicCommands {
             TrackInfo track = MusicPlayerMod.queueService().currentTrack();
             if (track == null) {
                 sendHeader(context.getSource());
-                context.getSource().sendSuccess(MusicPlayerMod.queueService()::describeNowPlaying, false);
+                context.getSource().sendSuccess(MusicPlayerMod.queueService().describeNowPlaying(), false);
                 return 1;
             }
         sendHeader(context.getSource());
@@ -299,14 +299,14 @@ public final class MusicCommands {
                 Messages.clickableCommand(Component.translatable("musicplayer.common.queue_label"), Component.translatable("musicplayer.common.queue_hover"), "/music queue", ChatFormatting.GRAY),
                 Messages.clickableCommand(Component.translatable("musicplayer.common.playlist_label"), Component.translatable("musicplayer.now.playlist_hover"), "/music playlist", ChatFormatting.AQUA),
                 Messages.clickableCommand(Component.translatable("musicplayer.common.help_label"), Component.translatable("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
-        context.getSource().sendSuccess(() -> spacer(), false);
+        context.getSource().sendSuccess(spacer(), false);
         long elapsedMs = MusicPlayerMod.queueService().playbackElapsedMillis();
         long durationMs = MusicPlayerMod.queueService().playbackDurationMillis();
         String requesterName = MusicPlayerMod.queueService().currentRequesterName();
         String elapsed = Messages.formatDuration(elapsedMs);
         String duration = durationMs > 0L ? Messages.formatDuration(durationMs) : "";
-        context.getSource().sendSuccess(() -> renderCurrentTrack(context.getSource(), track, elapsed, duration, requesterName), false);
-        context.getSource().sendSuccess(() -> renderProgressLine(elapsed, duration, requesterName, isPaused, durationMs > 0L ? MusicPlayerMod.queueService().playbackElapsedMillis() : 0L, durationMs), false);
+        context.getSource().sendSuccess(renderCurrentTrack(context.getSource(), track, elapsed, duration, requesterName), false);
+        context.getSource().sendSuccess(renderProgressLine(elapsed, duration, requesterName, isPaused, durationMs > 0L ? MusicPlayerMod.queueService().playbackElapsedMillis() : 0L, durationMs), false);
             return 1;
         });
     }
@@ -699,7 +699,7 @@ public final class MusicCommands {
         return Commands.literal("radio")
                 .executes(context -> {
                     sendHeader(context.getSource());
-                    context.getSource().sendSuccess(() -> sectionHeader(Component.translatable("musicplayer.radio.title"), Component.translatable("musicplayer.radio.subtitle")), false);
+                    context.getSource().sendSuccess(sectionHeader(Component.translatable("musicplayer.radio.title"), Component.translatable("musicplayer.radio.subtitle")), false);
                     return 1;
                 })
                 .then(Commands.literal("hot")
@@ -1525,7 +1525,9 @@ public final class MusicCommands {
             return;
         }
 
-        ItemStack burnedDisc = MusicDiscHelper.burn(mainHand.copyWithCount(1), track);
+        ItemStack burnBase = mainHand.copy();
+        burnBase.setCount(1);
+        ItemStack burnedDisc = MusicDiscHelper.burn(burnBase, track);
         if (mainHand.getCount() == 1) {
             player.setItemInHand(InteractionHand.MAIN_HAND, burnedDisc);
         } else {

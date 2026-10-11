@@ -6,7 +6,7 @@ import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
-import com.mojang.math.Axis;
+import com.mojang.math.Vector3f;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
@@ -96,13 +96,13 @@ public final class JukeboxCoverRenderer {
         poseStack.pushPose();
         poseStack.translate(x, y, z);
         if (yRotationDegrees != 0.0F) {
-            poseStack.mulPose(Axis.YP.rotationDegrees(yRotationDegrees));
+            poseStack.mulPose(Vector3f.YP.rotationDegrees(yRotationDegrees));
         }
         if (xRotationDegrees != 0.0F) {
-            poseStack.mulPose(Axis.XP.rotationDegrees(xRotationDegrees));
+            poseStack.mulPose(Vector3f.XP.rotationDegrees(xRotationDegrees));
         }
         if (spinDegrees != 0.0F) {
-            poseStack.mulPose(Axis.ZP.rotationDegrees(spinDegrees));
+            poseStack.mulPose(Vector3f.ZP.rotationDegrees(spinDegrees));
         }
 
         drawQuad(RenderType.entityCutoutNoCull(BLACK_DISC_TEXTURE), poseStack, outerHalfSize, light, 255, 255, 255, 255, 0.0F);

@@ -96,7 +96,7 @@ public final class LootMusicDiscService {
     }
 
     public InteractionResult tryInjectOnOpen(ServerPlayer player, Entity entity) {
-        if (entity.level().isClientSide()) {
+        if (entity.level.isClientSide) {
             return InteractionResult.PASS;
         }
         if (!(entity instanceof Container container) || !(entity instanceof ContainerEntity containerEntity)) {
@@ -122,7 +122,8 @@ public final class LootMusicDiscService {
 
         player.sendSystemMessage(Component.translatable("musicplayer.loot.generating").withStyle(ChatFormatting.GRAY));
 
-        ItemStack baseDisc = held.copyWithCount(1);
+        ItemStack baseDisc = held.copy();
+        baseDisc.setCount(1);
         if (held.getCount() == 1) {
             player.setItemInHand(hand, ItemStack.EMPTY);
         } else {
@@ -138,13 +139,14 @@ public final class LootMusicDiscService {
         }
 
         consumeTracks(1).whenComplete((tracks, throwable) -> {
-            MinecraftServer srv = player.level().getServer();
+            MinecraftServer srv = player.level.getServer();
             if (srv == null) return;
             srv.execute(() -> {
                 pendingPlayers.remove(player.getUUID());
                 if (throwable != null || tracks == null || tracks.isEmpty()) {
                     MusicPlayerMod.LOGGER.warn("Failed to generate random music disc for player {}", player.getScoreboardName(), throwable);
-                    ItemStack returned = baseDisc.copyWithCount(1);
+                    ItemStack returned = baseDisc.copy();
+                    returned.setCount(1);
                     if (!player.getInventory().add(returned)) {
                         player.drop(returned, false, true);
                     }
@@ -258,7 +260,7 @@ public final class LootMusicDiscService {
             Consumer<ServerPlayer> unpackLoot,
             String containerKey
     ) {
-        MinecraftServer srv = player.level().getServer();
+        MinecraftServer srv = player.level.getServer();
         if (srv == null) {
             return InteractionResult.PASS;
         }
@@ -280,7 +282,7 @@ public final class LootMusicDiscService {
         }
 
         unpackLoot.accept(player);
-        int inserted = insertPendingDiscs(container, player.level().random, count);
+        int inserted = insertPendingDiscs(container, player.level.random, count);
         if (inserted > 0) {
             MusicPlayerMod.LOGGER.info("Injected {} random music disc(s) into loot container: {}", inserted, containerKey);
             container.setChanged();
@@ -390,6 +392,6 @@ public final class LootMusicDiscService {
     }
 
     private static String key(Entity entity) {
-        return entity.level().dimension().toString() + ":entity:" + entity.getUUID();
+        return entity.level.dimension().toString() + ":entity:" + entity.getUUID();
     }
 }

@@ -44,7 +44,7 @@ public final class Messages {
             player.sendSystemMessage(component);
             return;
         }
-        source.sendSuccess(() -> component, false);
+        source.sendSuccess(component, false);
     }
 
     public static void sendChatLines(CommandSourceStack source, Component component) {

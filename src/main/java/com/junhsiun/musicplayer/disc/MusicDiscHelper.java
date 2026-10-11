@@ -43,8 +43,6 @@ public final class MusicDiscHelper {
             Items.MUSIC_DISC_11,
             Items.MUSIC_DISC_WAIT,
             Items.MUSIC_DISC_OTHERSIDE,
-            Items.MUSIC_DISC_RELIC,
-            Items.MUSIC_DISC_5,
             Items.MUSIC_DISC_PIGSTEP
     );
 
@@ -80,7 +78,8 @@ public final class MusicDiscHelper {
     }
 
     public static ItemStack createPendingDisc(ItemStack baseDisc, String token) {
-        ItemStack pendingDisc = baseDisc.copyWithCount(1);
+        ItemStack pendingDisc = baseDisc.copy();
+        pendingDisc.setCount(1);
         CompoundTag tag = pendingDisc.getOrCreateTag();
         tag.putBoolean(PENDING_KEY, true);
         tag.putString(PENDING_TOKEN_KEY, safe(token));
@@ -89,7 +88,8 @@ public final class MusicDiscHelper {
     }
 
     public static ItemStack burn(ItemStack baseDisc, TrackInfo track) {
-        ItemStack burnedDisc = baseDisc.copyWithCount(1);
+        ItemStack burnedDisc = baseDisc.copy();
+        burnedDisc.setCount(1);
         CompoundTag root = new CompoundTag();
         root.putString(TRACK_ID_KEY, safe(track.id()));
         root.putString(TITLE_KEY, safe(track.title()));

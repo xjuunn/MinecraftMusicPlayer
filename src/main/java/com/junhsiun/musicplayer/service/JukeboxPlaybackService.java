@@ -64,8 +64,9 @@ public final class JukeboxPlaybackService {
             return InteractionResult.PASS;
         }
 
-        ItemStack insertedDisc = heldStack.copyWithCount(1);
-        jukebox.setRecordWithoutPlaying(insertedDisc);
+        ItemStack insertedDisc = heldStack.copy();
+        insertedDisc.setCount(1);
+        jukebox.setRecord(insertedDisc);
         jukebox.setChanged();
         serverLevel.setBlock(pos, state.setValue(JukeboxBlock.HAS_RECORD, true), 2);
 
@@ -177,7 +178,7 @@ public final class JukeboxPlaybackService {
         if (!(blockEntity instanceof JukeboxBlockEntity jukebox)) {
             return "missing jukebox block entity";
         }
-        if (jukebox.getFirstItem().isEmpty()) {
+        if (jukebox.getRecord().isEmpty()) {
             return "jukebox record item is empty";
         }
         return null;
@@ -259,7 +260,7 @@ public final class JukeboxPlaybackService {
     private void pushRefresh(ServerLevel level, ActiveJukebox active, boolean urlsChanged) {
         for (UUID listener : active.listeners()) {
             ServerPlayer player = level.getServer().getPlayerList().getPlayer(listener);
-            if (player == null || player.level() != level) {
+            if (player == null || player.level != level) {
                 continue;
             }
             if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.ID)) {
