@@ -61,14 +61,21 @@
 | `CommandSourceStack.sendSuccess` | `sendSuccess(Supplier<Component>, boolean)`（约 1.20.2+） | `sendSuccess(Component, boolean)`，去掉所有 `() ->` 包装 |
 | `ItemStack.copyWithCount` | 存在（约 1.20.2+） | `copy()` 后 `setCount(1)` |
 | `Entity.level()` / `player.level()` | 方法 | 公开字段 `entity.level` / `player.level` |
-| `JukeboxBlockEntity` | `setRecordWithoutPlaying`、`getFirstItem()`（`ContainerSingleItem`） | 仅 `setRecord` / `getRecord` / `playRecord`，无 `ContainerSingleItem` |
-| `ServerAdvancementManager` | `getAdvancement(ResourceLocation)`（1.20.1 及 1.19.2 实测均可） | 若编译报错改用 `get(...)` |
+| `JukeboxBlockEntity` | `setRecordWithoutPlaying`、`getFirstItem()`（`ContainerSingleItem`） | 仅 `setRecord` / `getRecord` / `playRecord`，无 `ContainerSingleItem`；1.18.2 同左（类在 `block.entity` 包，无 `playRecord` 时用 `setRecord`） |
+| `ServerAdvancementManager` | `getAdvancement(ResourceLocation)`（1.20.1、1.19.2、1.18.2 实测均可） | 若编译报错改用 `get(...)` |
 | `GameProfile.getName()` | 新 authlib 改为 `name()` | `getName()` |
 | `SavedData.save` | 1.20.5+ 需 `save(CompoundTag, HolderLookup.Provider)` | `save(CompoundTag)` |
 | `DimensionDataStorage.computeIfAbsent` | `computeIfAbsent(Function, Supplier, String)`（1.19.2、1.20.1 实测一致） | 同左 |
-| `Options.chatLinks` / `chatLinksPrompt` | 方法访问器 `.chatLinks().get()`（1.19.2、1.20.1 实测可用） | 若不可用改为公开字段 |
-| `Player.drop` | 三参 `drop(ItemStack, boolean, boolean)`（1.19.2 实测可用） | — |
+| `Options.chatLinks` / `chatLinksPrompt` | 方法访问器 `.chatLinks().get()`（1.19.2、1.20.1 实测可用） | 1.18.2 为公开布尔字段 `client.options.chatLinks`（无 `.get()`） |
+| `Player.drop` | 三参 `drop(ItemStack, boolean, boolean)`（1.19.2、1.18.2 实测可用） | — |
 | 权限判断 | `source.hasPermission(2)` | 避免 `Permissions.COMMANDS_ADMIN`（1.21+ 才有） |
+| `Player.sendSystemMessage` | 存在（1.19+） | 1.18.2 用 `displayClientMessage(component, false)`（false=聊天栏，true=action bar） |
+| `PlayerList.broadcastSystemMessage` | 存在（1.19+） | 1.18.2 用 `broadcastMessage(Component, ChatType.CHAT, UUID)` |
+| `net.minecraft.util.RandomSource` | 存在（1.19+） | 1.18.2 用 `java.util.Random`（`Level.random`、`getRandom()` 均返回 `java.util.Random`） |
+| `ContainerEntity`（矿车容器） | 存在（1.19+） | 1.18.2 用 `AbstractMinecartContainer`，战利品用 `unpackLootTable(Player)` |
+| `Component.literal` / `translatable` / `empty` | 静态工厂方法（1.19+） | 1.18.2 用 `new TextComponent(...)` / `new TranslatableComponent(key, args...)` / `new TextComponent("")` |
+| `Component.getContents()` | 返回 contents 对象（如 `TranslatableContents.getKey()`） | 1.18.2 返回 `String`；判断翻译组件用 `instanceof TranslatableComponent` + `getKey()` |
+| `CommandBuildContext` | 存在（1.19+） | 1.18.2 无此类；Fabric 命令用 v1 `CommandRegistrationCallback`（回调签名 `(dispatcher, dedicated)`），去掉 `CommandBuildContext` 与 `Commands.CommandSelection` 参数 |
 
 ### 客户端
 
@@ -79,7 +86,7 @@
 | `Util.getPlatform().openUri` | 顶层 `net.minecraft.Util` | 同左 |
 | Fabric 网络接收器 | 1.19.x–1.20.x：`(server, player, handler, buf, sender)` + `FriendlyByteBuf`/`PacketByteBufs` | 极新版本使用 `CustomPacketPayload`，按分支现状对齐，不要跨风格混用 |
 | `WorldRenderContext` | `matrixStack()` / `consumers()`（fabric-rendering-v1） | 1.19.2 实测可用 |
-| `RenderType` / `BufferUploader` | `entityCutoutNoCull(ResourceLocation)`、`setupRenderState`/`clearRenderState`、`drawWithShader` | 1.19.2/1.20.1 实测可用 |
+| `RenderType` / `BufferUploader` | `entityCutoutNoCull(ResourceLocation)`、`setupRenderState`/`clearRenderState`、`drawWithShader` | 1.19.2/1.20.1 实测可用；1.18.2 的 `BufferBuilder.end()` 返回 `void`（无 `RenderedBuffer`），绘制用 `Tesselator.getInstance().end()` 或 `BufferUploader.end(builder)` |
 | `VertexConsumer` | 旧式 `vertex...color/uv/overlayCoords/uv2/normal/endVertex` | 1.21.2+ 改为 `addVertex` 风格，按目标版本选 |
 
 ### Mixin
@@ -106,12 +113,13 @@
 
 | 物品 | 加入版本 |
 |---|---|
-| `MUSIC_DISC_PIGSTEP` | 1.19 |
-| `MUSIC_DISC_OTHERSIDE` | 1.19 |
-| `MUSIC_DISC_RELIC` | 1.19.3 |
-| `MUSIC_DISC_5` | 1.20.5 |
+| `MUSIC_DISC_PIGSTEP` | 1.16 |
+| `MUSIC_DISC_OTHERSIDE` | 1.18 |
+| `MUSIC_DISC_5` | 1.19 |
+| `MUSIC_DISC_RELIC` | 1.20 |
 
-1.19.2 需从集合中剔除 `RELIC` 与 `5`。
+- 1.19.2 需从集合中剔除 `RELIC` 与 `5`。
+- 1.18.2 已含 `PIGSTEP` 与 `OTHERSIDE`（javap 实测），仍需剔除 `RELIC` 与 `5`（代码继承 1.19.2 分支时已满足）。
 
 ## 已完成版本分支参考
 
@@ -123,6 +131,7 @@
 | `1.21.11` | 1.21.11 | 21+ | — |
 | `1.20.1` | 1.20.1 | 17 | `0.92.x+1.20.1` |
 | `1.19.2` | 1.19.2 | 17 | `0.77.x+1.19.2` |
+| `1.18.2` | 1.18.2 | 17 | `0.77.0+1.18.2` |
 
 - `fabric_api_version` 以 [fabricmc.net/develop](https://fabricmc.net/develop) 查询为准，解析失败（TLS/404）时重试或换邻近版本。
 - loader 版本注意：fabric-loader 0.15+ 需要 Java 21 运行时；低版本 MC 常见 Java 17 环境，如需兼容运行时可考虑 pin 到 0.14.x（仅在用户要求时调整）。

@@ -12,7 +12,7 @@ import com.junhsiun.musicplayer.service.JukeboxPlaybackService;
 import com.junhsiun.musicplayer.service.LootMusicDiscService;
 import com.junhsiun.musicplayer.service.MusicQueueService;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;

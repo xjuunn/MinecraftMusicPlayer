@@ -13,13 +13,15 @@ import com.junhsiun.musicplayer.platform.RandomSongSource;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TranslatableComponent;
+import net.minecraft.network.chat.TextComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.vehicle.ContainerEntity;
+import net.minecraft.world.entity.vehicle.AbstractMinecartContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -99,13 +101,13 @@ public final class LootMusicDiscService {
         if (entity.level.isClientSide) {
             return InteractionResult.PASS;
         }
-        if (!(entity instanceof Container container) || !(entity instanceof ContainerEntity containerEntity)) {
+        if (!(entity instanceof AbstractMinecartContainer containerEntity)) {
             return InteractionResult.PASS;
         }
         return tryInjectOnOpen(
                 player,
-                container,
-                p -> containerEntity.unpackChestVehicleLootTable(p),
+                containerEntity,
+                p -> containerEntity.unpackLootTable(p),
                 key(entity)
         );
     }
@@ -116,11 +118,11 @@ public final class LootMusicDiscService {
             return;
         }
         if (!pendingPlayers.add(player.getUUID())) {
-            player.sendSystemMessage(Component.translatable("musicplayer.loot.already_generating").withStyle(ChatFormatting.YELLOW));
+            player.displayClientMessage(new TranslatableComponent("musicplayer.loot.already_generating").withStyle(ChatFormatting.YELLOW), false);
             return;
         }
 
-        player.sendSystemMessage(Component.translatable("musicplayer.loot.generating").withStyle(ChatFormatting.GRAY));
+        player.displayClientMessage(new TranslatableComponent("musicplayer.loot.generating").withStyle(ChatFormatting.GRAY), false);
 
         ItemStack baseDisc = held.copy();
         baseDisc.setCount(1);
@@ -150,7 +152,7 @@ public final class LootMusicDiscService {
                     if (!player.getInventory().add(returned)) {
                         player.drop(returned, false, true);
                     }
-                    player.sendSystemMessage(Component.translatable("musicplayer.loot.failed_returned").withStyle(ChatFormatting.RED));
+                    player.displayClientMessage(new TranslatableComponent("musicplayer.loot.failed_returned").withStyle(ChatFormatting.RED), false);
                     return;
                 }
                 giveBurnedDisc(player, baseDisc, tracks.get(0));
@@ -212,10 +214,10 @@ public final class LootMusicDiscService {
         if (!player.getInventory().add(burnedDisc)) {
             player.drop(burnedDisc, false, true);
         }
-        player.sendSystemMessage(Component.translatable("musicplayer.loot.generated").withStyle(ChatFormatting.GREEN)
-                .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
-                .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
-                .append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY)));
+        player.displayClientMessage(new TranslatableComponent("musicplayer.loot.generated").withStyle(ChatFormatting.GREEN)
+                .append(new TextComponent(track.title()).withStyle(ChatFormatting.AQUA))
+                .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY))
+                .append(new TextComponent(track.artist()).withStyle(ChatFormatting.GRAY)), false);
     }
 
     private void refillPool() {
@@ -290,7 +292,7 @@ public final class LootMusicDiscService {
         return InteractionResult.PASS;
     }
 
-    private int insertPendingDiscs(Container container, net.minecraft.util.RandomSource random, int maxCount) {
+    private int insertPendingDiscs(Container container, java.util.Random random, int maxCount) {
         List<Integer> emptySlots = new ArrayList<>();
         for (int slot = 0; slot < container.getContainerSize(); slot++) {
             if (container.getItem(slot).isEmpty()) {

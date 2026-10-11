@@ -19,8 +19,9 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TranslatableComponent;
+import net.minecraft.network.chat.TextComponent;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -250,7 +251,7 @@ public final class MusicQueueService {
 
         if (currentPlayback != null) {
             if (!paused && config.autoAdvance && now >= currentPlayback.expectedEndAt()) {
-                advance(server, Component.empty());
+                advance(server, new TextComponent(""));
                 return;
             }
             if (!radioPlaylistMode && currentLyrics.isEmpty() && !lyricFetchAttempted) {
@@ -334,7 +335,7 @@ public final class MusicQueueService {
                 playerJukeboxRefresh.remove(player.getUUID());
 
                 if (currentPlayback == null || currentLyrics.isEmpty()) {
-                    player.displayClientMessage(Component.literal(""), true);
+                    player.displayClientMessage(new TextComponent(""), true);
                     continue;
                 }
 
@@ -362,7 +363,7 @@ public final class MusicQueueService {
             }
 
             if (!overlayText.isEmpty()) {
-                player.displayClientMessage(Component.literal("♫ " + overlayText).withStyle(ChatFormatting.AQUA), true);
+                player.displayClientMessage(new TextComponent("♫ " + overlayText).withStyle(ChatFormatting.AQUA), true);
             }
         }
     }
@@ -391,7 +392,7 @@ public final class MusicQueueService {
             lyricsPreference.put(player.getUUID(), true);
         } else {
             lyricsPreference.put(player.getUUID(), false);
-            player.displayClientMessage(Component.literal(""), true);
+            player.displayClientMessage(new TextComponent(""), true);
         }
         if (lyricsPreferenceState != null) {
             lyricsPreferenceState.setEnabled(player.getUUID(), enabled);
@@ -402,7 +403,7 @@ public final class MusicQueueService {
         Boolean current = lyricsPreference.get(player.getUUID());
         if (current != null && current) {
             lyricsPreference.put(player.getUUID(), false);
-            player.displayClientMessage(Component.literal(""), true);
+            player.displayClientMessage(new TextComponent(""), true);
             if (lyricsPreferenceState != null) {
                 lyricsPreferenceState.setEnabled(player.getUUID(), false);
             }
@@ -479,13 +480,13 @@ public final class MusicQueueService {
         }
 
         if ("ended".equals(payload.action())) {
-            advance(server, Component.empty());
+            advance(server, new TextComponent(""));
             return;
         }
         if ("failed".equals(payload.action())) {
             Component reason = payload.message() == null || payload.message().isBlank()
-                    ? Component.translatable("musicplayer.play.failed_advance")
-                    : Component.translatable("musicplayer.play.failed_advance_reason",
+                    ? new TranslatableComponent("musicplayer.play.failed_advance")
+                    : new TranslatableComponent("musicplayer.play.failed_advance_reason",
                     Messages.textOrTranslatable(payload.message()));
             advance(server, reason);
         }
@@ -538,7 +539,7 @@ public final class MusicQueueService {
                 songId,
                 isTrackActiveOrQueued(songId));
         if (!decision.isAllowed()) {
-            Component message = Component.translatable(decision.key(), decision.args().toArray());
+            Component message = new TranslatableComponent(decision.key(), decision.args().toArray());
             if (decision.kind() == SongRequestPolicy.Kind.REJECT) {
                 source.sendFailure(message);
             } else {
@@ -559,12 +560,12 @@ public final class MusicQueueService {
                 server.execute(() -> {
                     try {
                         if (throwable != null) {
-                            source.sendFailure(Component.translatable("musicplayer.song.request_failed",
+                            source.sendFailure(new TranslatableComponent("musicplayer.song.request_failed",
                                     Messages.textOrTranslatable(rootMessage(throwable))));
                             return;
                         }
                         if (track == null || track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
-                            source.sendFailure(Component.translatable("musicplayer.song.no_source"));
+                            source.sendFailure(new TranslatableComponent("musicplayer.song.no_source"));
                             return;
                         }
                         enqueueOrStart(server, source, requester, track);
@@ -577,7 +578,7 @@ public final class MusicQueueService {
         } catch (RuntimeException ex) {
             server.execute(() -> {
                 try {
-                    source.sendFailure(Component.translatable("musicplayer.song.request_failed",
+                    source.sendFailure(new TranslatableComponent("musicplayer.song.request_failed",
                             Messages.textOrTranslatable(rootMessage(ex))));
                 } finally {
                     releaseSongRequest(requesterUuid);
@@ -608,18 +609,18 @@ public final class MusicQueueService {
 
     public void requestPlaylist(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String playlistId, boolean reverse) {
         if (!MusicPlayerConfigManager.get().allowPlaylistRequest) {
-            source.sendFailure(Component.translatable("musicplayer.playlist.disabled"));
+            source.sendFailure(new TranslatableComponent("musicplayer.playlist.disabled"));
             return;
         }
         enqueueRequest(() -> MusicPlayerMod.netease().playlistDetail(playlistId).handle((playlist, throwable) -> {
             server.execute(() -> {
                 if (throwable != null) {
-                    source.sendFailure(Component.translatable("musicplayer.playlist.load_failed",
+                    source.sendFailure(new TranslatableComponent("musicplayer.playlist.load_failed",
                             Messages.textOrTranslatable(rootMessage(throwable))));
                     return;
                 }
                 if (playlist.trackCount() <= 0) {
-                    source.sendFailure(Component.translatable("musicplayer.playlist.no_songs"));
+                    source.sendFailure(new TranslatableComponent("musicplayer.playlist.no_songs"));
                     return;
                 }
 
@@ -651,11 +652,11 @@ public final class MusicQueueService {
                     resolveTrack(first.songId()).whenComplete((track, trackThrowable) -> server.execute(() -> {
                         if (trackThrowable != null) {
                             MusicPlayerMod.LOGGER.warn("歌单首曲加载失败: {}", rootMessage(trackThrowable));
-                            advance(server, Component.translatable("musicplayer.playlist.first_track_failed"));
+                            advance(server, new TranslatableComponent("musicplayer.playlist.first_track_failed"));
                             return;
                         }
                         startTrack(server, track, first.requesterId(), first.requesterName());
-                        source.sendSuccess(Component.translatable("musicplayer.playlist.started", playlist.title(), playlistTotalTracks)
+                        source.sendSuccess(new TranslatableComponent("musicplayer.playlist.started", playlist.title(), playlistTotalTracks)
                                 .withStyle(ChatFormatting.GREEN), false);
 
                         if (reverse) {
@@ -672,7 +673,7 @@ public final class MusicQueueService {
                     MusicPlayerMod.netease().playlistTracksPage(playlistId, lastIndex, 1)
                             .whenComplete((tracks, t) -> server.execute(() -> {
                                 if (t != null || tracks == null || tracks.isEmpty()) {
-                                    source.sendFailure(Component.translatable("musicplayer.playlist.last_track_failed"));
+                                    source.sendFailure(new TranslatableComponent("musicplayer.playlist.last_track_failed"));
                                     return;
                                 }
                                 SearchEntry entry = tracks.get(0);
@@ -686,7 +687,7 @@ public final class MusicQueueService {
                                     playlistTrackIndex = lastIndex - 1;
                                     server.execute(() -> loadAndStart.run());
                                 }).exceptionally(ex -> {
-                                    server.execute(() -> source.sendFailure(Component.translatable("musicplayer.playlist.first_track_load_failed",
+                                    server.execute(() -> source.sendFailure(new TranslatableComponent("musicplayer.playlist.first_track_load_failed",
                                             Messages.textOrTranslatable(rootMessage(ex)))));
                                     return null;
                                 });
@@ -750,12 +751,12 @@ public final class MusicQueueService {
     public void requestProgram(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String programId) {
         enqueueRequest(() -> MusicPlayerMod.netease().programDetail(programId).thenCompose(program -> {
             if (program == null || program.mainTrackId().isBlank()) {
-                server.execute(() -> source.sendFailure(Component.translatable("musicplayer.radio.program_no_audio")));
+                server.execute(() -> source.sendFailure(new TranslatableComponent("musicplayer.radio.program_no_audio")));
                 return CompletableFuture.<Void>completedFuture(null);
             }
             return MusicPlayerMod.netease().resolveRadioSong(program.mainTrackId()).thenApply(track -> {
                 if (track == null || track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
-                    server.execute(() -> source.sendFailure(Component.translatable("musicplayer.radio.program_no_source")));
+                    server.execute(() -> source.sendFailure(new TranslatableComponent("musicplayer.radio.program_no_source")));
                     return null;
                 }
                 String programTitle = program.name();
@@ -765,7 +766,7 @@ public final class MusicQueueService {
                 return null;
             });
         }).exceptionally(throwable -> {
-            server.execute(() -> source.sendFailure(Component.translatable("musicplayer.radio.load_program_failed",
+            server.execute(() -> source.sendFailure(new TranslatableComponent("musicplayer.radio.load_program_failed",
                     Messages.textOrTranslatable(rootMessage(throwable)))));
             return null;
         }));
@@ -774,13 +775,13 @@ public final class MusicQueueService {
     public void requestRadio(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String radioId, boolean reverse) {
         enqueueRequest(() -> MusicPlayerMod.netease().radioDetail(radioId).thenCompose(radio -> {
             if (radio == null || radio.programCount() <= 0) {
-                server.execute(() -> source.sendFailure(Component.translatable("musicplayer.radio.no_programs")));
+                server.execute(() -> source.sendFailure(new TranslatableComponent("musicplayer.radio.no_programs")));
                 return CompletableFuture.<Void>completedFuture(null);
             }
             String radioName = radio.name();
             return MusicPlayerMod.netease().radioPrograms(radioId, 200, 0, reverse).thenCompose(programs -> {
                 if (programs == null || programs.isEmpty()) {
-                    server.execute(() -> source.sendFailure(Component.translatable("musicplayer.radio.no_programs")));
+                    server.execute(() -> source.sendFailure(new TranslatableComponent("musicplayer.radio.no_programs")));
                     return CompletableFuture.<Void>completedFuture(null);
                 }
                 if (programs.size() > 100) {
@@ -807,18 +808,18 @@ public final class MusicQueueService {
                 return resolveAndEnqueueRadioProgram(server, source, requester, 0,
                         () -> server.execute(() -> {
                             if (playlistQueue.isEmpty()) {
-                                source.sendFailure(Component.translatable("musicplayer.radio.no_playable_programs"));
+                                source.sendFailure(new TranslatableComponent("musicplayer.radio.no_playable_programs"));
                                 cleanUpRadioPlaylist();
                                 return;
                             }
-                            source.sendSuccess(Component.translatable("musicplayer.radio.started", radioName, playlistTotalTracks)
+                            source.sendSuccess(new TranslatableComponent("musicplayer.radio.started", radioName, playlistTotalTracks)
                                     .withStyle(ChatFormatting.GREEN), false);
                             QueuedTrack first = playlistQueue.removeFirst();
                             advanceAndStart(server, null, first);
                         }));
             });
         }).exceptionally(throwable -> {
-            server.execute(() -> source.sendFailure(Component.translatable("musicplayer.radio.load_failed",
+            server.execute(() -> source.sendFailure(new TranslatableComponent("musicplayer.radio.load_failed",
                     Messages.textOrTranslatable(rootMessage(throwable)))));
             return null;
         }));
@@ -964,32 +965,32 @@ public final class MusicQueueService {
 
     public void voteSkip(MinecraftServer server, ServerPlayer voter) {
         if (currentPlayback == null) {
-            Messages.sendFailurePlayer(voter.createCommandSourceStack(), Component.translatable("musicplayer.queue.nothing_playing").withStyle(ChatFormatting.RED));
+            Messages.sendFailurePlayer(voter.createCommandSourceStack(), new TranslatableComponent("musicplayer.queue.nothing_playing").withStyle(ChatFormatting.RED));
             return;
         }
         if (voter.getUUID().equals(currentPlayback.requesterId())) {
-            advance(server, Component.translatable("musicplayer.vote.requester_skipped"));
+            advance(server, new TranslatableComponent("musicplayer.vote.requester_skipped"));
             return;
         }
         if (!voteSkipPlayers.add(voter.getUUID())) {
-            Messages.sendFailurePlayer(voter.createCommandSourceStack(), Component.translatable("musicplayer.vote.already_voted").withStyle(ChatFormatting.YELLOW));
+            Messages.sendFailurePlayer(voter.createCommandSourceStack(), new TranslatableComponent("musicplayer.vote.already_voted").withStyle(ChatFormatting.YELLOW));
             return;
         }
         int activeListeners = activeListeners(server);
         int requiredVotes = Math.max(1, (int) Math.ceil(activeListeners * MusicPlayerConfigManager.get().voteSkipPercent));
         int currentVotes = voteSkipPlayers.size();
-        broadcast(server, Component.translatable("musicplayer.vote.progress", currentVotes, requiredVotes).withStyle(ChatFormatting.GOLD));
+        broadcast(server, new TranslatableComponent("musicplayer.vote.progress", currentVotes, requiredVotes).withStyle(ChatFormatting.GOLD));
         if (currentVotes >= requiredVotes) {
-            advance(server, Component.translatable("musicplayer.vote.passed"));
+            advance(server, new TranslatableComponent("musicplayer.vote.passed"));
         }
     }
 
     public void skipNow(MinecraftServer server, CommandSourceStack source) {
         if (currentPlayback == null) {
-            source.sendFailure(Component.translatable("musicplayer.queue.nothing_playing"));
+            source.sendFailure(new TranslatableComponent("musicplayer.queue.nothing_playing"));
             return;
         }
-        advance(server, Component.translatable("musicplayer.play.admin_skipped"));
+        advance(server, new TranslatableComponent("musicplayer.play.admin_skipped"));
     }
 
     public void stop(MinecraftServer server, String reason) {
@@ -1015,8 +1016,8 @@ public final class MusicQueueService {
         if (reason == null) {
             return "";
         }
-        if (reason.getContents() instanceof TranslatableContents contents) {
-            return contents.getKey();
+        if (reason instanceof TranslatableComponent translatable) {
+            return translatable.getKey();
         }
         return reason.getString();
     }
@@ -1024,7 +1025,7 @@ public final class MusicQueueService {
     public void clearQueue(CommandSourceStack source) {
         queue.clear();
         refreshTrackCache();
-        source.sendSuccess(Component.translatable("musicplayer.queue.cleared"), false);
+        source.sendSuccess(new TranslatableComponent("musicplayer.queue.cleared"), false);
     }
 
     public boolean moveQueuedTrackToFront(String songId) {
@@ -1071,7 +1072,7 @@ public final class MusicQueueService {
         resetPlaylistState();
         refreshTrackCache();
         server.getPlayerList().getPlayers().forEach(player -> sendStop(player, "musicplayer.playlist.stopped"));
-        broadcast(server, Component.translatable("musicplayer.playlist.stopped").withStyle(ChatFormatting.YELLOW));
+        broadcast(server, new TranslatableComponent("musicplayer.playlist.stopped").withStyle(ChatFormatting.YELLOW));
     }
 
     // ── Queue display ────────────────────────────────────────────────
@@ -1083,13 +1084,13 @@ public final class MusicQueueService {
     public List<Component> describeQueue(int page, int pageSize) {
         List<Component> lines = new ArrayList<>();
         if (currentPlayback == null) {
-            lines.add(Component.translatable("musicplayer.queue.nothing_playing").withStyle(ChatFormatting.GRAY));
+            lines.add(new TranslatableComponent("musicplayer.queue.nothing_playing").withStyle(ChatFormatting.GRAY));
         } else {
             lines.add(renderCurrentTrackLine(currentPlayback.track()));
         }
         if (queue.isEmpty()) {
             if (!playlistMode) {
-                lines.add(Component.translatable("musicplayer.queue.empty").withStyle(ChatFormatting.GRAY));
+                lines.add(new TranslatableComponent("musicplayer.queue.empty").withStyle(ChatFormatting.GRAY));
             }
         } else {
             List<QueuedTrack> all = queue.stream().toList();
@@ -1098,30 +1099,30 @@ public final class MusicQueueService {
             int safePage = Math.max(1, Math.min(page, totalPages));
             int start = (safePage - 1) * safePageSize;
             int end = Math.min(all.size(), start + safePageSize);
-            lines.add(Component.translatable("musicplayer.queue.page", safePage, totalPages).withStyle(ChatFormatting.YELLOW));
+            lines.add(new TranslatableComponent("musicplayer.queue.page", safePage, totalPages).withStyle(ChatFormatting.YELLOW));
             for (int index = start; index < end; index++) {
                 QueuedTrack queuedTrack = all.get(index);
-                MutableComponent line = Component.literal((index + 1) + ". ").withStyle(ChatFormatting.DARK_GRAY)
-                        .append(Messages.clickableCommand(Component.literal(queuedTrack.title()), Component.translatable("musicplayer.queue.replay_hover"), "/music play song " + queuedTrack.songId(), ChatFormatting.GREEN))
-                        .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
+                MutableComponent line = new TextComponent((index + 1) + ". ").withStyle(ChatFormatting.DARK_GRAY)
+                        .append(Messages.clickableCommand(new TextComponent(queuedTrack.title()), new TranslatableComponent("musicplayer.queue.replay_hover"), "/music play song " + queuedTrack.songId(), ChatFormatting.GREEN))
+                        .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY));
                 if (queuedTrack.artistCommand() != null && !queuedTrack.artistCommand().isBlank()) {
-                    line.append(Messages.clickableCommand(Component.literal(queuedTrack.artist()), Component.translatable("musicplayer.common.view_artist_hover"), queuedTrack.artistCommand(), ChatFormatting.GRAY));
+                    line.append(Messages.clickableCommand(new TextComponent(queuedTrack.artist()), new TranslatableComponent("musicplayer.common.view_artist_hover"), queuedTrack.artistCommand(), ChatFormatting.GRAY));
                 } else {
-                    line.append(Component.literal(queuedTrack.artist()).withStyle(ChatFormatting.GRAY));
+                    line.append(new TextComponent(queuedTrack.artist()).withStyle(ChatFormatting.GRAY));
                 }
                 lines.add(line);
             }
         }
         if (playlistMode) {
             int remaining = playlistRemainingCount();
-            lines.add(Component.translatable("musicplayer.playlist.remaining", remaining).withStyle(ChatFormatting.DARK_GRAY));
+            lines.add(new TranslatableComponent("musicplayer.playlist.remaining", remaining).withStyle(ChatFormatting.DARK_GRAY));
         }
         return lines;
     }
 
     public Component describeNowPlaying() {
         if (currentPlayback == null) {
-            return Component.translatable("musicplayer.queue.nothing_playing").withStyle(ChatFormatting.GRAY);
+            return new TranslatableComponent("musicplayer.queue.nothing_playing").withStyle(ChatFormatting.GRAY);
         }
         return renderCurrentTrackLine(currentPlayback.track());
     }
@@ -1130,7 +1131,7 @@ public final class MusicQueueService {
 
     private void enqueueOrStart(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, TrackInfo track) {
         if (isTrackActiveOrQueued(track.id())) {
-            source.sendSuccess(Component.translatable("musicplayer.request.duplicate").withStyle(ChatFormatting.YELLOW), false);
+            source.sendSuccess(new TranslatableComponent("musicplayer.request.duplicate").withStyle(ChatFormatting.YELLOW), false);
             return;
         }
         if (currentPlayback == null) {
@@ -1148,15 +1149,15 @@ public final class MusicQueueService {
         ));
         refreshTrackCache();
         if (MusicPlayerConfigManager.get().announceQueueChanges) {
-            broadcast(server, Component.translatable("musicplayer.queue.requested", requester.getGameProfile().getName()).withStyle(ChatFormatting.GOLD)
-                    .append(Messages.clickableCommand(Component.literal(track.title()), Component.translatable("musicplayer.queue.replay_hover"), "/music play song " + track.id(), ChatFormatting.AQUA))
-                    .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
+            broadcast(server, new TranslatableComponent("musicplayer.queue.requested", requester.getGameProfile().getName()).withStyle(ChatFormatting.GOLD)
+                    .append(Messages.clickableCommand(new TextComponent(track.title()), new TranslatableComponent("musicplayer.queue.replay_hover"), "/music play song " + track.id(), ChatFormatting.AQUA))
+                    .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY))
                     .append(track.artistId() != null && !track.artistId().isBlank()
-                            ? Messages.clickableCommand(Component.literal(track.artist()), Component.translatable("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY)
-                            : Component.literal(track.artist()).withStyle(ChatFormatting.GRAY)));
+                            ? Messages.clickableCommand(new TextComponent(track.artist()), new TranslatableComponent("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY)
+                            : new TextComponent(track.artist()).withStyle(ChatFormatting.GRAY)));
         } else {
-            source.sendSuccess(Component.translatable("musicplayer.queue.added").withStyle(ChatFormatting.GRAY)
-                    .append(Messages.clickableCommand(Component.literal(track.title()), Component.translatable("musicplayer.queue.replay_hover"), "/music play song " + track.id(), ChatFormatting.AQUA)), false);
+            source.sendSuccess(new TranslatableComponent("musicplayer.queue.added").withStyle(ChatFormatting.GRAY)
+                    .append(Messages.clickableCommand(new TextComponent(track.title()), new TranslatableComponent("musicplayer.queue.replay_hover"), "/music play song " + track.id(), ChatFormatting.AQUA)), false);
         }
     }
 
@@ -1214,7 +1215,7 @@ public final class MusicQueueService {
             playlistMode = false;
             cleanUpRadioPlaylist();
         }
-        stopPlayback(server, reason == null ? Component.translatable("musicplayer.stop.all_done") : reason);
+        stopPlayback(server, reason == null ? new TranslatableComponent("musicplayer.stop.all_done") : reason);
     }
 
     private void advanceAndStart(MinecraftServer server, Component reason, QueuedTrack next) {
@@ -1247,7 +1248,7 @@ public final class MusicQueueService {
                 return;
             }
             if (throwable != null) {
-                broadcast(server, Component.translatable("musicplayer.queue.skipped_unplayable", next.title()).withStyle(ChatFormatting.RED));
+                broadcast(server, new TranslatableComponent("musicplayer.queue.skipped_unplayable", next.title()).withStyle(ChatFormatting.RED));
                 advance(server, null);
                 return;
             }
@@ -1267,7 +1268,7 @@ public final class MusicQueueService {
                 }
             } catch (Exception e) {
                 MusicPlayerMod.LOGGER.error("播放歌曲失败: {}", track == null ? next.title() : track.title(), e);
-                advance(server, Component.translatable("musicplayer.play.playback_failed_skip"));
+                advance(server, new TranslatableComponent("musicplayer.play.playback_failed_skip"));
             }
         }));
     }
@@ -1275,7 +1276,7 @@ public final class MusicQueueService {
     private void startTrack(MinecraftServer server, TrackInfo track, UUID requesterId, String requesterName) {
         if (track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
             MusicPlayerMod.LOGGER.warn("跳过无播放源的歌曲: {} - {}", track.title(), track.artist());
-            advance(server, Component.translatable("musicplayer.play.skip_no_source"));
+            advance(server, new TranslatableComponent("musicplayer.play.skip_no_source"));
             return;
         }
         long now = System.currentTimeMillis();
@@ -1360,7 +1361,7 @@ public final class MusicQueueService {
         playerJukeboxLastLyric.clear();
         playerJukeboxSentLyricText.clear();
         playerJukeboxRefresh.clear();
-        Component empty = Component.literal("");
+        Component empty = new TextComponent("");
         server.getPlayerList().getPlayers().stream()
                 .filter(p -> !optedOutPlayers.contains(p.getUUID()))
                 .forEach(p -> p.displayClientMessage(empty, true));
@@ -1400,44 +1401,44 @@ public final class MusicQueueService {
     }
 
     private void broadcast(MinecraftServer server, Component message) {
-        server.getPlayerList().broadcastSystemMessage(message, false);
+        server.getPlayerList().broadcastMessage(message, net.minecraft.network.chat.ChatType.CHAT, java.util.UUID.randomUUID());
     }
 
     // ── Render ───────────────────────────────────────────────────────
 
     private Component renderNowPlayingBroadcast(TrackInfo track) {
-        MutableComponent line = Component.translatable("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
-                .append(Messages.clickableUrl(Component.literal(track.title()), Component.translatable("musicplayer.common.open_browser_hover"), Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
-                .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
+        MutableComponent line = new TranslatableComponent("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
+                .append(Messages.clickableUrl(new TextComponent(track.title()), new TranslatableComponent("musicplayer.common.open_browser_hover"), Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
+                .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY));
         if (track.artistId() != null && !track.artistId().isBlank()) {
-            line.append(Messages.clickableCommand(Component.literal(track.artist()), Component.translatable("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY));
+            line.append(Messages.clickableCommand(new TextComponent(track.artist()), new TranslatableComponent("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY));
         } else {
-            line.append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY));
+            line.append(new TextComponent(track.artist()).withStyle(ChatFormatting.GRAY));
         }
-        line.append(Component.literal("\n"));
+        line.append(new TextComponent("\n"));
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
-            line.append(Component.literal(" "));
-            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().get(0), ChatFormatting.GREEN));
+            line.append(new TextComponent(" "));
+            line.append(Messages.clickableUrl(new TranslatableComponent("musicplayer.common.download_label"), new TranslatableComponent("musicplayer.common.download_hover"), track.sourceUrls().get(0), ChatFormatting.GREEN));
         }
-        line.append(Component.literal(" "));
-        line.append(Messages.clickableCommand(Component.translatable("musicplayer.common.skip_label"), Component.translatable("musicplayer.common.skip_hover"), "/music skip", ChatFormatting.YELLOW));
-        line.append(Component.literal(" "));
-        line.append(Messages.clickableCommand(Component.translatable("musicplayer.common.queue_label"), Component.translatable("musicplayer.common.queue_hover"), "/music queue", ChatFormatting.GRAY));
+        line.append(new TextComponent(" "));
+        line.append(Messages.clickableCommand(new TranslatableComponent("musicplayer.common.skip_label"), new TranslatableComponent("musicplayer.common.skip_hover"), "/music skip", ChatFormatting.YELLOW));
+        line.append(new TextComponent(" "));
+        line.append(Messages.clickableCommand(new TranslatableComponent("musicplayer.common.queue_label"), new TranslatableComponent("musicplayer.common.queue_hover"), "/music queue", ChatFormatting.GRAY));
         return line;
     }
 
     private Component renderCurrentTrackLine(TrackInfo track) {
-        MutableComponent line = Component.translatable("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
-                .append(Messages.clickableUrl(Component.literal(track.title()), Component.translatable("musicplayer.common.open_browser_hover"), Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
-                .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
+        MutableComponent line = new TranslatableComponent("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
+                .append(Messages.clickableUrl(new TextComponent(track.title()), new TranslatableComponent("musicplayer.common.open_browser_hover"), Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
+                .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY));
         if (track.artistId() != null && !track.artistId().isBlank()) {
-            line.append(Messages.clickableCommand(Component.literal(track.artist()), Component.translatable("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY));
+            line.append(Messages.clickableCommand(new TextComponent(track.artist()), new TranslatableComponent("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY));
         } else {
-            line.append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY));
+            line.append(new TextComponent(track.artist()).withStyle(ChatFormatting.GRAY));
         }
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
-            line.append(Component.literal(" "));
-            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().get(0), ChatFormatting.GREEN));
+            line.append(new TextComponent(" "));
+            line.append(Messages.clickableUrl(new TranslatableComponent("musicplayer.common.download_label"), new TranslatableComponent("musicplayer.common.download_hover"), track.sourceUrls().get(0), ChatFormatting.GREEN));
         }
         return line;
     }

@@ -4,6 +4,8 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TranslatableComponent;
+import net.minecraft.network.chat.TextComponent;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
@@ -41,7 +43,7 @@ public final class Messages {
 
     public static void sendChat(CommandSourceStack source, Component component) {
         if (source.getEntity() instanceof ServerPlayer player) {
-            player.sendSystemMessage(component);
+            player.displayClientMessage(component, false);
             return;
         }
         source.sendSuccess(component, false);
@@ -57,9 +59,9 @@ public final class Messages {
      */
     public static Component textOrTranslatable(String text) {
         if (text != null && text.matches("musicplayer\\.[a-z0-9_]+(?:\\.[a-z0-9_]+)+")) {
-            return Component.translatable(text);
+            return new TranslatableComponent(text);
         }
-        return Component.literal(text == null ? "" : text);
+        return new TextComponent(text == null ? "" : text);
     }
 
     public static void info(CommandSourceStack source, String text) {
@@ -67,7 +69,7 @@ public final class Messages {
     }
 
     public static void info(CommandSourceStack source, String text, boolean broadcastToOps) {
-        info(source, Component.literal(text), broadcastToOps);
+        info(source, new TextComponent(text), broadcastToOps);
     }
 
     public static void info(CommandSourceStack source, Component component) {
@@ -83,7 +85,7 @@ public final class Messages {
     }
 
     public static void success(CommandSourceStack source, String text, boolean broadcastToOps) {
-        success(source, Component.literal(text), broadcastToOps);
+        success(source, new TextComponent(text), broadcastToOps);
     }
 
     public static void success(CommandSourceStack source, Component component) {
@@ -95,20 +97,20 @@ public final class Messages {
     }
 
     public static void warning(CommandSourceStack source, String text) {
-        warning(source, Component.literal(text));
+        warning(source, new TextComponent(text));
     }
 
     public static void warning(CommandSourceStack source, Component component) {
         Component styled = component.copy().withStyle(ChatFormatting.RED);
         if (source.getEntity() instanceof ServerPlayer player) {
-            player.sendSystemMessage(styled);
+            player.displayClientMessage(styled, false);
             return;
         }
         source.sendFailure(styled);
     }
 
     public static void loading(CommandSourceStack source, String text) {
-        loading(source, Component.literal(text));
+        loading(source, new TextComponent(text));
     }
 
     public static void loading(CommandSourceStack source, Component component) {
@@ -121,7 +123,7 @@ public final class Messages {
 
     public static void sendFailurePlayer(CommandSourceStack source, Component component) {
         if (source.getEntity() instanceof ServerPlayer player) {
-            player.sendSystemMessage(component);
+            player.displayClientMessage(component, false);
             return;
         }
         source.sendFailure(component);
@@ -140,7 +142,7 @@ public final class Messages {
     }
 
     public static MutableComponent clickableCommand(String label, String hover, String command, ChatFormatting color) {
-        return clickableCommand(Component.literal(label), Component.literal(hover), command, color);
+        return clickableCommand(new TextComponent(label), new TextComponent(hover), command, color);
     }
 
     public static MutableComponent clickableCommand(Component label, Component hover, String command, ChatFormatting color) {
@@ -152,7 +154,7 @@ public final class Messages {
     }
 
     public static MutableComponent clickableUrl(String label, String hover, String url, ChatFormatting color) {
-        return clickableUrl(Component.literal(label), Component.literal(hover), url, color);
+        return clickableUrl(new TextComponent(label), new TextComponent(hover), url, color);
     }
 
     public static MutableComponent clickableUrl(Component label, Component hover, String url, ChatFormatting color) {
@@ -171,7 +173,7 @@ public final class Messages {
     }
 
     public static MutableComponent suggestable(String label, String hover, String command, ChatFormatting color) {
-        return suggestable(Component.literal(label), Component.literal(hover), command, color);
+        return suggestable(new TextComponent(label), new TextComponent(hover), command, color);
     }
 
     public static MutableComponent suggestable(Component label, Component hover, String command, ChatFormatting color) {

@@ -17,6 +17,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextComponent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -399,7 +400,7 @@ public final class ClientJukeboxController {
             return;
         }
         String text = subtitle == null || subtitle.isBlank() ? title : title + " - " + subtitle;
-        minecraft.gui.setNowPlaying(Component.literal(text));
+        minecraft.gui.setNowPlaying(new TextComponent(text));
     }
 
     private String getInvalidStateReason(ClientLevel level, long jukeboxPos) {

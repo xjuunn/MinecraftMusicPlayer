@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.model;
 
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextComponent;
 
 public record SearchEntry(String id, String title, Component subtitle, String titleCommand, String subtitleCommand) {
     public SearchEntry(String id, String title, Component subtitle) {
@@ -8,7 +9,7 @@ public record SearchEntry(String id, String title, Component subtitle, String ti
     }
 
     public SearchEntry(String id, String title, String subtitle, String titleCommand, String subtitleCommand) {
-        this(id, title, subtitle == null || subtitle.isBlank() ? null : Component.literal(subtitle), titleCommand, subtitleCommand);
+        this(id, title, subtitle == null || subtitle.isBlank() ? null : new TextComponent(subtitle), titleCommand, subtitleCommand);
     }
 
     public SearchEntry(String id, String title, String subtitle) {

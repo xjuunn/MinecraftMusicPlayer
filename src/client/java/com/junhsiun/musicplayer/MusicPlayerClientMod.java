@@ -42,11 +42,11 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
                 if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
                     return;
                 }
-                if (!client.options.chatLinks().get()) {
+                if (!client.options.chatLinks) {
                     return;
                 }
                 try {
-                    if (client.options.chatLinksPrompt().get()) {
+                    if (client.options.chatLinksPrompt) {
                         net.minecraft.client.gui.screens.Screen parent = client.screen;
                         client.setScreen(new ConfirmLinkScreen(accepted -> {
                             if (accepted) {

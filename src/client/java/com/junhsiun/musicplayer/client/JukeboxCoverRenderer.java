@@ -3,7 +3,6 @@ package com.junhsiun.musicplayer.client;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.math.Vector3f;
@@ -120,9 +119,8 @@ public final class JukeboxCoverRenderer {
         vertex(bufferBuilder, last, halfSize, -halfSize, depthOffset, 1.0F, 1.0F, light, red, green, blue, alpha);
         vertex(bufferBuilder, last, halfSize, halfSize, depthOffset, 1.0F, 0.0F, light, red, green, blue, alpha);
         vertex(bufferBuilder, last, -halfSize, halfSize, depthOffset, 0.0F, 0.0F, light, red, green, blue, alpha);
-        BufferBuilder.RenderedBuffer renderedBuffer = bufferBuilder.end();
         renderType.setupRenderState();
-        BufferUploader.drawWithShader(renderedBuffer);
+        Tesselator.getInstance().end();
         renderType.clearRenderState();
     }
 

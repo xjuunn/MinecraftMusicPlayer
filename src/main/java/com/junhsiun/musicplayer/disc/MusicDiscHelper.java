@@ -8,7 +8,8 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.RandomSource;
+import net.minecraft.network.chat.TranslatableComponent;
+import net.minecraft.network.chat.TextComponent;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -16,6 +17,7 @@ import net.minecraft.world.item.Items;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 
 public final class MusicDiscHelper {
@@ -71,7 +73,7 @@ public final class MusicDiscHelper {
         return stack.getTag().getString(PENDING_TOKEN_KEY);
     }
 
-    public static ItemStack randomBaseDiscStack(RandomSource random) {
+    public static ItemStack randomBaseDiscStack(Random random) {
         List<Item> discs = new ArrayList<>(SUPPORTED_DISCS);
         Item item = discs.get(random.nextInt(discs.size()));
         return new ItemStack(item);
@@ -83,7 +85,7 @@ public final class MusicDiscHelper {
         CompoundTag tag = pendingDisc.getOrCreateTag();
         tag.putBoolean(PENDING_KEY, true);
         tag.putString(PENDING_TOKEN_KEY, safe(token));
-        pendingDisc.setHoverName(Component.translatable("musicplayer.disc.random").withStyle(ChatFormatting.LIGHT_PURPLE));
+        pendingDisc.setHoverName(new TranslatableComponent("musicplayer.disc.random").withStyle(ChatFormatting.LIGHT_PURPLE));
         return pendingDisc;
     }
 
@@ -150,25 +152,25 @@ public final class MusicDiscHelper {
     }
 
     private static Component buildDisplayName(TrackInfo track) {
-        return Component.literal(track.title() + " - " + track.artist())
+        return new TextComponent(track.title() + " - " + track.artist())
                 .withStyle(ChatFormatting.AQUA);
     }
 
     private static ListTag buildLore(TrackInfo track, int sourceCount) {
         ListTag lore = new ListTag();
-        addLoreLine(lore, Component.translatable("musicplayer.disc.brand").withStyle(ChatFormatting.GOLD));
-        addLoreLine(lore, Component.translatable("musicplayer.disc.song", track.title()).withStyle(ChatFormatting.WHITE));
-        addLoreLine(lore, Component.translatable("musicplayer.disc.artist", track.artist()).withStyle(ChatFormatting.GRAY));
+        addLoreLine(lore, new TranslatableComponent("musicplayer.disc.brand").withStyle(ChatFormatting.GOLD));
+        addLoreLine(lore, new TranslatableComponent("musicplayer.disc.song", track.title()).withStyle(ChatFormatting.WHITE));
+        addLoreLine(lore, new TranslatableComponent("musicplayer.disc.artist", track.artist()).withStyle(ChatFormatting.GRAY));
         if (track.artistId() != null && !track.artistId().isBlank()) {
-            addLoreLine(lore, Component.translatable("musicplayer.disc.artist_id", track.artistId()).withStyle(ChatFormatting.DARK_GRAY));
+            addLoreLine(lore, new TranslatableComponent("musicplayer.disc.artist_id", track.artistId()).withStyle(ChatFormatting.DARK_GRAY));
         }
         if (track.id() != null && !track.id().isBlank()) {
-            addLoreLine(lore, Component.translatable("musicplayer.disc.song_id", track.id()).withStyle(ChatFormatting.DARK_GRAY));
+            addLoreLine(lore, new TranslatableComponent("musicplayer.disc.song_id", track.id()).withStyle(ChatFormatting.DARK_GRAY));
         }
         if (track.durationMillis() > 0L) {
-            addLoreLine(lore, Component.translatable("musicplayer.disc.duration", Messages.formatDuration(track.durationMillis())).withStyle(ChatFormatting.DARK_AQUA));
+            addLoreLine(lore, new TranslatableComponent("musicplayer.disc.duration", Messages.formatDuration(track.durationMillis())).withStyle(ChatFormatting.DARK_AQUA));
         }
-        addLoreLine(lore, Component.translatable("musicplayer.disc.source_count", sourceCount).withStyle(ChatFormatting.DARK_AQUA));
+        addLoreLine(lore, new TranslatableComponent("musicplayer.disc.source_count", sourceCount).withStyle(ChatFormatting.DARK_AQUA));
         return lore;
     }
 

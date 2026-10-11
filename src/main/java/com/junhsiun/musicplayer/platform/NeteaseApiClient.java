@@ -21,6 +21,8 @@ import com.junhsiun.musicplayer.platform.url.SongUrlResolver;
 import com.junhsiun.musicplayer.platform.url.VkeysUrlProvider;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TranslatableComponent;
+import net.minecraft.network.chat.TextComponent;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -177,7 +179,7 @@ public final class NeteaseApiClient {
                     entries.add(new SearchEntry(
                             playlistId,
                             str(playlist, "name"),
-                            Component.translatable("musicplayer.entry.track_count", intVal(playlist, "trackCount")),
+                            new TranslatableComponent("musicplayer.entry.track_count", intVal(playlist, "trackCount")),
                             viewPlaylistCommand(playlistId),
                             ""
                     ));
@@ -218,7 +220,7 @@ public final class NeteaseApiClient {
                         entries.add(new SearchEntry(
                                 artistId,
                                 str(artist, "name"),
-                                Component.translatable("musicplayer.entry.artist"),
+                                new TranslatableComponent("musicplayer.entry.artist"),
                                 viewArtistCommand(artistId),
                                 ""
                         ));
@@ -371,7 +373,7 @@ public final class NeteaseApiClient {
                     entries.add(new SearchEntry(
                             artistId,
                             str(node, "name"),
-                            Component.translatable("musicplayer.entry.artist"),
+                            new TranslatableComponent("musicplayer.entry.artist"),
                             viewArtistCommand(artistId),
                             ""
                     ));
@@ -400,7 +402,7 @@ public final class NeteaseApiClient {
                     entries.add(new SearchEntry(
                             rid,
                             rname,
-                            Component.translatable("musicplayer.entry.radio"),
+                            new TranslatableComponent("musicplayer.entry.radio"),
                             viewRadioCommand(rid),
                             playRadioCommand(rid)
                     ));
@@ -523,7 +525,7 @@ public final class NeteaseApiClient {
                         entries.add(new SearchEntry(
                                 rid,
                                 name,
-                                rcmd.isBlank() ? Component.translatable("musicplayer.entry.radio") : Component.literal(rcmd),
+                                rcmd.isBlank() ? new TranslatableComponent("musicplayer.entry.radio") : new TextComponent(rcmd),
                                 viewRadioCommand(rid),
                                 ""
                         ));
@@ -546,7 +548,7 @@ public final class NeteaseApiClient {
                 entries.add(new SearchEntry(
                         String.valueOf(cateId),
                         name,
-                        Component.translatable("musicplayer.entry.radio_count", radioCount),
+                        new TranslatableComponent("musicplayer.entry.radio_count", radioCount),
                         "",
                         ""
                 ));
