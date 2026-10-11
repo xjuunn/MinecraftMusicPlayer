@@ -92,6 +92,8 @@ public final class MusicDiscHelper {
     public static ItemStack burn(ItemStack baseDisc, TrackInfo track) {
         ItemStack burnedDisc = baseDisc.copy();
         burnedDisc.setCount(1);
+        burnedDisc.getOrCreateTag().remove(PENDING_KEY);
+        burnedDisc.getOrCreateTag().remove(PENDING_TOKEN_KEY);
         CompoundTag root = new CompoundTag();
         root.putString(TRACK_ID_KEY, safe(track.id()));
         root.putString(TITLE_KEY, safe(track.title()));
