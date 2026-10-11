@@ -97,7 +97,7 @@ public final class MusicPlayerConfigManager {
             return;
         }
         try (Reader reader = Files.newBufferedReader(LEGACY_CONFIG_PATH)) {
-            JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
+            JsonObject root = new JsonParser().parse(reader).getAsJsonObject();
             JsonElement legacyProxy = root.get("proxy");
             if (legacyProxy != null && legacyProxy.isJsonPrimitive()) {
                 String proxyValue = legacyProxy.getAsString();

@@ -28,7 +28,7 @@ public final class ApiHttp {
     public static JsonObject getJson(String url, String... queryPairs) throws IOException {
         Request request = buildRequest(url, JSON_ACCEPT, queryPairs);
         try (Response response = execute(request)) {
-            return JsonParser.parseString(Objects.requireNonNull(response.body()).string()).getAsJsonObject();
+            return new JsonParser().parse(Objects.requireNonNull(response.body()).string()).getAsJsonObject();
         }
     }
 

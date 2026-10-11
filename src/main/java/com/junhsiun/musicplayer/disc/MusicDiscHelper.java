@@ -44,7 +44,6 @@ public final class MusicDiscHelper {
             Items.MUSIC_DISC_WARD,
             Items.MUSIC_DISC_11,
             Items.MUSIC_DISC_WAIT,
-            Items.MUSIC_DISC_OTHERSIDE,
             Items.MUSIC_DISC_PIGSTEP
     );
 

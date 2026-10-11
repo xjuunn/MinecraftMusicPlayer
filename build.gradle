@@ -17,13 +17,10 @@ repositories {
     mavenCentral()
 }
 
-loom {
-    splitEnvironmentSourceSets()
-
-    mods {
-        musicplayer {
-            sourceSet sourceSets.main
-            sourceSet sourceSets.client
+sourceSets {
+    main {
+        java {
+            srcDirs += 'src/client/java'
         }
     }
 }
@@ -38,6 +35,7 @@ dependencies {
     implementation(include('com.squareup.okhttp3:okhttp:3.14.9'))
     implementation(include('com.squareup.okio:okio:1.17.2'))
     compileOnly('com.google.code.gson:gson:2.11.0')
+    testImplementation('com.google.code.gson:gson:2.11.0')
 
     testImplementation('org.junit.jupiter:junit-jupiter:5.10.2')
     testRuntimeOnly('org.junit.platform:junit-platform-launcher:1.10.2')

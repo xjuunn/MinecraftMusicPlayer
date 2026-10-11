@@ -134,7 +134,7 @@ public final class NeteaseApiClient {
                 "limit", Integer.toString(limit),
                 "offset", Integer.toString(offset)).thenApply(root -> {
             JsonArray songs = arr(root, "songs");
-            if (songs == null || songs.isEmpty()) return List.of();
+            if (songs == null || songs.size() == 0) return List.of();
             List<SearchEntry> tracks = new ArrayList<>();
             for (JsonElement elem : songs) {
                 JsonObject song = elem.getAsJsonObject();
@@ -164,7 +164,7 @@ public final class NeteaseApiClient {
                         "application/json,text/plain,*/*"
                 ));
                 JsonArray playlists = arr(root, "playlist");
-                if (playlists == null || playlists.isEmpty()) {
+                if (playlists == null || playlists.size() == 0) {
                     break;
                 }
                 for (JsonElement elem : playlists) {
@@ -197,7 +197,7 @@ public final class NeteaseApiClient {
     public CompletableFuture<List<TrackInfo>> artistTopSongs(String artistId) {
         return getJson("/artist/top/song", "id", artistId).thenCompose(root -> {
             JsonArray songs = arr(root, "songs");
-            if (songs == null || songs.isEmpty()) {
+            if (songs == null || songs.size() == 0) {
                 return CompletableFuture.completedFuture(List.of());
             }
             List<CompletableFuture<TrackInfo>> futures = new ArrayList<>();
@@ -252,7 +252,7 @@ public final class NeteaseApiClient {
                 "limit", Integer.toString(limit),
                 "offset", Integer.toString(offset)).thenApply(root -> {
             JsonArray songs = arr(root, "songs");
-            if (songs == null || songs.isEmpty()) return List.of();
+            if (songs == null || songs.size() == 0) return List.of();
             List<SearchEntry> tracks = new ArrayList<>();
             for (JsonElement elem : songs) {
                 JsonObject song = elem.getAsJsonObject();
@@ -415,7 +415,7 @@ public final class NeteaseApiClient {
     private CompletableFuture<TrackInfo> songDetail(String id) {
         return getJson("/song/detail", "ids", id).thenApply(root -> {
             JsonArray songs = arr(root, "songs");
-            JsonObject song = songs != null && !songs.isEmpty() ? songs.get(0).getAsJsonObject() : null;
+            JsonObject song = songs != null && songs.size() != 0 ? songs.get(0).getAsJsonObject() : null;
             if (song == null) {
                 return new TrackInfo(id, "", "", "", "", List.of(), 0L);
             }
@@ -625,7 +625,7 @@ public final class NeteaseApiClient {
                     "application/json,text/plain,*/*"
             ));
             JsonArray page = arr(root, "songs");
-            if (page == null || page.isEmpty()) {
+            if (page == null || page.size() == 0) {
                 break;
             }
             for (JsonElement elem : page) {
@@ -702,7 +702,7 @@ public final class NeteaseApiClient {
                 throw new IOException("HTTP " + response.code());
             }
             String body = Objects.requireNonNull(response.body()).string();
-            return JsonParser.parseString(body).getAsJsonObject();
+            return new JsonParser().parse(body).getAsJsonObject();
         } catch (Exception exception) {
             MusicPlayerMod.LOGGER.debug("请求音乐接口失败: {}", request.url(), exception);
             throw new RuntimeException(exception);
@@ -716,12 +716,12 @@ public final class NeteaseApiClient {
 
     private static String firstArtistName(JsonObject songNode) {
         JsonArray artists = arr(songNode, "ar");
-        if (artists != null && !artists.isEmpty()) {
+        if (artists != null && artists.size() != 0) {
             JsonElement el = artists.get(0);
             if (el != null && el.isJsonObject()) return str(el.getAsJsonObject(), "name");
         }
         JsonArray artistsAlt = arr(songNode, "artists");
-        if (artistsAlt != null && !artistsAlt.isEmpty()) {
+        if (artistsAlt != null && artistsAlt.size() != 0) {
             JsonElement el = artistsAlt.get(0);
             if (el != null && el.isJsonObject()) return str(el.getAsJsonObject(), "name");
         }
@@ -730,12 +730,12 @@ public final class NeteaseApiClient {
 
     private static String firstArtistId(JsonObject songNode) {
         JsonArray artists = arr(songNode, "ar");
-        if (artists != null && !artists.isEmpty()) {
+        if (artists != null && artists.size() != 0) {
             JsonElement el = artists.get(0);
             if (el != null && el.isJsonObject()) return str(el.getAsJsonObject(), "id");
         }
         JsonArray artistsAlt = arr(songNode, "artists");
-        if (artistsAlt != null && !artistsAlt.isEmpty()) {
+        if (artistsAlt != null && artistsAlt.size() != 0) {
             JsonElement el = artistsAlt.get(0);
             if (el != null && el.isJsonObject()) return str(el.getAsJsonObject(), "id");
         }

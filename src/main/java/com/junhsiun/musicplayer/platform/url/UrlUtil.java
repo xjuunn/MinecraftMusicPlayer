@@ -20,7 +20,7 @@ public final class UrlUtil {
             return null;
         }
         var data = root.getAsJsonArray("data");
-        if (data.isEmpty() || !data.get(0).isJsonObject()) {
+        if (data.size() == 0 || !data.get(0).isJsonObject()) {
             return null;
         }
         JsonObject first = data.get(0).getAsJsonObject();

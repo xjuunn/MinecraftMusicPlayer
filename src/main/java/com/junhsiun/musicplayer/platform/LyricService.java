@@ -73,7 +73,7 @@ public final class LyricService {
                 try (Response response = client.newCall(request).execute()) {
                     if (!response.isSuccessful()) return null;
                     String body = response.body() != null ? response.body().string() : "";
-                    JsonObject root = JsonParser.parseString(body).getAsJsonObject();
+                    JsonObject root = new JsonParser().parse(body).getAsJsonObject();
                     if (root.get("code") == null || !root.get("code").isJsonPrimitive() || root.get("code").getAsInt() != 200) return null;
                     String lyric = "";
                     if (root.has("lrc") && root.get("lrc").isJsonObject()) {

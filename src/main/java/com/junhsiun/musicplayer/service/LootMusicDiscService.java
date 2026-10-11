@@ -2,6 +2,15 @@ package com.junhsiun.musicplayer.service;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonPrimitive;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
 import com.google.gson.reflect.TypeToken;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
@@ -29,6 +38,7 @@ import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.storage.LevelResource;
 
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -45,7 +55,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 public final class LootMusicDiscService {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder()
+            .setPrettyPrinting()
+            .registerTypeAdapter(TrackInfo.class, new TrackInfoAdapter())
+            .create();
     private static final java.lang.reflect.Type STRING_SET = new TypeToken<Set<String>>(){}.getType();
     private static final java.lang.reflect.Type TRACK_LIST = new TypeToken<List<TrackInfo>>(){}.getType();
     private static final int POOL_CAPACITY = 20;
@@ -395,5 +408,51 @@ public final class LootMusicDiscService {
 
     private static String key(Entity entity) {
         return entity.level.dimension().toString() + ":entity:" + entity.getUUID();
+    }
+
+    private static final class TrackInfoAdapter implements JsonSerializer<TrackInfo>, JsonDeserializer<TrackInfo> {
+        @Override
+        public JsonElement serialize(TrackInfo src, Type typeOfSrc, JsonSerializationContext context) {
+            JsonObject root = new JsonObject();
+            root.addProperty("id", src.id());
+            root.addProperty("title", src.title());
+            root.addProperty("artist", src.artist());
+            root.addProperty("artistId", src.artistId());
+            root.addProperty("coverUrl", src.coverUrl());
+            JsonArray urls = new JsonArray();
+            for (String url : src.sourceUrls()) {
+                urls.add(new JsonPrimitive(url));
+            }
+            root.add("sourceUrls", urls);
+            root.addProperty("durationMillis", src.durationMillis());
+            return root;
+        }
+
+        @Override
+        public TrackInfo deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+            JsonObject root = json.getAsJsonObject();
+            JsonArray urlsElement = root.getAsJsonArray("sourceUrls");
+            List<String> urls = new ArrayList<>();
+            if (urlsElement != null) {
+                for (JsonElement element : urlsElement) {
+                    urls.add(element.getAsString());
+                }
+            }
+            return new TrackInfo(
+                    getString(root, "id"),
+                    getString(root, "title"),
+                    getString(root, "artist"),
+                    getString(root, "artistId"),
+                    getString(root, "coverUrl"),
+                    urls,
+                    root.has("durationMillis") && root.get("durationMillis").isJsonPrimitive()
+                            ? root.get("durationMillis").getAsLong()
+                            : 0L
+            );
+        }
+
+        private static String getString(JsonObject root, String key) {
+            return root.has(key) && root.get(key).isJsonPrimitive() ? root.get(key).getAsString() : "";
+        }
     }
 }

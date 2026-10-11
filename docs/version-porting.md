@@ -120,6 +120,16 @@
 
 - 1.19.2 需从集合中剔除 `RELIC` 与 `5`。
 - 1.18.2 已含 `PIGSTEP` 与 `OTHERSIDE`（javap 实测），仍需剔除 `RELIC` 与 `5`（代码继承 1.19.2 分支时已满足）。
+- 1.17.1 无 `MUSIC_DISC_OTHERSIDE`（1.18 加入），需剔除；`PIGSTEP`（1.16）保留。
+
+## 1.17.x 专项注意
+
+- **Loom 不支持 `splitEnvironmentSourceSets()`**：1.17 没有 bundled server jar，Loom 报错 `Only Minecraft versions using a bundled server jar can be split`。改法：删除 `loom { splitEnvironmentSourceSets() ... }`，在 `sourceSets.main.java.srcDirs += 'src/client/java'` 把客户端源码并入 main 编译。
+- **fabric-api 版本号后缀是 `+1.17` 而非 `+1.17.1`**（如 `0.46.1+1.17`）。
+- **测试需要显式 gson**：MC 1.17 自带旧版 Gson，无 `JsonParser.parseString`；`testImplementation('com.google.code.gson:gson:2.11.0')`。
+- **运行时 Gson 太旧（2.8.0）**：静态方法 `JsonParser.parseString` / `parseReader` 不存在，主代码必须用实例方法 `new JsonParser().parse(...)`（新旧版本均可用；测试可用新 API）。`JsonArray.isEmpty()` 也不存在，必须用 `size() == 0` / `size() != 0`。
+- **fabric-api 模组 id 是 `fabric` 而非 `fabric-api`**（0.46.x 时代）：`fabric.mod.json` 的 `depends` 键需写 `"fabric"`，否则开发环境与生产环境均报缺依赖。
+- Java 保持 17（代码大量使用 pattern matching instanceof 等）；1.17.1 官方启动器默认 Java 16，但 Java 17 可正常运行；`fabric.mod.json` 的 `depends.java` 为 `>=17`。
 
 ## 已完成版本分支参考
 
@@ -132,6 +142,7 @@
 | `1.20.1` | 1.20.1 | 17 | `0.92.x+1.20.1` |
 | `1.19.2` | 1.19.2 | 17 | `0.77.x+1.19.2` |
 | `1.18.2` | 1.18.2 | 17 | `0.77.0+1.18.2` |
+| `1.17.1` | 1.17.1 | 17 | `0.46.1+1.17` |
 
 - `fabric_api_version` 以 [fabricmc.net/develop](https://fabricmc.net/develop) 查询为准，解析失败（TLS/404）时重试或换邻近版本。
 - loader 版本注意：fabric-loader 0.15+ 需要 Java 21 运行时；低版本 MC 常见 Java 17 环境，如需兼容运行时可考虑 pin 到 0.14.x（仅在用户要求时调整）。
