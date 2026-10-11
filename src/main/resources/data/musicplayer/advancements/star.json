@@ -8,7 +8,7 @@
     "title": {"translate": "musicplayer.advancement.star.title"},
     "description": {"translate": "musicplayer.advancement.star.description"},
     "icon": {
-      "id": "minecraft:torch"
+      "item": "minecraft:torch"
     },
     "frame": "goal",
     "show_toast": false,

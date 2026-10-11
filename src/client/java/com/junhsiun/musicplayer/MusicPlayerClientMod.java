@@ -47,8 +47,13 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
                 }
                 try {
                     if (client.options.chatLinksPrompt().get()) {
-                        client.setScreen(new net.minecraft.client.gui.screens.ConfirmLinkScreen(
-                                accepted -> client.setScreen(null), url, false));
+                        net.minecraft.client.gui.screens.Screen parent = client.screen;
+                        client.setScreen(new ConfirmLinkScreen(accepted -> {
+                            if (accepted) {
+                                Util.getPlatform().openUri(URI.create(url));
+                            }
+                            client.setScreen(parent);
+                        }, url, false));
                     } else {
                         Util.getPlatform().openUri(URI.create(url));
                     }
