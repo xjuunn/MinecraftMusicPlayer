@@ -19,6 +19,7 @@ import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.platform.ArtistTopSongSource;
 import com.junhsiun.musicplayer.platform.HotPlaylistRandomSource;
 import com.junhsiun.musicplayer.platform.RandomSongSource;
+import com.junhsiun.musicplayer.util.Java8;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -39,6 +40,7 @@ import net.minecraft.world.level.storage.LevelResource;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -49,7 +51,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -65,6 +71,11 @@ public final class LootMusicDiscService {
     private static final int REFILL_BATCH = 5;
     private static final int REFILL_THRESHOLD = POOL_CAPACITY - REFILL_BATCH;
     private static final long PER_SOURCE_TIMEOUT_SECONDS = 60;
+    private static final ScheduledExecutorService TIMEOUT_EXECUTOR = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "loot-disc-timeout");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private final Set<String> processedContainers = new HashSet<>();
     private final Queue<TrackInfo> trackPool = new ConcurrentLinkedQueue<>();
@@ -99,9 +110,10 @@ public final class LootMusicDiscService {
             return InteractionResult.PASS;
         }
         BlockEntity blockEntity = world.getBlockEntity(pos);
-        if (!(blockEntity instanceof RandomizableContainerBlockEntity randomizable)) {
+        if (!(blockEntity instanceof RandomizableContainerBlockEntity)) {
             return InteractionResult.PASS;
         }
+        RandomizableContainerBlockEntity randomizable = (RandomizableContainerBlockEntity) blockEntity;
         return tryInjectOnOpen(
                 player,
                 randomizable,
@@ -114,9 +126,10 @@ public final class LootMusicDiscService {
         if (entity.level.isClientSide) {
             return InteractionResult.PASS;
         }
-        if (!(entity instanceof AbstractMinecartContainer containerEntity)) {
+        if (!(entity instanceof AbstractMinecartContainer)) {
             return InteractionResult.PASS;
         }
+        AbstractMinecartContainer containerEntity = (AbstractMinecartContainer) entity;
         return tryInjectOnOpen(
                 player,
                 containerEntity,
@@ -162,7 +175,7 @@ public final class LootMusicDiscService {
                     MusicPlayerMod.LOGGER.warn("Failed to generate random music disc for player {}", player.getScoreboardName(), throwable);
                     ItemStack returned = baseDisc.copy();
                     returned.setCount(1);
-                    if (!player.getInventory().add(returned)) {
+                    if (!player.inventory.add(returned)) {
                         player.drop(returned, false, true);
                     }
                     player.displayClientMessage(new TranslatableComponent("musicplayer.loot.failed_returned").withStyle(ChatFormatting.RED), false);
@@ -197,9 +210,9 @@ public final class LootMusicDiscService {
 
     private CompletableFuture<List<TrackInfo>> fetchTracks(int count) {
         if (sources.isEmpty()) {
-            return CompletableFuture.completedFuture(List.of());
+            return CompletableFuture.completedFuture(Java8.listOf());
         }
-        CompletableFuture<List<TrackInfo>> fallback = CompletableFuture.completedFuture(List.of());
+        CompletableFuture<List<TrackInfo>> fallback = CompletableFuture.completedFuture(Java8.listOf());
         for (int i = 0; i < sources.size(); i++) {
             int index = sourceIndex.getAndIncrement() % sources.size();
             RandomSongSource source = sources.get(index);
@@ -207,11 +220,11 @@ public final class LootMusicDiscService {
                 if (!prev.isEmpty()) {
                     return CompletableFuture.completedFuture(prev);
                 }
-                return source.fetchRandomTracks(count)
-                        .orTimeout(PER_SOURCE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                // Java 9+ 的 orTimeout 不可用（目标 Java 8），用 ScheduledExecutorService 等价实现。
+                return withTimeout(source.fetchRandomTracks(count))
                         .exceptionally(ex -> {
                             MusicPlayerMod.LOGGER.warn("Random source {} failed, trying next", source.getClass().getSimpleName(), ex);
-                            return List.of();
+                            return Java8.listOf();
                         });
             });
         }
@@ -224,7 +237,7 @@ public final class LootMusicDiscService {
 
     private void giveBurnedDisc(ServerPlayer player, ItemStack baseDisc, TrackInfo track) {
         ItemStack burnedDisc = MusicDiscHelper.burn(baseDisc, track);
-        if (!player.getInventory().add(burnedDisc)) {
+        if (!player.inventory.add(burnedDisc)) {
             player.drop(burnedDisc, false, true);
         }
         player.displayClientMessage(new TranslatableComponent("musicplayer.loot.generated").withStyle(ChatFormatting.GREEN)
@@ -239,7 +252,7 @@ public final class LootMusicDiscService {
         }
         int deficit = POOL_CAPACITY - trackPool.size();
         int batchSize = Math.max(REFILL_BATCH, deficit);
-        CompletableFuture<List<TrackInfo>> combined = CompletableFuture.completedFuture(List.of());
+        CompletableFuture<List<TrackInfo>> combined = CompletableFuture.completedFuture(Java8.listOf());
         for (int i = 0; i < sources.size(); i++) {
             int index = sourceIndex.getAndIncrement() % sources.size();
             RandomSongSource source = sources.get(index);
@@ -247,11 +260,11 @@ public final class LootMusicDiscService {
                 if (!prev.isEmpty()) {
                     return CompletableFuture.completedFuture(prev);
                 }
-                return source.fetchRandomTracks(batchSize)
-                        .orTimeout(PER_SOURCE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                // Java 9+ 的 orTimeout 不可用（目标 Java 8），用 ScheduledExecutorService 等价实现。
+                return withTimeout(source.fetchRandomTracks(batchSize))
                         .exceptionally(ex -> {
                             MusicPlayerMod.LOGGER.warn("Refill source {} failed, trying next", source.getClass().getSimpleName(), ex);
-                            return List.of();
+                            return Java8.listOf();
                         });
             });
         }
@@ -267,6 +280,25 @@ public final class LootMusicDiscService {
             saveCache();
             MusicPlayerMod.LOGGER.info("Refilled random track pool with {} tracks (pool size: {})", tracks.size(), trackPool.size());
         });
+    }
+
+    private static CompletableFuture<List<TrackInfo>> withTimeout(CompletableFuture<List<TrackInfo>> future) {
+        final CompletableFuture<List<TrackInfo>> result = new CompletableFuture<>();
+        ScheduledFuture<?> timeoutTask = TIMEOUT_EXECUTOR.schedule(new Runnable() {
+            @Override
+            public void run() {
+                result.completeExceptionally(new TimeoutException("随机曲目获取超时"));
+            }
+        }, PER_SOURCE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        future.whenComplete((tracks, ex) -> {
+            timeoutTask.cancel(false);
+            if (ex != null) {
+                result.completeExceptionally(ex);
+            } else {
+                result.complete(tracks);
+            }
+        });
+        return result;
     }
 
     private InteractionResult tryInjectOnOpen(
@@ -353,7 +385,7 @@ public final class LootMusicDiscService {
         Path path = storePath(srv);
         try {
             Files.createDirectories(path.getParent());
-            Files.writeString(path, GSON.toJson(processedContainers));
+            Files.write(path, GSON.toJson(processedContainers).getBytes(StandardCharsets.UTF_8));
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.warn("Failed to save loot music disc injection state.", exception);
         }
@@ -384,7 +416,7 @@ public final class LootMusicDiscService {
         try {
             Files.createDirectories(path.getParent());
             List<TrackInfo> snapshot = new ArrayList<>(trackPool);
-            Files.writeString(path, GSON.toJson(snapshot));
+            Files.write(path, GSON.toJson(snapshot).getBytes(StandardCharsets.UTF_8));
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.warn("Failed to save random track cache.", exception);
         }

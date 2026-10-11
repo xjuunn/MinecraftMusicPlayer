@@ -6,6 +6,7 @@ import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
 import com.junhsiun.musicplayer.util.Messages;
+import com.junhsiun.musicplayer.util.Java8;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import javazoom.jl.decoder.JavaLayerException;
@@ -65,20 +66,27 @@ public final class ClientJukeboxController {
     public void handle(JukeboxMusicPayload payload) {
         MusicPlayerMod.LOGGER.debug("Received custom jukebox payload: action={}, pos={}", payload.action(), BlockPos.of(payload.jukeboxPos()));
         switch (payload.action()) {
-            case "play" -> {
+            case "play": {
                 play(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl(), payload.offsetMillis());
                 setTrackId(payload.jukeboxPos(), payload.trackId());
+                break;
             }
-            case "refresh" -> {
+            case "refresh": {
                 refresh(payload.jukeboxPos(), payload.urls(), payload.title(), payload.subtitle(), payload.coverUrl(), payload.offsetMillis());
                 setTrackId(payload.jukeboxPos(), payload.trackId());
+                break;
             }
-            case "update" -> {
+            case "update": {
                 update(payload.jukeboxPos(), payload.title(), payload.subtitle(), payload.coverUrl());
                 setTrackId(payload.jukeboxPos(), payload.trackId());
+                break;
             }
-            case "stop" -> stop(payload.jukeboxPos());
-            default -> MusicPlayerMod.LOGGER.warn("Unknown jukebox action: {}", payload.action());
+            case "stop":
+                stop(payload.jukeboxPos());
+                break;
+            default:
+                MusicPlayerMod.LOGGER.warn("Unknown jukebox action: {}", payload.action());
+                break;
         }
     }
 
@@ -93,7 +101,7 @@ public final class ClientJukeboxController {
         playbackHandles.keySet().forEach(this::stop);
         pendingInsertions.clear();
         lastPositionReportTime.clear();
-        if (reason != null && !reason.isBlank()) {
+        if (reason != null && Java8.isNotBlank(reason)) {
             MusicPlayerMod.LOGGER.info("Stopped all jukebox playback: {}", reason);
         }
     }
@@ -111,14 +119,14 @@ public final class ClientJukeboxController {
         pendingInsertions.entrySet().removeIf(entry -> now - entry.getValue() > PENDING_TIMEOUT_MILLIS);
 
         long reportInterval = 2000L;
-        for (Long jukeboxPos : List.copyOf(playbackHandles.keySet())) {
+        for (Long jukeboxPos : Java8.copyOf(new ArrayList<>(playbackHandles.keySet()))) {
             PlaybackHandle handle = playbackHandles.get(jukeboxPos);
             if (handle == null) continue;
             if (handle.finishedAtMillis > 0L) {
                 continue;
             }
 
-            if (handle.player != null && !handle.trackId.isBlank()) {
+            if (handle.player != null && Java8.isNotBlank(handle.trackId)) {
                 Long lastReport = lastPositionReportTime.get(jukeboxPos);
                 if (lastReport == null || now - lastReport >= reportInterval) {
                     lastPositionReportTime.put(jukeboxPos, now);
@@ -190,7 +198,7 @@ public final class ClientJukeboxController {
         PlaybackHandle handle = playbackHandles.computeIfAbsent(jukeboxPos, ignored -> new PlaybackHandle());
         stopPlaybackOnly(handle);
         handle.finishedAtMillis = 0L;
-        handle.urls = urls == null ? List.of() : List.copyOf(urls);
+        handle.urls = urls == null ? Java8.listOf() : Java8.copyOf(urls);
         handle.title = title == null ? "" : title;
         handle.subtitle = subtitle == null ? "" : subtitle;
         handle.coverUrl = coverUrl == null ? "" : coverUrl;
@@ -213,15 +221,15 @@ public final class ClientJukeboxController {
             return;
         }
         if (urls != null && !urls.isEmpty()) {
-            handle.urls = List.copyOf(urls);
+            handle.urls = Java8.copyOf(urls);
         }
-        if (title != null && !title.isBlank()) {
+        if (title != null && Java8.isNotBlank(title)) {
             handle.title = title;
         }
-        if (subtitle != null && !subtitle.isBlank()) {
+        if (subtitle != null && Java8.isNotBlank(subtitle)) {
             handle.subtitle = subtitle;
         }
-        if (coverUrl != null && !coverUrl.isBlank() && handle.coverUrl.isBlank()) {
+        if (Java8.isNotBlank(coverUrl) && Java8.isBlank(handle.coverUrl)) {
             handle.coverUrl = coverUrl;
             CoverArtTextureCache.getInstance().request(coverUrl);
         }
@@ -271,7 +279,7 @@ public final class ClientJukeboxController {
         if (handle == null) {
             return;
         }
-        if (coverUrl != null && !coverUrl.isBlank() && !coverUrl.equals(handle.coverUrl)) {
+        if (Java8.isNotBlank(coverUrl) && !coverUrl.equals(handle.coverUrl)) {
             handle.coverUrl = coverUrl;
             CoverArtTextureCache.getInstance().request(coverUrl);
         }
@@ -362,7 +370,7 @@ public final class ClientJukeboxController {
         private volatile Player player;
         private volatile Thread thread;
         private volatile Call currentCall;
-        private volatile List<String> urls = List.of();
+        private volatile List<String> urls = Java8.listOf();
         private volatile String title = "";
         private volatile String subtitle = "";
         private volatile String coverUrl = "";
@@ -371,7 +379,40 @@ public final class ClientJukeboxController {
         private volatile long finishedAtMillis;
     }
 
-    public record JukeboxVisualState(BlockPos pos, String coverUrl, long startedAtMillis, boolean finished, long finishedAtMillis) {
+    public static final class JukeboxVisualState {
+        private final BlockPos pos;
+        private final String coverUrl;
+        private final long startedAtMillis;
+        private final boolean finished;
+        private final long finishedAtMillis;
+
+        public JukeboxVisualState(BlockPos pos, String coverUrl, long startedAtMillis, boolean finished, long finishedAtMillis) {
+            this.pos = pos;
+            this.coverUrl = coverUrl;
+            this.startedAtMillis = startedAtMillis;
+            this.finished = finished;
+            this.finishedAtMillis = finishedAtMillis;
+        }
+
+        public BlockPos pos() {
+            return pos;
+        }
+
+        public String coverUrl() {
+            return coverUrl;
+        }
+
+        public long startedAtMillis() {
+            return startedAtMillis;
+        }
+
+        public boolean finished() {
+            return finished;
+        }
+
+        public long finishedAtMillis() {
+            return finishedAtMillis;
+        }
     }
 
     private void logSourceFallback(String url, Exception exception) {
@@ -396,10 +437,10 @@ public final class ClientJukeboxController {
 
     private void showNowPlaying(String title, String subtitle) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.gui == null || title == null || title.isBlank()) {
+        if (minecraft.gui == null || Java8.isBlank(title)) {
             return;
         }
-        String text = subtitle == null || subtitle.isBlank() ? title : title + " - " + subtitle;
+        String text = Java8.isBlank(subtitle) ? title : title + " - " + subtitle;
         minecraft.gui.setNowPlaying(new TextComponent(text));
     }
 
@@ -415,9 +456,10 @@ public final class ClientJukeboxController {
             return "jukebox no longer has a record";
         }
         BlockEntity blockEntity = level.getBlockEntity(pos);
-        if (!(blockEntity instanceof JukeboxBlockEntity jukebox)) {
+        if (!(blockEntity instanceof JukeboxBlockEntity)) {
             return "missing jukebox block entity";
         }
+        JukeboxBlockEntity jukebox = (JukeboxBlockEntity) blockEntity;
         return null;
     }
 
@@ -484,12 +526,13 @@ public final class ClientJukeboxController {
             Throwable failure = null;
             try {
                 Line line = AudioSystem.getLine(lineInfo);
-                if (line instanceof SourceDataLine dataLine) {
+                if (line instanceof SourceDataLine) {
+                    SourceDataLine dataLine = (SourceDataLine) line;
                     sourceLine = dataLine;
                     sourceLine.open(audioFormat);
                     if (sourceLine.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
                         javax.sound.sampled.Control ctrl = sourceLine.getControl(FloatControl.Type.MASTER_GAIN);
-                        if (ctrl instanceof FloatControl fc) gainControl = fc;
+                        if (ctrl instanceof FloatControl) gainControl = (FloatControl) ctrl;
                     }
                     sourceLine.start();
                 }

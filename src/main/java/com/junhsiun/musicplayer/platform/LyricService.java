@@ -6,6 +6,7 @@ import com.google.gson.JsonParser;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.model.LyricLine;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
+import com.junhsiun.musicplayer.util.Java8;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -30,7 +31,7 @@ public final class LyricService {
                     if (lines != null) return CompletableFuture.completedFuture(lines);
                     return fetchFromFallback(songId);
                 })
-                .thenApply(lines -> lines != null ? lines : List.of());
+                .thenApply(lines -> lines != null ? lines : Java8.listOf());
     }
 
     private CompletableFuture<List<LyricLine>> fetchFromPrimary(String songId) {
@@ -80,7 +81,7 @@ public final class LyricService {
                         JsonElement lrcElement = root.getAsJsonObject("lrc").get("lyric");
                         lyric = lrcElement != null && lrcElement.isJsonPrimitive() ? lrcElement.getAsString() : "";
                     }
-                    if (lyric == null || lyric.isBlank()) return null;
+                    if (lyric == null || Java8.isBlank(lyric)) return null;
                     MusicPlayerMod.LOGGER.debug("歌词(fallback) 响应长度: {} 字符", lyric.length());
                     return parseLrc(lyric);
                 }
@@ -92,11 +93,11 @@ public final class LyricService {
     }
 
     public static List<LyricLine> parseLrc(String lrcText) {
-        if (lrcText == null || lrcText.isBlank()) return List.of();
+        if (lrcText == null || Java8.isBlank(lrcText)) return Java8.listOf();
         List<LyricLine> lines = new ArrayList<>();
         for (String rawLine : lrcText.split("\n")) {
             String line = rawLine.trim();
-            if (line.isBlank()) continue;
+            if (Java8.isBlank(line)) continue;
             if (line.startsWith("[") && !line.contains("]")) continue;
             Matcher matcher = LRC_LINE.matcher(line);
             if (matcher.matches()) {

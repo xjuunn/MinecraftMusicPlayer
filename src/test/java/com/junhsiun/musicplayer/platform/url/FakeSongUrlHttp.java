@@ -2,6 +2,7 @@ package com.junhsiun.musicplayer.platform.url;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.junhsiun.musicplayer.util.Java8;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -45,12 +46,12 @@ final class FakeSongUrlHttp implements SongUrlHttp {
 
     /** 记录一次对给定 URL 的调用（含查询参数），提高测试可观测性。 */
     private void log(String url, String... queryPairs) {
-        callLog.computeIfAbsent(url, k -> new ArrayList<>()).add(List.of(queryPairs));
+        callLog.computeIfAbsent(url, k -> new ArrayList<>()).add(Java8.listOf(queryPairs));
     }
 
     /** 返回某 URL 下所有被调用的查询参数组合（按调用顺序），用于校验探测顺序。 */
     List<List<String>> callParams(String url) {
-        return callLog.getOrDefault(url, List.of());
+        return callLog.getOrDefault(url, Java8.listOf());
     }
 
     /** 返回某 URL 是否被调用过。 */

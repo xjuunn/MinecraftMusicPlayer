@@ -6,12 +6,15 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.junhsiun.musicplayer.util.Java8;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 public final class MusicPlayerConfigManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -51,7 +54,7 @@ public final class MusicPlayerConfigManager {
     public static void save() {
         try {
             Files.createDirectories(CONFIG_PATH.getParent());
-            Files.writeString(CONFIG_PATH, GSON.toJson(config));
+            Files.write(CONFIG_PATH, GSON.toJson(config).getBytes(StandardCharsets.UTF_8));
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.error("保存配置失败。", exception);
         }
@@ -62,7 +65,7 @@ public final class MusicPlayerConfigManager {
     }
 
     private static void migrateLegacyDefaults() {
-        if (config.neteaseBaseUrl == null || config.neteaseBaseUrl.isBlank()
+        if (config.neteaseBaseUrl == null || Java8.isBlank(config.neteaseBaseUrl)
                 || "http://127.0.0.1:3000".equalsIgnoreCase(config.neteaseBaseUrl.trim())) {
             config.neteaseBaseUrl = MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL;
         }
@@ -101,20 +104,20 @@ public final class MusicPlayerConfigManager {
             JsonElement legacyProxy = root.get("proxy");
             if (legacyProxy != null && legacyProxy.isJsonPrimitive()) {
                 String proxyValue = legacyProxy.getAsString();
-                if ((config.proxy == null || config.proxy.isBlank()) && proxyValue != null && !proxyValue.isBlank()) {
+                if ((config.proxy == null || Java8.isBlank(config.proxy)) && proxyValue != null && Java8.isNotBlank(proxyValue)) {
                     config.proxy = proxyValue.trim();
                 }
             }
 
             JsonElement platformBaseUrl = root.get("platformBaseUrl");
             if (platformBaseUrl != null && platformBaseUrl.isJsonObject()) {
-                for (var entry : platformBaseUrl.getAsJsonObject().entrySet()) {
+                for (Map.Entry<String, JsonElement> entry : platformBaseUrl.getAsJsonObject().entrySet()) {
                     String value = entry.getValue().getAsString();
                     if ((config.neteaseBaseUrl == null
-                            || config.neteaseBaseUrl.isBlank()
+                            || Java8.isBlank(config.neteaseBaseUrl)
                             || MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL.equals(config.neteaseBaseUrl)
                             || "http://127.0.0.1:3000".equalsIgnoreCase(config.neteaseBaseUrl))
-                            && value != null && !value.isBlank()) {
+                            && value != null && Java8.isNotBlank(value)) {
                         config.neteaseBaseUrl = value.trim();
                     }
                 }

@@ -42,7 +42,8 @@ public final class Messages {
     }
 
     public static void sendChat(CommandSourceStack source, Component component) {
-        if (source.getEntity() instanceof ServerPlayer player) {
+        if (source.getEntity() instanceof ServerPlayer) {
+            ServerPlayer player = (ServerPlayer) source.getEntity();
             player.displayClientMessage(component, false);
             return;
         }
@@ -102,7 +103,8 @@ public final class Messages {
 
     public static void warning(CommandSourceStack source, Component component) {
         Component styled = component.copy().withStyle(ChatFormatting.RED);
-        if (source.getEntity() instanceof ServerPlayer player) {
+        if (source.getEntity() instanceof ServerPlayer) {
+            ServerPlayer player = (ServerPlayer) source.getEntity();
             player.displayClientMessage(styled, false);
             return;
         }
@@ -122,7 +124,8 @@ public final class Messages {
     }
 
     public static void sendFailurePlayer(CommandSourceStack source, Component component) {
-        if (source.getEntity() instanceof ServerPlayer player) {
+        if (source.getEntity() instanceof ServerPlayer) {
+            ServerPlayer player = (ServerPlayer) source.getEntity();
             player.displayClientMessage(component, false);
             return;
         }

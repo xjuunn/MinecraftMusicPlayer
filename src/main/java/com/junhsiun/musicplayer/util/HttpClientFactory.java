@@ -15,6 +15,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
 public final class HttpClientFactory {
     private static final int API_CONNECT_TIMEOUT = 5;
@@ -61,7 +62,7 @@ public final class HttpClientFactory {
         if (config.preferIpv4) {
             builder.dns(hostname -> {
                 List<InetAddress> all = Dns.SYSTEM.lookup(hostname);
-                List<InetAddress> ipv4 = all.stream().filter(address -> address instanceof Inet4Address).toList();
+                List<InetAddress> ipv4 = all.stream().filter(address -> address instanceof Inet4Address).collect(Collectors.toList());
                 if (!ipv4.isEmpty()) {
                     return ipv4;
                 }
@@ -102,7 +103,7 @@ public final class HttpClientFactory {
     }
 
     private static Proxy resolveManualProxy(String value) {
-        if (value == null || value.isBlank()) {
+        if (value == null || Java8.isBlank(value)) {
             return null;
         }
 
@@ -114,9 +115,9 @@ public final class HttpClientFactory {
     }
 
     private static Proxy resolveEnvironmentProxy() {
-        for (String key : List.of("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")) {
+        for (String key : Java8.listOf("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")) {
             String value = System.getenv(key);
-            if (value == null || value.isBlank()) {
+            if (value == null || Java8.isBlank(value)) {
                 continue;
             }
 

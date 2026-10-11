@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.platform;
 
 import com.junhsiun.musicplayer.model.LyricLine;
+import com.junhsiun.musicplayer.util.Java8;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -46,7 +47,7 @@ class LrcParserTest {
     void 时间戳自动排序() {
         String lrc = "[00:03.00]晚\n[00:01.00]早\n";
         List<LyricLine> lines = LyricService.parseLrc(lrc);
-        assertEquals(List.of(new LyricLine(1_000L, "早"), new LyricLine(3_000L, "晚")), lines);
+        assertEquals(Java8.listOf(new LyricLine(1_000L, "早"), new LyricLine(3_000L, "晚")), lines);
     }
 
     @Test
@@ -121,14 +122,14 @@ class LrcParserTest {
 
     @Test
     void findCurrentLine_返回当前行() {
-        List<LyricLine> lines = List.of(new LyricLine(1_000L, "a"), new LyricLine(3_000L, "b"));
+        List<LyricLine> lines = Java8.listOf(new LyricLine(1_000L, "a"), new LyricLine(3_000L, "b"));
         assertEquals("a", LyricService.findCurrentLine(lines, 1_500L).text());
         assertEquals("b", LyricService.findCurrentLine(lines, 4_000L).text());
     }
 
     @Test
     void findCurrentLine_时间在第一句之前返回null() {
-        List<LyricLine> lines = List.of(new LyricLine(1_000L, "a"), new LyricLine(3_000L, "b"));
+        List<LyricLine> lines = Java8.listOf(new LyricLine(1_000L, "a"), new LyricLine(3_000L, "b"));
         assertNull(LyricService.findCurrentLine(lines, 500L));
     }
 
@@ -139,25 +140,25 @@ class LrcParserTest {
 
     @Test
     void findCurrentLine_空列表返回null() {
-        assertNull(LyricService.findCurrentLine(List.of(), 500L));
+        assertNull(LyricService.findCurrentLine(Java8.listOf(), 500L));
     }
 
     @Test
     void findCurrentLine_精确匹配时间戳() {
-        List<LyricLine> lines = List.of(new LyricLine(1_000L, "a"), new LyricLine(3_000L, "b"));
+        List<LyricLine> lines = Java8.listOf(new LyricLine(1_000L, "a"), new LyricLine(3_000L, "b"));
         assertEquals("a", LyricService.findCurrentLine(lines, 1_000L).text());
         assertEquals("b", LyricService.findCurrentLine(lines, 3_000L).text());
     }
 
     @Test
     void findCurrentLine_时间在两句之间取前一句() {
-        List<LyricLine> lines = List.of(new LyricLine(1_000L, "a"), new LyricLine(3_000L, "b"), new LyricLine(5_000L, "c"));
+        List<LyricLine> lines = Java8.listOf(new LyricLine(1_000L, "a"), new LyricLine(3_000L, "b"), new LyricLine(5_000L, "c"));
         assertEquals("b", LyricService.findCurrentLine(lines, 4_000L).text());
     }
 
     @Test
     void findCurrentLine_只有单行歌词() {
-        List<LyricLine> lines = List.of(new LyricLine(1_000L, "only"));
+        List<LyricLine> lines = Java8.listOf(new LyricLine(1_000L, "only"));
         assertEquals("only", LyricService.findCurrentLine(lines, 10_000L).text());
         assertNull(LyricService.findCurrentLine(lines, 500L));
     }

@@ -1,6 +1,8 @@
 package com.junhsiun.musicplayer.platform.url;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.junhsiun.musicplayer.util.Java8;
 
 /**
  * URL 解析相关的轻量工具。
@@ -19,7 +21,7 @@ public final class UrlUtil {
         if (root == null || !root.has("data") || !root.get("data").isJsonArray()) {
             return null;
         }
-        var data = root.getAsJsonArray("data");
+        JsonArray data = root.getAsJsonArray("data");
         if (data.size() == 0 || !data.get(0).isJsonObject()) {
             return null;
         }
@@ -43,6 +45,6 @@ public final class UrlUtil {
             depth++;
         }
         String msg = current.getMessage();
-        return msg != null && !msg.isBlank() ? msg : current.getClass().getSimpleName();
+        return msg != null && Java8.isNotBlank(msg) ? msg : current.getClass().getSimpleName();
     }
 }

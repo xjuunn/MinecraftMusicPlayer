@@ -25,12 +25,12 @@ import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.state.BlockState;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public final class MusicPlayerMod implements ModInitializer {
     public static final String MOD_ID = "musicplayer";
-    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    public static final Logger LOGGER = LogManager.getLogger(MOD_ID);
 
     private static final MusicQueueService MUSIC_QUEUE_SERVICE = new MusicQueueService();
     private static final JukeboxPlaybackService JUKEBOX_PLAYBACK_SERVICE = new JukeboxPlaybackService();
@@ -49,7 +49,8 @@ public final class MusicPlayerMod implements ModInitializer {
             ItemStack heldStack = player.getItemInHand(hand);
 
             if (MusicDiscHelper.isPendingDisc(heldStack)) {
-                if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                if (player instanceof net.minecraft.server.level.ServerPlayer) {
+                    net.minecraft.server.level.ServerPlayer serverPlayer = (net.minecraft.server.level.ServerPlayer) player;
                     LOOT_MUSIC_DISC_SERVICE.useRandomDisc(serverPlayer, hand);
                 }
                 return InteractionResult.SUCCESS;
@@ -61,22 +62,25 @@ public final class MusicPlayerMod implements ModInitializer {
                     if (world.isClientSide()) {
                         return InteractionResult.SUCCESS;
                     }
-                    if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                    if (player instanceof net.minecraft.server.level.ServerPlayer) {
+                        net.minecraft.server.level.ServerPlayer serverPlayer = (net.minecraft.server.level.ServerPlayer) player;
                         return JUKEBOX_PLAYBACK_SERVICE.tryInsertCustomDisc(serverPlayer, world, hand, hitResult);
                     }
                     return InteractionResult.FAIL;
                 }
             }
 
-            if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+            if (!(player instanceof net.minecraft.server.level.ServerPlayer)) {
                 return InteractionResult.PASS;
             }
+            net.minecraft.server.level.ServerPlayer serverPlayer = (net.minecraft.server.level.ServerPlayer) player;
             return LOOT_MUSIC_DISC_SERVICE.tryInjectOnOpen(serverPlayer, world, hitResult.getBlockPos());
         });
         UseItemCallback.EVENT.register((player, world, hand) -> {
-            if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+            if (!(player instanceof net.minecraft.server.level.ServerPlayer)) {
                 return InteractionResultHolder.pass(player.getItemInHand(hand));
             }
+            net.minecraft.server.level.ServerPlayer serverPlayer = (net.minecraft.server.level.ServerPlayer) player;
             if (MusicDiscHelper.isPendingDisc(player.getItemInHand(hand))) {
                 LOOT_MUSIC_DISC_SERVICE.useRandomDisc(serverPlayer, hand);
                 return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), world.isClientSide());
@@ -84,9 +88,10 @@ public final class MusicPlayerMod implements ModInitializer {
             return InteractionResultHolder.pass(player.getItemInHand(hand));
         });
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
-            if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+            if (!(player instanceof net.minecraft.server.level.ServerPlayer)) {
                 return InteractionResult.PASS;
             }
+            net.minecraft.server.level.ServerPlayer serverPlayer = (net.minecraft.server.level.ServerPlayer) player;
             return LOOT_MUSIC_DISC_SERVICE.tryInjectOnOpen(serverPlayer, entity);
         });
         ServerPlayNetworking.registerGlobalReceiver(MusicPlaybackReportPayload.ID, (server, player, handler, buf, sender) -> {

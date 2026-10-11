@@ -1,5 +1,6 @@
 package com.junhsiun.musicplayer.network;
 
+import com.junhsiun.musicplayer.util.Java8;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -26,8 +27,8 @@ class MusicControlPayloadTest {
 
     @Test
     void play过长URL被过滤() {
-        String longUrl = "http://" + "a".repeat(30000) + ".mp3";
-        MusicControlPayload payload = MusicControlPayload.play("1", List.of(longUrl), "t", "s", 0L);
+        String longUrl = "http://" + Java8.repeat("a", 30000) + ".mp3";
+        MusicControlPayload payload = MusicControlPayload.play("1", Java8.listOf(longUrl), "t", "s", 0L);
         assertTrue(payload.urls().isEmpty());
     }
 

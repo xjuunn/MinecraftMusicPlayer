@@ -1,14 +1,19 @@
 package com.junhsiun.musicplayer.platform.url;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.junhsiun.musicplayer.util.Java8;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * 单曲音源解析器（按优先级汇总各第三方提供者）。
@@ -18,7 +23,7 @@ import java.util.concurrent.TimeUnit;
  * 后续接入新第三方音源时，只需新增提供者并调用 {@link #register(SongUrlProvider)}。
  */
 public final class SongUrlResolver {
-    private static final Logger LOGGER = LoggerFactory.getLogger(SongUrlResolver.class);
+    private static final Logger LOGGER = LogManager.getLogger(SongUrlResolver.class);
     private static final int PROVIDER_TIMEOUT_SECONDS = 3;
 
     private final List<SongUrlProvider> providers = new ArrayList<>();
@@ -45,7 +50,7 @@ public final class SongUrlResolver {
      */
     public CompletableFuture<List<String>> resolve(String songId) {
         if (providers.isEmpty()) {
-            return CompletableFuture.completedFuture(List.of());
+            return CompletableFuture.completedFuture(Java8.listOf());
         }
         List<CompletableFuture<List<String>>> futures = new ArrayList<>(providers.size());
         for (SongUrlProvider provider : providers) {
@@ -56,8 +61,29 @@ public final class SongUrlResolver {
                 .thenApply(nil -> collect(futures));
     }
 
+    private static final ScheduledExecutorService TIMEOUT_EXECUTOR = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "song-url-timeout");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     private CompletableFuture<List<String>> withTimeout(CompletableFuture<List<String>> future) {
-        return future.orTimeout(timeoutSeconds, TimeUnit.SECONDS).exceptionally(ex -> List.of());
+        final CompletableFuture<List<String>> result = new CompletableFuture<>();
+        ScheduledFuture<?> timeoutTask = TIMEOUT_EXECUTOR.schedule(new Runnable() {
+            @Override
+            public void run() {
+                result.completeExceptionally(new TimeoutException("音源解析超时"));
+            }
+        }, timeoutSeconds, TimeUnit.SECONDS);
+        future.whenComplete((urls, ex) -> {
+            timeoutTask.cancel(false);
+            if (ex != null) {
+                result.completeExceptionally(ex);
+            } else {
+                result.complete(urls);
+            }
+        });
+        return result;
     }
 
     private List<String> collect(List<CompletableFuture<List<String>>> futures) {
@@ -67,7 +93,7 @@ public final class SongUrlResolver {
                 List<String> urls = futures.get(index).get();
                 if (urls != null) {
                     for (String url : urls) {
-                        if (url != null && !url.isBlank()) {
+                        if (url != null && Java8.isNotBlank(url)) {
                             ordered.add(url.trim());
                         }
                     }
@@ -76,6 +102,6 @@ public final class SongUrlResolver {
                 LOGGER.trace("音源收集忽略失败: {}", UrlUtil.rootMessage(e));
             }
         }
-        return List.copyOf(ordered);
+        return Java8.copyOf(new ArrayList<>(ordered));
     }
 }

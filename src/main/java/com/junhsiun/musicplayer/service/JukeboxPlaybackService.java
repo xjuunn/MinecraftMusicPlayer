@@ -5,6 +5,7 @@ import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper.DiscTrackData;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
+import com.junhsiun.musicplayer.util.Java8;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
@@ -36,9 +37,10 @@ public final class JukeboxPlaybackService {
     private final Map<UUID, Long> playerPositionTime = new HashMap<>();
 
     public InteractionResult tryInsertCustomDisc(ServerPlayer player, Level level, InteractionHand hand, BlockHitResult hitResult) {
-        if (!(level instanceof ServerLevel serverLevel)) {
+        if (!(level instanceof ServerLevel)) {
             return InteractionResult.PASS;
         }
+        ServerLevel serverLevel = (ServerLevel) level;
 
         BlockPos pos = hitResult.getBlockPos();
         BlockState state = serverLevel.getBlockState(pos);
@@ -60,9 +62,10 @@ public final class JukeboxPlaybackService {
         }
 
         BlockEntity blockEntity = serverLevel.getBlockEntity(pos);
-        if (!(blockEntity instanceof JukeboxBlockEntity jukebox)) {
+        if (!(blockEntity instanceof JukeboxBlockEntity)) {
             return InteractionResult.PASS;
         }
+        JukeboxBlockEntity jukebox = (JukeboxBlockEntity) blockEntity;
 
         ItemStack insertedDisc = heldStack.copy();
         insertedDisc.setCount(1);
@@ -111,7 +114,7 @@ public final class JukeboxPlaybackService {
 
     private void startPlayback(ServerLevel level, BlockPos pos, DiscTrackData discData) {
         ActiveJukebox active = startPlaybackResolved(level, pos, discData);
-        if (discData.trackId() != null && !discData.trackId().isBlank()) {
+        if (discData.trackId() != null && Java8.isNotBlank(discData.trackId())) {
             MusicPlayerMod.netease().resolveSong(discData.trackId()).whenComplete((track, throwable) ->
                     level.getServer().execute(() -> refreshPlaybackData(level, pos, active, discData, track, throwable))
             );
@@ -157,10 +160,10 @@ public final class JukeboxPlaybackService {
         }
         return new DiscTrackData(
                 original.trackId(),
-                track.title().isBlank() ? original.title() : track.title(),
-                track.artist().isBlank() ? original.artist() : track.artist(),
-                track.artistId().isBlank() ? original.artistId() : track.artistId(),
-                track.coverUrl().isBlank() ? original.coverUrl() : track.coverUrl(),
+                Java8.isBlank(track.title()) ? original.title() : track.title(),
+                Java8.isBlank(track.artist()) ? original.artist() : track.artist(),
+                Java8.isBlank(track.artistId()) ? original.artistId() : track.artistId(),
+                Java8.isBlank(track.coverUrl()) ? original.coverUrl() : track.coverUrl(),
                 track.sourceUrls(),
                 track.durationMillis() > 0L ? track.durationMillis() : original.durationMillis()
         );
@@ -175,9 +178,10 @@ public final class JukeboxPlaybackService {
             return "jukebox block missing or has no record";
         }
         BlockEntity blockEntity = level.getBlockEntity(active.pos());
-        if (!(blockEntity instanceof JukeboxBlockEntity jukebox)) {
+        if (!(blockEntity instanceof JukeboxBlockEntity)) {
             return "missing jukebox block entity";
         }
+        JukeboxBlockEntity jukebox = (JukeboxBlockEntity) blockEntity;
         if (jukebox.getRecord().isEmpty()) {
             return "jukebox record item is empty";
         }

@@ -1,5 +1,6 @@
 package com.junhsiun.musicplayer.platform.url;
 
+import com.junhsiun.musicplayer.util.Java8;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -25,7 +26,7 @@ class VkeysUrlProviderTest {
         http.stubJson("https://api.vkeys.cn/v2/music/netease", "{\"code\":200,\"data\":{\"url\":\"https://vkeys.mp3\"}}");
         VkeysUrlProvider provider = new VkeysUrlProvider(http);
 
-        assertEquals(List.of("https://vkeys.mp3"), resolve(provider, "1"));
+        assertEquals(Java8.listOf("https://vkeys.mp3"), resolve(provider, "1"));
     }
 
     @Test
@@ -41,7 +42,7 @@ class VkeysUrlProviderTest {
         http.stubJson("https://api.vkeys.cn/v2/music/netease", "{\"data\":{\"url\":\"https://quality4.mp3\"}}");
         VkeysUrlProvider provider = new VkeysUrlProvider(http);
 
-        assertEquals(List.of("https://quality4.mp3"), resolve(provider, "1"));
+        assertEquals(Java8.listOf("https://quality4.mp3"), resolve(provider, "1"));
     }
 
     // ── data 结构异常 ─────────────────────────────────────
@@ -137,7 +138,7 @@ class VkeysUrlProviderTest {
         http.stubJson("https://api.vkeys.cn/v2/music/netease", "{\"data\":{\"url\":\"  https://trimmed.mp3  \"}}");
         VkeysUrlProvider provider = new VkeysUrlProvider(http);
 
-        assertEquals(List.of("https://trimmed.mp3"), resolve(provider, "1"));
+        assertEquals(Java8.listOf("https://trimmed.mp3"), resolve(provider, "1"));
     }
 
     // ── 质量档位顺序 ──────────────────────────────────────

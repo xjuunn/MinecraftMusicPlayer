@@ -6,26 +6,59 @@ public enum PlayOrder {
     SHUFFLE;
 
     public String displayName() {
-        return switch (this) {
-            case SEQUENTIAL -> "正序";
-            case REVERSE -> "倒序";
-            case SHUFFLE -> "随机";
-        };
+        String result;
+        switch (this) {
+            case SEQUENTIAL:
+                result = "正序";
+                break;
+            case REVERSE:
+                result = "倒序";
+                break;
+            case SHUFFLE:
+                result = "随机";
+                break;
+            default:
+                result = "";
+                break;
+        }
+        return result;
     }
 
     public String translationKey() {
-        return switch (this) {
-            case SEQUENTIAL -> "musicplayer.play_order.sequential";
-            case REVERSE -> "musicplayer.play_order.reverse";
-            case SHUFFLE -> "musicplayer.play_order.shuffle";
-        };
+        String result;
+        switch (this) {
+            case SEQUENTIAL:
+                result = "musicplayer.play_order.sequential";
+                break;
+            case REVERSE:
+                result = "musicplayer.play_order.reverse";
+                break;
+            case SHUFFLE:
+                result = "musicplayer.play_order.shuffle";
+                break;
+            default:
+                result = "";
+                break;
+        }
+        return result;
     }
 
     public static PlayOrder fromString(String value) {
-        return switch (value.toLowerCase()) {
-            case "reverse", "倒序" -> REVERSE;
-            case "shuffle", "random", "随机" -> SHUFFLE;
-            default -> SEQUENTIAL;
-        };
+        PlayOrder result;
+        switch (value.toLowerCase()) {
+            case "reverse":
+            case "倒序":
+                result = REVERSE;
+                break;
+            case "shuffle":
+            case "random":
+            case "随机":
+                result = SHUFFLE;
+                break;
+            default:
+                result = SEQUENTIAL;
+                break;
+        }
+        return result;
     }
 }

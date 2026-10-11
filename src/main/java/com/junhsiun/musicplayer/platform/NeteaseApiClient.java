@@ -20,6 +20,7 @@ import com.junhsiun.musicplayer.platform.url.QijieyaUrlProvider;
 import com.junhsiun.musicplayer.platform.url.SongUrlResolver;
 import com.junhsiun.musicplayer.platform.url.VkeysUrlProvider;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
+import com.junhsiun.musicplayer.util.Java8;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.network.chat.TextComponent;
@@ -125,7 +126,7 @@ public final class NeteaseApiClient {
                     str(p, "id"), str(p, "name"),
                     str(obj(p, "creator"), "userId"),
                     str(obj(p, "creator"), "nickname"),
-                    List.of(), intVal(p, "trackCount"));
+                    Java8.listOf(), intVal(p, "trackCount"));
         });
     }
 
@@ -134,14 +135,14 @@ public final class NeteaseApiClient {
                 "limit", Integer.toString(limit),
                 "offset", Integer.toString(offset)).thenApply(root -> {
             JsonArray songs = arr(root, "songs");
-            if (songs == null || songs.size() == 0) return List.of();
+            if (songs == null || songs.size() == 0) return Java8.listOf();
             List<SearchEntry> tracks = new ArrayList<>();
             for (JsonElement elem : songs) {
                 JsonObject song = elem.getAsJsonObject();
                 String songId = str(song, "id");
                 String artistId = firstArtistId(song);
                 tracks.add(new SearchEntry(songId, str(song, "name"), firstArtistName(song),
-                        playSongCommand(songId), artistId.isBlank() ? "" : viewArtistCommand(artistId)));
+                        playSongCommand(songId), Java8.isBlank(artistId) ? "" : viewArtistCommand(artistId)));
             }
             MusicPlayerMod.LOGGER.debug("歌单曲目分页: id={}, offset={}, limit={}, 返回={}",
                     playlistId, offset, limit, tracks.size());
@@ -170,7 +171,7 @@ public final class NeteaseApiClient {
                 for (JsonElement elem : playlists) {
                     JsonObject playlist = elem.getAsJsonObject();
                     JsonObject creator = obj(playlist, "creator");
-                    if (nickname.isBlank()) {
+                    if (Java8.isBlank(nickname)) {
                         resolvedUserId = str(creator, "userId", userId);
                         nickname = str(creator, "nickname");
                         signature = str(creator, "signature");
@@ -198,7 +199,7 @@ public final class NeteaseApiClient {
         return getJson("/artist/top/song", "id", artistId).thenCompose(root -> {
             JsonArray songs = arr(root, "songs");
             if (songs == null || songs.size() == 0) {
-                return CompletableFuture.completedFuture(List.of());
+                return CompletableFuture.completedFuture(Java8.listOf());
             }
             List<CompletableFuture<TrackInfo>> futures = new ArrayList<>();
             for (JsonElement elem : songs) {
@@ -252,7 +253,7 @@ public final class NeteaseApiClient {
                 "limit", Integer.toString(limit),
                 "offset", Integer.toString(offset)).thenApply(root -> {
             JsonArray songs = arr(root, "songs");
-            if (songs == null || songs.size() == 0) return List.of();
+            if (songs == null || songs.size() == 0) return Java8.listOf();
             List<SearchEntry> tracks = new ArrayList<>();
             for (JsonElement elem : songs) {
                 JsonObject song = elem.getAsJsonObject();
@@ -311,7 +312,7 @@ public final class NeteaseApiClient {
             List<CompletableFuture<TrackInfo>> futures = candidateNodes.stream()
                     .map(this::resolveSongFromNode)
                     .collect(Collectors.toList());
-            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
             List<TrackInfo> tracks = new ArrayList<>();
             for (CompletableFuture<TrackInfo> future : futures) {
@@ -344,14 +345,27 @@ public final class NeteaseApiClient {
         ).thenApply(root -> {
             List<SearchEntry> entries = new ArrayList<>();
             JsonObject result = obj(root, "result");
-            JsonArray list = switch (type) {
-                case 1 -> arr(result, "songs");
-                case 100 -> arr(result, "artists");
-                case 1000 -> arr(result, "playlists");
-                case 1002 -> arr(result, "userprofiles");
-                case 1009 -> arr(result, "djRadios");
-                default -> new JsonArray();
-            };
+            JsonArray list;
+            switch (type) {
+                case 1:
+                    list = arr(result, "songs");
+                    break;
+                case 100:
+                    list = arr(result, "artists");
+                    break;
+                case 1000:
+                    list = arr(result, "playlists");
+                    break;
+                case 1002:
+                    list = arr(result, "userprofiles");
+                    break;
+                case 1009:
+                    list = arr(result, "djRadios");
+                    break;
+                default:
+                    list = new JsonArray();
+                    break;
+            }
             if (list == null) {
                 return entries;
             }
@@ -366,7 +380,7 @@ public final class NeteaseApiClient {
                             str(node, "name"),
                             firstArtistName(node),
                             playSongCommand(songId),
-                            artistId.isBlank() ? "" : viewArtistCommand(artistId)
+                            Java8.isBlank(artistId) ? "" : viewArtistCommand(artistId)
                     ));
                 } else if (type == 100) {
                     String artistId = str(node, "id");
@@ -385,7 +399,7 @@ public final class NeteaseApiClient {
                             str(node, "name"),
                             str(obj(node, "creator"), "nickname"),
                             viewPlaylistCommand(playlistId),
-                            ownerId.isBlank() ? "" : viewUserCommand(ownerId)
+                            Java8.isBlank(ownerId) ? "" : viewUserCommand(ownerId)
                     ));
                 } else if (type == 1002) {
                     String foundUserId = str(node, "userId");
@@ -417,7 +431,7 @@ public final class NeteaseApiClient {
             JsonArray songs = arr(root, "songs");
             JsonObject song = songs != null && songs.size() != 0 ? songs.get(0).getAsJsonObject() : null;
             if (song == null) {
-                return new TrackInfo(id, "", "", "", "", List.of(), 0L);
+                return new TrackInfo(id, "", "", "", "", Java8.listOf(), 0L);
             }
             return new TrackInfo(
                     str(song, "id"),
@@ -425,7 +439,7 @@ public final class NeteaseApiClient {
                     firstArtistName(song),
                     firstArtistId(song),
                     songCoverUrl(song),
-                    List.of(),
+                    Java8.listOf(),
                     lng(song, "dt")
             );
         });
@@ -466,7 +480,7 @@ public final class NeteaseApiClient {
                         JsonObject mainSong = obj(node, "mainSong");
                         String mainTrackId = mainSong != null ? str(mainSong, "id") : "";
                         String coverUrl = str(node, "coverUrl");
-                        if (coverUrl.isBlank()) coverUrl = str(node, "coverUrl");
+                        if (Java8.isBlank(coverUrl)) coverUrl = str(node, "coverUrl");
                         JsonObject radio = obj(node, "radio");
                         String radioId = radio != null ? str(radio, "id") : rid;
                         String radioName = radio != null ? str(radio, "name") : "";
@@ -521,11 +535,11 @@ public final class NeteaseApiClient {
                         String rid = str(node, "id");
                         String name = str(node, "name");
                         String rcmd = str(node, "rcmdText");
-                        if (rcmd.isBlank()) rcmd = str(node, "desc");
+                        if (Java8.isBlank(rcmd)) rcmd = str(node, "desc");
                         entries.add(new SearchEntry(
                                 rid,
                                 name,
-                                rcmd.isBlank() ? new TranslatableComponent("musicplayer.entry.radio") : new TextComponent(rcmd),
+                                Java8.isBlank(rcmd) ? new TranslatableComponent("musicplayer.entry.radio") : new TextComponent(rcmd),
                                 viewRadioCommand(rid),
                                 ""
                         ));
@@ -572,7 +586,7 @@ public final class NeteaseApiClient {
         if (tags != null) {
             for (JsonElement tag : tags) {
                 String name = str(tag.getAsJsonObject(), "name");
-                if (!name.isBlank()) {
+                if (Java8.isNotBlank(name)) {
                     categories.add(name);
                 }
             }
@@ -608,7 +622,7 @@ public final class NeteaseApiClient {
                     str(playlist, "name"),
                     str(obj(playlist, "creator"), "nickname"),
                     viewPlaylistCommand(playlistId),
-                    ownerId.isBlank() ? "" : viewUserCommand(ownerId)
+                    Java8.isBlank(ownerId) ? "" : viewUserCommand(ownerId)
             ));
         }
         return entries;
@@ -642,7 +656,7 @@ public final class NeteaseApiClient {
 
     private CompletableFuture<TrackInfo> resolveSongFromNode(JsonObject songNode) {
         String id = str(songNode, "id");
-        if (id.isBlank()) {
+        if (Java8.isBlank(id)) {
             return CompletableFuture.completedFuture(null);
         }
         String title = str(songNode, "name");
@@ -654,7 +668,7 @@ public final class NeteaseApiClient {
     }
 
     private static CompletableFuture<List<TrackInfo>> collectResults(List<CompletableFuture<TrackInfo>> futures) {
-        return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .thenApply(nil -> {
                     List<TrackInfo> tracks = new ArrayList<>();
                     for (CompletableFuture<TrackInfo> future : futures) {
@@ -744,11 +758,11 @@ public final class NeteaseApiClient {
 
     private static String songCoverUrl(JsonObject songNode) {
         String albumCover = str(obj(songNode, "al"), "picUrl");
-        if (!albumCover.isBlank()) {
+        if (Java8.isNotBlank(albumCover)) {
             return albumCover;
         }
         String albumCoverAlt = str(obj(songNode, "album"), "picUrl");
-        if (!albumCoverAlt.isBlank()) {
+        if (Java8.isNotBlank(albumCoverAlt)) {
             return albumCoverAlt;
         }
         return "";

@@ -1,8 +1,9 @@
 package com.junhsiun.musicplayer.platform.url;
 
 import com.google.gson.JsonObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.junhsiun.musicplayer.util.Java8;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -18,7 +19,7 @@ import static com.junhsiun.musicplayer.platform.url.UrlUtil.isHttpUrl;
  * 该源无法完整播放 VIP 歌曲（可能仅返回前 30 秒试听），故仅作为最后保底。
  */
 public final class MycelisUrlProvider implements SongUrlProvider {
-    private static final Logger LOGGER = LoggerFactory.getLogger(MycelisUrlProvider.class);
+    private static final Logger LOGGER = LogManager.getLogger(MycelisUrlProvider.class);
     private static final String[] LEVELS = {"standard", "higher", "exhigh", "lossless"};
 
     private final SongUrlHttp http;
@@ -54,12 +55,12 @@ public final class MycelisUrlProvider implements SongUrlProvider {
                 JsonObject root = http.getJson(base + "/song/url/v1", "id", songId, "level", level);
                 String url = firstUrl(root);
                 if (isHttpUrl(url)) {
-                    return List.of(url.trim());
+                    return Java8.listOf(url.trim());
                 }
             } catch (Exception e) {
                 LOGGER.trace("Mycelis 音源失败 id={} level={}: {}", songId, level, UrlUtil.rootMessage(e));
             }
         }
-        return List.of();
+        return Java8.listOf();
     }
 }

@@ -2,6 +2,7 @@ package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
+import com.junhsiun.musicplayer.util.Java8;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -42,7 +43,7 @@ public final class CoverArtTextureCache {
     }
 
     public synchronized void request(String coverUrl) {
-        if (coverUrl == null || coverUrl.isBlank()) {
+        if (coverUrl == null || Java8.isBlank(coverUrl)) {
             return;
         }
         CacheEntry existing = entries.get(coverUrl);
@@ -201,7 +202,17 @@ public final class CoverArtTextureCache {
         return Math.min(1.0F, value);
     }
 
-    private record CacheEntry(ResourceLocation textureId, boolean loading, boolean failed) {
+    private static final class CacheEntry {
+        private final ResourceLocation textureId;
+        private final boolean loading;
+        private final boolean failed;
+
+        private CacheEntry(ResourceLocation textureId, boolean loading, boolean failed) {
+            this.textureId = textureId;
+            this.loading = loading;
+            this.failed = failed;
+        }
+
         public static CacheEntry pending() {
             return new CacheEntry(null, true, false);
         }
@@ -212,6 +223,18 @@ public final class CoverArtTextureCache {
 
         public static CacheEntry failure() {
             return new CacheEntry(null, false, true);
+        }
+
+        public ResourceLocation textureId() {
+            return textureId;
+        }
+
+        public boolean loading() {
+            return loading;
+        }
+
+        public boolean failed() {
+            return failed;
         }
     }
 }

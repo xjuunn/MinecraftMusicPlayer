@@ -1,5 +1,6 @@
 package com.junhsiun.musicplayer.model;
 
+import com.junhsiun.musicplayer.util.Java8;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -15,20 +16,20 @@ class QueuedTrackTest {
 
     @Test
     void record字段正确赋值() {
-        QueuedTrack track = new QueuedTrack("100", "歌名", "歌手", "/artist 100", USER, "玩家", List.of("url1", "url2"));
+        QueuedTrack track = new QueuedTrack("100", "歌名", "歌手", "/artist 100", USER, "玩家", Java8.listOf("url1", "url2"));
         assertEquals("100", track.songId());
         assertEquals("歌名", track.title());
         assertEquals("歌手", track.artist());
         assertEquals("/artist 100", track.artistCommand());
         assertEquals(USER, track.requesterId());
         assertEquals("玩家", track.requesterName());
-        assertEquals(List.of("url1", "url2"), track.sourceUrls());
+        assertEquals(Java8.listOf("url1", "url2"), track.sourceUrls());
     }
 
     @Test
     void 相同参数的两个record相等() {
-        QueuedTrack a = new QueuedTrack("1", "t", "a", "c", USER, "n", List.of("u1"));
-        QueuedTrack b = new QueuedTrack("1", "t", "a", "c", USER, "n", List.of("u1"));
+        QueuedTrack a = new QueuedTrack("1", "t", "a", "c", USER, "n", Java8.listOf("u1"));
+        QueuedTrack b = new QueuedTrack("1", "t", "a", "c", USER, "n", Java8.listOf("u1"));
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
     }

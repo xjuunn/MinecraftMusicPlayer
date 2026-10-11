@@ -15,6 +15,7 @@ import com.junhsiun.musicplayer.platform.LyricService;
 import com.junhsiun.musicplayer.util.Messages;
 import com.junhsiun.musicplayer.util.PlayerSongLimiter;
 import com.junhsiun.musicplayer.util.SongRequestPolicy;
+import com.junhsiun.musicplayer.util.Java8;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -41,6 +42,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 public final class MusicQueueService {
     private static final long FALLBACK_TRACK_TIMEOUT_MS = 10 * 60_000L;
@@ -62,7 +64,7 @@ public final class MusicQueueService {
     /** 每玩家已通过校验、但尚未完成异步解析入队的在途点歌数（仅服务端线程访问）。 */
     private final Map<UUID, Integer> pendingSongRequests = new HashMap<>();
     private final LyricService lyricService = new LyricService();
-    private volatile List<LyricLine> currentLyrics = List.of();
+    private volatile List<LyricLine> currentLyrics = Java8.listOf();
     private String globalLastSentLyricText = "";
     private String globalLastLyric = "";
     private int globalLyricRefreshCounter = 0;
@@ -86,7 +88,7 @@ public final class MusicQueueService {
     private boolean playlistReversed = false;
 
     // Radio one-at-a-time state
-    private List<ProgramInfo> cachedRadioPrograms = List.of();
+    private List<ProgramInfo> cachedRadioPrograms = Java8.listOf();
     private int radioProgramIndex = 0;
     private boolean radioPlaylistMode = false;
     private String radioName = "";
@@ -198,9 +200,9 @@ public final class MusicQueueService {
 
     public List<SearchEntry> queuedEntries(int page, int pageSize) {
         if (queue.isEmpty()) {
-            return List.of();
+            return Java8.listOf();
         }
-        List<QueuedTrack> all = queue.stream().toList();
+        List<QueuedTrack> all = queue.stream().collect(Collectors.toList());
         int safePageSize = Math.max(1, pageSize);
         int totalPages = Math.max(1, (int) Math.ceil(all.size() / (double) safePageSize));
         int safePage = Math.max(1, Math.min(page, totalPages));
@@ -222,7 +224,7 @@ public final class MusicQueueService {
 
     public List<SearchEntry> playlistEntries() {
         if (playlistQueue.isEmpty()) {
-            return List.of();
+            return Java8.listOf();
         }
         return playlistQueue.stream()
                 .map(track -> new SearchEntry(
@@ -232,7 +234,7 @@ public final class MusicQueueService {
                         "/music play song " + track.songId(),
                         track.artistCommand()
                 ))
-                .toList();
+                .collect(Collectors.toList());
     }
 
     // ── Tick / lifecycle ───────────────────────────────────────────────
@@ -270,7 +272,7 @@ public final class MusicQueueService {
             }
         }
 
-        for (ServerPlayer player : List.copyOf(server.getPlayerList().getPlayers())) {
+        for (ServerPlayer player : Java8.copyOf(server.getPlayerList().getPlayers())) {
             if (optedOutPlayers.contains(player.getUUID())) continue;
             Boolean pref = lyricsPreference.get(player.getUUID());
             boolean playerWantsLyrics;
@@ -287,7 +289,7 @@ public final class MusicQueueService {
 
             if (nearJukebox) {
                 String jtId = MusicPlayerMod.jukeboxService().getJukeboxTrackIdForPlayer(player);
-                if (!jtId.isBlank()) {
+                if (Java8.isNotBlank(jtId)) {
                     if (!jtId.equals(playerJukeboxTrackId.get(player.getUUID()))) {
                         playerJukeboxTrackId.put(player.getUUID(), jtId);
                         if (!jukeboxLyricsCache.containsKey(jtId)) {
@@ -433,7 +435,7 @@ public final class MusicQueueService {
 
     public void initLyricsState(MinecraftServer server) {
         lyricsPreferenceState = server.overworld().getDataStorage()
-                .computeIfAbsent(LyricsPreferenceState::fromTag, LyricsPreferenceState::new, LyricsPreferenceState.storageId());
+                .computeIfAbsent(LyricsPreferenceState::new, LyricsPreferenceState.storageId());
     }
 
     // ── Player join / leave / report ─────────────────────────────────
@@ -462,7 +464,7 @@ public final class MusicQueueService {
         if (payload == null || optedOutPlayers.contains(player.getUUID())) {
             return;
         }
-        if (payload.trackId() == null || payload.trackId().isBlank()) {
+        if (payload.trackId() == null || Java8.isBlank(payload.trackId())) {
             return;
         }
 
@@ -484,7 +486,7 @@ public final class MusicQueueService {
             return;
         }
         if ("failed".equals(payload.action())) {
-            Component reason = payload.message() == null || payload.message().isBlank()
+            Component reason = payload.message() == null || Java8.isBlank(payload.message())
                     ? new TranslatableComponent("musicplayer.play.failed_advance")
                     : new TranslatableComponent("musicplayer.play.failed_advance_reason",
                     Messages.textOrTranslatable(payload.message()));
@@ -532,7 +534,7 @@ public final class MusicQueueService {
                 queue.size() + totalPendingSongRequests(),
                 config.maxQueueSize,
                 currentPlayback == null ? null : currentPlayback.requesterId(),
-                queue.stream().toList(),
+                queue.stream().collect(Collectors.toList()),
                 requesterUuid,
                 config.maxSongsPerPlayer,
                 pendingSongRequests.getOrDefault(requesterUuid, 0),
@@ -680,7 +682,7 @@ public final class MusicQueueService {
                                 resolveTrack(entry.id()).thenAccept(track -> {
                                     playlistQueue.addLast(new QueuedTrack(
                                             track.id(), track.title(), track.artist(),
-                                            track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
+                                            track.artistId() == null || Java8.isBlank(track.artistId()) ? "" : "/music view artist " + track.artistId(),
                                             playlistRequesterId, playlistRequesterName,
                                             track.sourceUrls()
                                     ));
@@ -726,7 +728,7 @@ public final class MusicQueueService {
                         futures[i] = resolveTrack(entry.id()).thenAccept(track -> {
                                     playlistQueue.addLast(new QueuedTrack(
                                             track.id(), track.title(), track.artist(),
-                                            track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
+                                            track.artistId() == null || Java8.isBlank(track.artistId()) ? "" : "/music view artist " + track.artistId(),
                                             playlistRequesterId, playlistRequesterName,
                                             track.sourceUrls()
                                     ));
@@ -750,7 +752,7 @@ public final class MusicQueueService {
 
     public void requestProgram(MinecraftServer server, CommandSourceStack source, ServerPlayer requester, String programId) {
         enqueueRequest(() -> MusicPlayerMod.netease().programDetail(programId).thenCompose(program -> {
-            if (program == null || program.mainTrackId().isBlank()) {
+            if (program == null || Java8.isBlank(program.mainTrackId())) {
                 server.execute(() -> source.sendFailure(new TranslatableComponent("musicplayer.radio.program_no_audio")));
                 return CompletableFuture.<Void>completedFuture(null);
             }
@@ -760,7 +762,7 @@ public final class MusicQueueService {
                     return null;
                 }
                 String programTitle = program.name();
-                String radioName = program.radioName().isBlank() ? "播客" : program.radioName();
+                String radioName = Java8.isBlank(program.radioName()) ? "播客" : program.radioName();
                 TrackInfo programTrack = new TrackInfo(track.id(), programTitle, radioName, "", program.coverUrl(), track.sourceUrls(), program.durationMillis());
                 server.execute(() -> enqueueOrStart(server, source, requester, programTrack));
                 return null;
@@ -794,7 +796,7 @@ public final class MusicQueueService {
                 resetPlaylistState();
 
                 // Cache all program metadata, but only resolve audio one at a time
-                cachedRadioPrograms = List.copyOf(programs);
+                cachedRadioPrograms = Java8.copyOf(programs);
                 radioProgramIndex = 0;
                 radioPlaylistMode = true;
                 this.radioName = radioName;
@@ -831,7 +833,7 @@ public final class MusicQueueService {
             return CompletableFuture.completedFuture(null);
         }
         ProgramInfo prog = cachedRadioPrograms.get(index);
-        if (prog.mainTrackId().isBlank()) {
+        if (Java8.isBlank(prog.mainTrackId())) {
             server.execute(() -> {
                 playlistTotalTracks--;
                 if (onSuccess != null) onSuccess.run();
@@ -909,7 +911,7 @@ public final class MusicQueueService {
     }
 
     private void cleanUpRadioPlaylist() {
-        cachedRadioPrograms = List.of();
+        cachedRadioPrograms = Java8.listOf();
         radioProgramIndex = 0;
         radioPlaylistMode = false;
         radioResolvedTracks.clear();
@@ -940,7 +942,7 @@ public final class MusicQueueService {
                         }
                         playlistQueue.addLast(new QueuedTrack(
                                 track.id(), track.title(), track.artist(),
-                                track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
+                                track.artistId() == null || Java8.isBlank(track.artistId()) ? "" : "/music view artist " + track.artistId(),
                                 playlistRequesterId, playlistRequesterName,
                                 track.sourceUrls()
                         ));
@@ -994,7 +996,7 @@ public final class MusicQueueService {
     }
 
     public void stop(MinecraftServer server, String reason) {
-        stopPlayback(server, reason == null || reason.isBlank() ? null : Messages.textOrTranslatable(reason));
+        stopPlayback(server, Java8.isBlank(reason) ? null : Messages.textOrTranslatable(reason));
     }
 
     private void stopPlayback(MinecraftServer server, Component reason) {
@@ -1006,7 +1008,7 @@ public final class MusicQueueService {
         refreshTrackCache();
         String payload = payloadReason(reason);
         server.getPlayerList().getPlayers().forEach(player -> sendStop(player, payload));
-        if (reason != null && !reason.getString().isBlank()) {
+        if (reason != null && Java8.isNotBlank(reason.getString())) {
             broadcast(server, reason.copy().withStyle(ChatFormatting.YELLOW));
         }
     }
@@ -1016,7 +1018,8 @@ public final class MusicQueueService {
         if (reason == null) {
             return "";
         }
-        if (reason instanceof TranslatableComponent translatable) {
+        if (reason instanceof TranslatableComponent) {
+            TranslatableComponent translatable = (TranslatableComponent) reason;
             return translatable.getKey();
         }
         return reason.getString();
@@ -1029,7 +1032,7 @@ public final class MusicQueueService {
     }
 
     public boolean moveQueuedTrackToFront(String songId) {
-        if (songId == null || songId.isBlank() || queue.isEmpty()) {
+        if (songId == null || Java8.isBlank(songId) || queue.isEmpty()) {
             return false;
         }
         QueuedTrack target = null;
@@ -1049,7 +1052,7 @@ public final class MusicQueueService {
     }
 
     public boolean removeFromQueue(String songId) {
-        if (songId == null || songId.isBlank() || queue.isEmpty()) {
+        if (songId == null || Java8.isBlank(songId) || queue.isEmpty()) {
             return false;
         }
         boolean removed = queue.removeIf(track -> songId.equals(track.songId()));
@@ -1093,7 +1096,7 @@ public final class MusicQueueService {
                 lines.add(new TranslatableComponent("musicplayer.queue.empty").withStyle(ChatFormatting.GRAY));
             }
         } else {
-            List<QueuedTrack> all = queue.stream().toList();
+            List<QueuedTrack> all = queue.stream().collect(Collectors.toList());
             int safePageSize = Math.max(1, pageSize);
             int totalPages = Math.max(1, (int) Math.ceil(all.size() / (double) safePageSize));
             int safePage = Math.max(1, Math.min(page, totalPages));
@@ -1105,7 +1108,7 @@ public final class MusicQueueService {
                 MutableComponent line = new TextComponent((index + 1) + ". ").withStyle(ChatFormatting.DARK_GRAY)
                         .append(Messages.clickableCommand(new TextComponent(queuedTrack.title()), new TranslatableComponent("musicplayer.queue.replay_hover"), "/music play song " + queuedTrack.songId(), ChatFormatting.GREEN))
                         .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY));
-                if (queuedTrack.artistCommand() != null && !queuedTrack.artistCommand().isBlank()) {
+                if (queuedTrack.artistCommand() != null && Java8.isNotBlank(queuedTrack.artistCommand())) {
                     line.append(Messages.clickableCommand(new TextComponent(queuedTrack.artist()), new TranslatableComponent("musicplayer.common.view_artist_hover"), queuedTrack.artistCommand(), ChatFormatting.GRAY));
                 } else {
                     line.append(new TextComponent(queuedTrack.artist()).withStyle(ChatFormatting.GRAY));
@@ -1142,7 +1145,7 @@ public final class MusicQueueService {
                 track.id(),
                 track.title(),
                 track.artist(),
-                track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
+                track.artistId() == null || Java8.isBlank(track.artistId()) ? "" : "/music view artist " + track.artistId(),
                 requester.getUUID(),
                 requester.getGameProfile().getName(),
                 track.sourceUrls()
@@ -1152,7 +1155,7 @@ public final class MusicQueueService {
             broadcast(server, new TranslatableComponent("musicplayer.queue.requested", requester.getGameProfile().getName()).withStyle(ChatFormatting.GOLD)
                     .append(Messages.clickableCommand(new TextComponent(track.title()), new TranslatableComponent("musicplayer.queue.replay_hover"), "/music play song " + track.id(), ChatFormatting.AQUA))
                     .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY))
-                    .append(track.artistId() != null && !track.artistId().isBlank()
+                    .append(track.artistId() != null && Java8.isNotBlank(track.artistId())
                             ? Messages.clickableCommand(new TextComponent(track.artist()), new TranslatableComponent("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY)
                             : new TextComponent(track.artist()).withStyle(ChatFormatting.GRAY)));
         } else {
@@ -1176,18 +1179,24 @@ public final class MusicQueueService {
 
         // Priority 2: playlist queue (low-priority "micro" tasks)
         if (!playlistQueue.isEmpty()) {
-            QueuedTrack next = switch (playOrder) {
-                case REVERSE -> playlistQueue.removeLast();
-                case SHUFFLE -> {
+            QueuedTrack next;
+            switch (playOrder) {
+                case REVERSE:
+                    next = playlistQueue.removeLast();
+                    break;
+                case SHUFFLE: {
                     List<QueuedTrack> temp = new ArrayList<>(playlistQueue);
                     playlistQueue.clear();
                     int idx = temp.isEmpty() ? 0 : new Random().nextInt(temp.size());
                     QueuedTrack picked = temp.remove(idx);
                     playlistQueue.addAll(temp);
-                    yield picked;
+                    next = picked;
+                    break;
                 }
-                default -> playlistQueue.removeFirst();
-            };
+                default:
+                    next = playlistQueue.removeFirst();
+                    break;
+            }
             int consumed;
             if (playlistReversed) {
                 int totalProcessed = (playlistTotalTracks - 1) - playlistTrackIndex;
@@ -1252,7 +1261,7 @@ public final class MusicQueueService {
                 advance(server, null);
                 return;
             }
-            if (reason != null && !reason.getString().isBlank()) {
+            if (reason != null && Java8.isNotBlank(reason.getString())) {
                 broadcast(server, reason.copy().withStyle(ChatFormatting.YELLOW));
             }
             try {
@@ -1300,7 +1309,7 @@ public final class MusicQueueService {
                 });
         broadcast(server, renderNowPlayingBroadcast(track));
 
-        currentLyrics = List.of();
+        currentLyrics = Java8.listOf();
         globalLastSentLyricText = "";
         globalLastLyric = "";
         globalLyricRefreshCounter = 0;
@@ -1349,7 +1358,7 @@ public final class MusicQueueService {
     }
 
     private void clearLyrics(MinecraftServer server) {
-        currentLyrics = List.of();
+        currentLyrics = Java8.listOf();
         globalLastSentLyricText = "";
         globalLastLyric = "";
         globalLyricRefreshCounter = 0;
@@ -1374,7 +1383,7 @@ public final class MusicQueueService {
     }
 
     private boolean isTrackActiveOrQueued(String songId) {
-        if (songId == null || songId.isBlank()) {
+        if (songId == null || Java8.isBlank(songId)) {
             return false;
         }
         if (currentPlayback != null && songId.equals(currentPlayback.track().id())) {
@@ -1410,7 +1419,7 @@ public final class MusicQueueService {
         MutableComponent line = new TranslatableComponent("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
                 .append(Messages.clickableUrl(new TextComponent(track.title()), new TranslatableComponent("musicplayer.common.open_browser_hover"), Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
                 .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY));
-        if (track.artistId() != null && !track.artistId().isBlank()) {
+        if (track.artistId() != null && Java8.isNotBlank(track.artistId())) {
             line.append(Messages.clickableCommand(new TextComponent(track.artist()), new TranslatableComponent("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY));
         } else {
             line.append(new TextComponent(track.artist()).withStyle(ChatFormatting.GRAY));
@@ -1431,7 +1440,7 @@ public final class MusicQueueService {
         MutableComponent line = new TranslatableComponent("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
                 .append(Messages.clickableUrl(new TextComponent(track.title()), new TranslatableComponent("musicplayer.common.open_browser_hover"), Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
                 .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY));
-        if (track.artistId() != null && !track.artistId().isBlank()) {
+        if (track.artistId() != null && Java8.isNotBlank(track.artistId())) {
             line.append(Messages.clickableCommand(new TextComponent(track.artist()), new TranslatableComponent("musicplayer.common.view_artist_hover"), "/music view artist " + track.artistId(), ChatFormatting.GRAY));
         } else {
             line.append(new TextComponent(track.artist()).withStyle(ChatFormatting.GRAY));
@@ -1562,6 +1571,66 @@ public final class MusicQueueService {
         return current.getMessage() == null ? current.toString() : current.getMessage();
     }
 
-    private record CurrentPlayback(TrackInfo track, long startedAt, long expectedEndAt, UUID requesterId, String requesterName) {
+    private static final class CurrentPlayback {
+        private final TrackInfo track;
+        private final long startedAt;
+        private final long expectedEndAt;
+        private final UUID requesterId;
+        private final String requesterName;
+
+        private CurrentPlayback(TrackInfo track, long startedAt, long expectedEndAt, UUID requesterId, String requesterName) {
+            this.track = track;
+            this.startedAt = startedAt;
+            this.expectedEndAt = expectedEndAt;
+            this.requesterId = requesterId;
+            this.requesterName = requesterName;
+        }
+
+        private TrackInfo track() {
+            return track;
+        }
+
+        private long startedAt() {
+            return startedAt;
+        }
+
+        private long expectedEndAt() {
+            return expectedEndAt;
+        }
+
+        private UUID requesterId() {
+            return requesterId;
+        }
+
+        private String requesterName() {
+            return requesterName;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof CurrentPlayback)) {
+                return false;
+            }
+            CurrentPlayback that = (CurrentPlayback) o;
+            return startedAt == that.startedAt
+                    && expectedEndAt == that.expectedEndAt
+                    && Objects.equals(track, that.track)
+                    && Objects.equals(requesterId, that.requesterId)
+                    && Objects.equals(requesterName, that.requesterName);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(track, startedAt, expectedEndAt, requesterId, requesterName);
+        }
+
+        @Override
+        public String toString() {
+            return "CurrentPlayback{track=" + track + ", startedAt=" + startedAt + ", expectedEndAt=" + expectedEndAt
+                    + ", requesterId=" + requesterId + ", requesterName='" + requesterName + "'}";
+        }
     }
 }

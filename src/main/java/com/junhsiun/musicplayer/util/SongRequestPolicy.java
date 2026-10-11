@@ -3,6 +3,7 @@ package com.junhsiun.musicplayer.util;
 import com.junhsiun.musicplayer.model.QueuedTrack;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -22,15 +23,61 @@ public final class SongRequestPolicy {
     }
 
     /** 点歌决策结果。{@code key} 为翻译键（为空表示允许点歌），{@code args} 为翻译参数。 */
-    public record Decision(Kind kind, String key, List<Object> args) {
+    public static final class Decision {
+        private final Kind kind;
+        private final String key;
+        private final List<Object> args;
+
+        public Decision(Kind kind, String key, List<Object> args) {
+            this.kind = kind;
+            this.key = key;
+            this.args = args;
+        }
+
+        public Kind kind() {
+            return kind;
+        }
+
+        public String key() {
+            return key;
+        }
+
+        public List<Object> args() {
+            return args;
+        }
+
         /** 允许点歌的便捷构造。 */
         public static Decision allowed() {
-            return new Decision(Kind.NOTICE, "", List.of());
+            return new Decision(Kind.NOTICE, "", Java8.listOf());
         }
 
         /** 允许点歌（key 为空）。 */
         public boolean isAllowed() {
             return key == null || key.isEmpty();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof Decision)) {
+                return false;
+            }
+            Decision that = (Decision) o;
+            return kind == that.kind
+                    && Objects.equals(key, that.key)
+                    && Objects.equals(args, that.args);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(kind, key, args);
+        }
+
+        @Override
+        public String toString() {
+            return "Decision{kind=" + kind + ", key='" + key + "', args=" + args + "}";
         }
     }
 
@@ -90,16 +137,16 @@ public final class SongRequestPolicy {
             boolean songActiveOrQueued) {
 
         if (!allowSongRequest) {
-            return new Decision(Kind.REJECT, "musicplayer.request.disabled", List.of());
+            return new Decision(Kind.REJECT, "musicplayer.request.disabled", Java8.listOf());
         }
         if (queueSize >= maxQueueSize) {
-            return new Decision(Kind.REJECT, "musicplayer.request.queue_full", List.of());
+            return new Decision(Kind.REJECT, "musicplayer.request.queue_full", Java8.listOf());
         }
         if (!PlayerSongLimiter.canRequest(playingRequesterId, queued, player, maxSongsPerPlayer, pendingCount)) {
-            return new Decision(Kind.REJECT, "musicplayer.request.player_limit", List.of(maxSongsPerPlayer));
+            return new Decision(Kind.REJECT, "musicplayer.request.player_limit", Java8.listOf(maxSongsPerPlayer));
         }
         if (songActiveOrQueued) {
-            return new Decision(Kind.NOTICE, "musicplayer.request.duplicate", List.of());
+            return new Decision(Kind.NOTICE, "musicplayer.request.duplicate", Java8.listOf());
         }
         return Decision.allowed();
     }

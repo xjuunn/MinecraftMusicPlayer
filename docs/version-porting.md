@@ -129,7 +129,39 @@
 - **测试需要显式 gson**：MC 1.17 自带旧版 Gson，无 `JsonParser.parseString`；`testImplementation('com.google.code.gson:gson:2.11.0')`。
 - **运行时 Gson 太旧（2.8.0）**：静态方法 `JsonParser.parseString` / `parseReader` 不存在，主代码必须用实例方法 `new JsonParser().parse(...)`（新旧版本均可用；测试可用新 API）。`JsonArray.isEmpty()` 也不存在，必须用 `size() == 0` / `size() != 0`。
 - **fabric-api 模组 id 是 `fabric` 而非 `fabric-api`**（0.46.x 时代）：`fabric.mod.json` 的 `depends` 键需写 `"fabric"`，否则开发环境与生产环境均报缺依赖。
-- Java 保持 17（代码大量使用 pattern matching instanceof 等）；1.17.1 官方启动器默认 Java 16，但 Java 17 可正常运行；`fabric.mod.json` 的 `depends.java` 为 `>=17`。
+
+## 1.16.x 专项注意（基于 1.17.1 分支）
+
+- **日志无 slf4j**：1.16 自带 Log4j2；所有 `org.slf4j.Logger` / `LoggerFactory` 改为 `org.apache.logging.log4j.Logger` / `LogManager`（7 个文件）。
+- **`Tag` 无 `TAG_COMPOUND`/`TAG_LIST`/`TAG_STRING` 常量**：直接用数字字面量 `10`/`9`/`8`。
+- **`SavedData`**：构造器为 `SavedData(String id)`；无 `load` 静态工厂，需实现抽象实例方法 `load(CompoundTag)`；`DimensionDataStorage.computeIfAbsent` 只有两参 `(Supplier<T>, String)`，去掉 `fromTag` 工厂参数。
+- **`Player.getInventory()` 不存在**：用公开字段 `player.inventory`。
+- **fabric-api 版本后缀是 `+1.16`**（如 `0.42.0+1.16`）。
+- **fabric-loader 版本**：0.15+ 要求 Java 21；对齐 Java 8 时使用 `loader_version=0.14.22`。
+
+## Java 8 对齐（1.16.5 分支）
+
+1.16.5 官方要求 Java 8；分支已完全对齐官方 Java 8，`options.release=8`、`sourceCompatibility/targetCompatibility=VERSION_1_8`、mixin `compatibilityLevel: JAVA_8`、`fabric.mod.json` `"java": ">=8"`。
+
+主要降级工作（约 90 个源文件）：
+
+| 项目 | 改法 |
+|---|---|
+| `record` | 转为 `public final class`（保留组件访问器方法名如 `id()`，实现 equals/hashCode/toString）；嵌套 record 转 `static final class` |
+| 模式匹配 `instanceof`（22 处） | `if (x instanceof Type t)` → `if (x instanceof Type) { Type t = (Type) x; ... }` |
+| 箭头 switch / switch 表达式（8 处） | 改为传统冒号 switch + break/return；switch 表达式先声明变量再赋值 |
+| `List.of` / `Set.of`（183 处） | `Java8.listOf(...)` / `Java8.setOf(...)`（`src/main/.../util/Java8.java`） |
+| `List.copyOf` | `Java8.copyOf(list)`；传入 Set 时先 `new ArrayList<>(set)` |
+| `.isBlank()` | `Java8.isBlank(x)` / `Java8.isNotBlank(x)` |
+| `.repeat()` | `Java8.repeat(s, n)` |
+| `stream().toList()` | `stream().collect(Collectors.toList())` |
+| `Files.writeString` | `Files.write(path, bytes.getBytes(StandardCharsets.UTF_8))` |
+| `var` | 显式类型 |
+| `CompletableFuture.orTimeout` | `ScheduledExecutorService` 等价实现（`SongUrlResolver`、`LootMusicDiscService`） |
+| `CompletableFuture.delayedExecutor` | 手动 `Thread` + `future` 或 `ScheduledExecutorService` |
+| `Collection.toArray(T[]::new)` | `toArray(new T[0])` |
+
+测试代码同样需要降级（`options.release=8` 作用于所有 `JavaCompile` 任务）。
 
 ## 已完成版本分支参考
 
@@ -143,6 +175,7 @@
 | `1.19.2` | 1.19.2 | 17 | `0.77.x+1.19.2` |
 | `1.18.2` | 1.18.2 | 17 | `0.77.0+1.18.2` |
 | `1.17.1` | 1.17.1 | 17 | `0.46.1+1.17` |
+| `1.16.5` | 1.16.5 | 17 | `0.42.0+1.16` |
 
 - `fabric_api_version` 以 [fabricmc.net/develop](https://fabricmc.net/develop) 查询为准，解析失败（TLS/404）时重试或换邻近版本。
 - loader 版本注意：fabric-loader 0.15+ 需要 Java 21 运行时；低版本 MC 常见 Java 17 环境，如需兼容运行时可考虑 pin 到 0.14.x（仅在用户要求时调整）。

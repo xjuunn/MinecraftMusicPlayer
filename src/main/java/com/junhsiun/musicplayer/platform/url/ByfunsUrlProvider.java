@@ -1,7 +1,8 @@
 package com.junhsiun.musicplayer.platform.url;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.junhsiun.musicplayer.util.Java8;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -15,7 +16,7 @@ import static com.junhsiun.musicplayer.platform.url.UrlUtil.isHttpUrl;
  * 支持 VIP 歌曲，优先使用靠前的高音质档位。
  */
 public final class ByfunsUrlProvider implements SongUrlProvider {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ByfunsUrlProvider.class);
+    private static final Logger LOGGER = LogManager.getLogger(ByfunsUrlProvider.class);
     private static final String BASE_URL = "https://api.byfuns.top/1/";
     // 不使用 lossless：它返回 FLAC 无损直链，而客户端 JLayer 只能解码 MP3。
     // 使用 exhigh/higher/standard（MP3 档位），与旧实现保持一致以确保可播放。
@@ -50,12 +51,12 @@ public final class ByfunsUrlProvider implements SongUrlProvider {
                     url = url.trim();
                 }
                 if (isHttpUrl(url)) {
-                    return List.of(url);
+                    return Java8.listOf(url);
                 }
             } catch (Exception e) {
                 LOGGER.trace("Byfuns 音源失败 id={} level={}: {}", songId, level, UrlUtil.rootMessage(e));
             }
         }
-        return List.of();
+        return Java8.listOf();
     }
 }

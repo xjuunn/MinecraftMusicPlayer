@@ -2,6 +2,7 @@ package com.junhsiun.musicplayer.platform;
 
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
+import com.junhsiun.musicplayer.util.Java8;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,7 +26,7 @@ public final class ArtistTopSongSource implements RandomSongSource {
         return client.topArtists(ARTIST_FETCH_LIMIT, ARTIST_FETCH_OFFSET)
                 .thenCompose(artists -> {
                     if (artists.isEmpty()) {
-                        return CompletableFuture.completedFuture(List.of());
+                        return CompletableFuture.completedFuture(Java8.listOf());
                     }
                     Random random = new Random();
                     List<SearchEntry> shuffled = new ArrayList<>(artists);
@@ -36,7 +37,7 @@ public final class ArtistTopSongSource implements RandomSongSource {
                         String artistId = shuffled.get(i).id();
                         artistFutures.add(client.artistTopSongs(artistId));
                     }
-                    return CompletableFuture.allOf(artistFutures.toArray(CompletableFuture[]::new))
+                    return CompletableFuture.allOf(artistFutures.toArray(new CompletableFuture[0]))
                             .thenApply(ignored -> {
                                 List<TrackInfo> allTracks = new ArrayList<>();
                                 for (CompletableFuture<List<TrackInfo>> future : artistFutures) {

@@ -14,6 +14,7 @@ import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.model.UserPlaylistView;
 import com.junhsiun.musicplayer.network.OpenUrlPayload;
 import com.junhsiun.musicplayer.util.Messages;
+import com.junhsiun.musicplayer.util.Java8;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
@@ -38,6 +39,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.DoubleConsumer;
 import java.util.function.IntConsumer;
@@ -123,9 +125,10 @@ public final class MusicCommands {
     }
 
     private static int sendStarAchievement(CommandSourceStack source) {
-        if (!(source.getEntity() instanceof ServerPlayer player)) {
+        if (!(source.getEntity() instanceof ServerPlayer)) {
             return 0;
         }
+        ServerPlayer player = (ServerPlayer) source.getEntity();
         grantStarAchievement(source.getServer(), player);
         if (ServerPlayNetworking.canSend(player, OpenUrlPayload.ID)) {
             OpenUrlPayload.send(player, new OpenUrlPayload(REPOSITORY_URL));
@@ -161,93 +164,108 @@ public final class MusicCommands {
     private static int sendHelpFor(CommandSourceStack source, String subcommand) {
         sendHeader(source);
         switch (subcommand) {
-            case "now" -> {
+            case "now": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("now"), null), false);
                 detailLine(source, "/music now", new TranslatableComponent("musicplayer.help.usage.now"));
+                break;
             }
-            case "queue" -> {
+            case "queue": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("queue"), null), false);
                 detailLine(source, "/music queue", new TranslatableComponent("musicplayer.help.usage.queue"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.queue_promote"), new TranslatableComponent("musicplayer.help.usage.queue_promote"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.queue_remove"), new TranslatableComponent("musicplayer.help.usage.queue_remove"));
                 detailLine(source, "/music queue clear", new TranslatableComponent("musicplayer.help.usage.queue_clear"));
+                break;
             }
-            case "play" -> {
+            case "play": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("play"), null), false);
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.play_song"), new TranslatableComponent("musicplayer.help.usage.play_song"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.play_playlist"), new TranslatableComponent("musicplayer.help.usage.play_playlist"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.play_playlist_reverse"), new TranslatableComponent("musicplayer.help.usage.play_playlist_reverse"));
+                break;
             }
-            case "playlist" -> {
+            case "playlist": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("playlist"), null), false);
                 detailLine(source, "/music playlist", new TranslatableComponent("musicplayer.help.usage.playlist"));
                 detailLine(source, "/music playlist list", new TranslatableComponent("musicplayer.help.usage.playlist_list"));
                 detailLine(source, "/music playlist stop", new TranslatableComponent("musicplayer.help.usage.playlist_stop"));
                 detailLine(source, "/music playlist order", new TranslatableComponent("musicplayer.help.usage.playlist_order"));
+                break;
             }
-            case "skip" -> {
+            case "skip": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("skip"), null), false);
                 detailLine(source, "/music skip", new TranslatableComponent("musicplayer.help.usage.skip"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.skip_requester"), new TranslatableComponent("musicplayer.help.usage.skip_no_vote"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.skip_admin"), new TranslatableComponent("musicplayer.help.usage.skip_no_vote"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.skip_vote"), new TranslatableComponent("musicplayer.help.usage.skip_vote"));
+                break;
             }
-            case "search" -> {
+            case "search": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("search"), null), false);
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.search_song"), new TranslatableComponent("musicplayer.help.usage.search_song"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.search_artist"), new TranslatableComponent("musicplayer.help.usage.search_artist"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.search_playlist"), new TranslatableComponent("musicplayer.help.usage.search_playlist"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.search_user"), new TranslatableComponent("musicplayer.help.usage.search_user"));
+                break;
             }
-            case "view" -> {
+            case "view": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("view"), null), false);
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.view_playlist"), new TranslatableComponent("musicplayer.help.usage.view_playlist"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.view_artist"), new TranslatableComponent("musicplayer.help.usage.view_artist"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.view_user"), new TranslatableComponent("musicplayer.help.usage.view_user"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.view_url"), new TranslatableComponent("musicplayer.help.usage.view_url"));
+                break;
             }
-            case "join" -> {
+            case "join": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("join"), null), false);
                 detailLine(source, "/music join", new TranslatableComponent("musicplayer.help.usage.join"));
+                break;
             }
-            case "leave" -> {
+            case "leave": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("leave"), null), false);
                 detailLine(source, "/music leave", new TranslatableComponent("musicplayer.help.usage.leave"));
+                break;
             }
-            case "mute" -> {
+            case "mute": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("mute"), null), false);
                 detailLine(source, "/music mute once", new TranslatableComponent("musicplayer.help.usage.mute_once"));
+                break;
             }
-            case "burn" -> {
+            case "burn": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("burn"), null), false);
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.burn_song"), new TranslatableComponent("musicplayer.help.usage.burn_song"));
+                break;
             }
-            case "random" -> {
+            case "random": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("random"), null), false);
                 detailLine(source, "/music random", new TranslatableComponent("musicplayer.help.usage.random"));
+                break;
             }
-            case "help" -> {
+            case "help": {
                 return sendHelpOverview(source);
             }
-            case "lyrics" -> {
+            case "lyrics": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("lyrics"), null), false);
                 detailLine(source, "/music lyrics", new TranslatableComponent("musicplayer.help.usage.lyrics"));
                 detailLine(source, "/music lyrics on", new TranslatableComponent("musicplayer.help.usage.lyrics_on"));
                 detailLine(source, "/music lyrics off", new TranslatableComponent("musicplayer.help.usage.lyrics_off"));
                 detailLine(source, "/music lyrics status", new TranslatableComponent("musicplayer.help.usage.lyrics_status"));
+                break;
             }
-            case "stop" -> {
+            case "stop": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("stop"), null), false);
                 detailLine(source, "/music stop", new TranslatableComponent("musicplayer.help.usage.stop"));
+                break;
             }
-            case "config" -> {
+            case "config": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("config"), null), false);
                 detailLine(source, "/music config reload", new TranslatableComponent("musicplayer.help.usage.config_reload"));
                 detailLine(source, "/music config status", new TranslatableComponent("musicplayer.help.usage.config_status"));
                 detailLine(source, "/music config clearqueue", new TranslatableComponent("musicplayer.help.usage.config_clearqueue"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.config_set"), new TranslatableComponent("musicplayer.help.usage.config_set"));
+                break;
             }
-            case "radio" -> {
+            case "radio": {
                 Messages.sendSuccess(source,  sectionHeader(new TextComponent("radio"), null), false);
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.radio_hot"), new TranslatableComponent("musicplayer.help.usage.radio_hot"));
                 detailLine(source, "/music radio categories", new TranslatableComponent("musicplayer.help.usage.radio_categories"));
@@ -257,8 +275,9 @@ public final class MusicCommands {
                 detailLine(source, "/music play program <id>", new TranslatableComponent("musicplayer.help.usage.play_program"));
                 detailLine(source, "/music play radio <id>", new TranslatableComponent("musicplayer.help.usage.play_radio"));
                 detailLine(source, "/music play radio <id> reverse", new TranslatableComponent("musicplayer.help.usage.play_radio_reverse"));
+                break;
             }
-            default -> {
+            default: {
                 Messages.sendSuccess(source,  new TranslatableComponent("musicplayer.help.unknown_subcommand", subcommand).withStyle(ChatFormatting.RED), false);
                 Messages.sendSuccess(source,  spacer(), false);
                 return sendHelpOverview(source);
@@ -317,7 +336,8 @@ public final class MusicCommands {
                 .then(Commands.argument("delta", IntegerArgumentType.integer()).executes(context -> {
                     int delta = IntegerArgumentType.getInteger(context, "delta");
                     MusicPlayerMod.queueService().seek(context.getSource().getServer(), delta);
-                    if (context.getSource().getEntity() instanceof ServerPlayer player) {
+                    if (context.getSource().getEntity() instanceof ServerPlayer) {
+                        ServerPlayer player = (ServerPlayer) context.getSource().getEntity();
                         String icon = delta >= 0 ? "⏩" : "⏪";
                         player.displayClientMessage(new TextComponent(icon + "  ").withStyle(ChatFormatting.GRAY)
                                 .append(new TranslatableComponent("musicplayer.seek.seconds", Math.abs(delta)).withStyle(ChatFormatting.GRAY)), false);
@@ -876,7 +896,7 @@ public final class MusicCommands {
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_auto", yesNo(config.autoAdvance), yesNo(config.showLoadingHints)), false);
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_lyrics", yesNo(config.showLyrics)), false);
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_proxy",
-                            !config.proxy.isBlank()
+                            Java8.isNotBlank(config.proxy)
                                     ? new TranslatableComponent("musicplayer.config.proxy_manual", config.proxy)
                                     : new TranslatableComponent(config.useSystemProxy ? "musicplayer.config.proxy_auto" : "musicplayer.config.proxy_direct")), false);
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_network", yesNo(config.preferIpv4), config.connectTimeoutSeconds, config.readTimeoutSeconds), false);
@@ -915,7 +935,7 @@ public final class MusicCommands {
                             String value = StringArgumentType.getString(context, "value").trim();
                             MusicPlayerConfigManager.get().proxy = "none".equalsIgnoreCase(value) ? "" : value;
                             MusicPlayerConfigManager.save();
-                            Messages.success(context.getSource(), new TranslatableComponent("musicplayer.config.proxy_updated", MusicPlayerConfigManager.get().proxy.isBlank() ? "<none>" : MusicPlayerConfigManager.get().proxy), false);
+                            Messages.success(context.getSource(), new TranslatableComponent("musicplayer.config.proxy_updated", Java8.isBlank(MusicPlayerConfigManager.get().proxy) ? "<none>" : MusicPlayerConfigManager.get().proxy), false);
                             return 1;
                         })))
                         .then(intSetting("connectTimeoutSeconds", 3, 60, value -> MusicPlayerConfigManager.get().connectTimeoutSeconds = value))
@@ -1149,7 +1169,7 @@ public final class MusicCommands {
         sendHeader(source);
         Messages.sendSuccess(source,  new TranslatableComponent("musicplayer.view.user_prefix").withStyle(ChatFormatting.GOLD)
                 .append(clickableText(user.name(), "/music view user " + user.id(), new TranslatableComponent("musicplayer.common.view_user_playlists_hover"), ChatFormatting.AQUA)), false);
-        if (user.signature() != null && !user.signature().isBlank()) {
+        if (user.signature() != null && Java8.isNotBlank(user.signature())) {
             Messages.sendSuccess(source,  spacer(), false);
             Messages.sendSuccess(source,  new TextComponent(user.signature()).withStyle(ChatFormatting.GRAY), false);
         }
@@ -1188,7 +1208,7 @@ public final class MusicCommands {
                     sendHeader(source);
                     Messages.sendSuccess(source,  new TranslatableComponent("musicplayer.view.artist_prefix").withStyle(ChatFormatting.GOLD)
                             .append(clickableText(artist.name(), "/music view " + literal + " " + artist.id(), new TranslatableComponent("musicplayer.common.view_artist_hover"), ChatFormatting.AQUA)), false);
-                    if (artist.description() != null && !artist.description().isBlank()) {
+                    if (artist.description() != null && Java8.isNotBlank(artist.description())) {
                         Messages.sendSuccess(source,  spacer(), false);
                         Messages.sendSuccess(source,  new TextComponent(artist.description()).withStyle(ChatFormatting.GRAY), false);
                     }
@@ -1217,7 +1237,7 @@ public final class MusicCommands {
             Messages.warning(source, new TranslatableComponent("musicplayer.view.song_failed", Messages.textOrTranslatable(rootMessage(throwable))));
             return;
         }
-        if (track == null || track.title() == null || track.title().isBlank()) {
+        if (track == null || track.title() == null || Java8.isBlank(track.title())) {
             Messages.warning(source, new TranslatableComponent("musicplayer.view.song_not_found"));
             return;
         }
@@ -1229,7 +1249,7 @@ public final class MusicCommands {
                 .append(clickableText(track.title(), "/music play song " + track.id(), new TranslatableComponent("musicplayer.common.tap_request_hover"), ChatFormatting.AQUA))
                 .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY))
                 .append(clickableText(track.artist(),
-                        track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
+                        Java8.isBlank(track.artistId()) ? "" : "/music view artist " + track.artistId(),
                         new TranslatableComponent("musicplayer.common.click_artist_hover"), ChatFormatting.GRAY)), false);
 
         if (track.durationMillis() > 0L) {
@@ -1237,7 +1257,7 @@ public final class MusicCommands {
                     .append(new TextComponent(Messages.formatDuration(track.durationMillis())).withStyle(ChatFormatting.WHITE)), false);
         }
 
-        if (track.coverUrl() != null && !track.coverUrl().isBlank()) {
+        if (track.coverUrl() != null && Java8.isNotBlank(track.coverUrl())) {
             Messages.sendSuccess(source,  new TranslatableComponent("musicplayer.view.cover_prefix").withStyle(ChatFormatting.GRAY)
                     .append(Messages.clickableUrl(new TranslatableComponent("musicplayer.common.click_view_label"), new TranslatableComponent("musicplayer.view.cover_hover"), track.coverUrl(), ChatFormatting.BLUE)), false);
         }
@@ -1303,7 +1323,7 @@ public final class MusicCommands {
                             Messages.clickableCommand(new TranslatableComponent("musicplayer.common.help_label"), new TranslatableComponent("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
                     MutableComponent headerLine = new TextComponent("──").withStyle(ChatFormatting.GOLD)
                             .append(new TranslatableComponent("musicplayer.radio.detail_title").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
-                    if (!radio.name().isBlank()) {
+                    if (Java8.isNotBlank(radio.name())) {
                         headerLine.append(new TextComponent("  " + radio.name()).withStyle(ChatFormatting.GRAY));
                     }
                     Messages.sendSuccess(source, headerLine, false);
@@ -1316,7 +1336,7 @@ public final class MusicCommands {
                     if (radio.radioFeeType() != 0) {
                         Messages.sendSuccess(source,  new TranslatableComponent("musicplayer.radio.paid_notice").withStyle(ChatFormatting.RED), false);
                     }
-                    if (radio.description() != null && !radio.description().isBlank()) {
+                    if (radio.description() != null && Java8.isNotBlank(radio.description())) {
                         Messages.sendSuccess(source,  spacer(), false);
                         Messages.sendSuccess(source,  new TextComponent(radio.description()).withStyle(ChatFormatting.GRAY), false);
                     }
@@ -1349,13 +1369,13 @@ public final class MusicCommands {
         sendHeader(source);
         sendQuickBar(source,
                 Messages.clickableCommand(new TranslatableComponent("musicplayer.common.play_label"), new TranslatableComponent("musicplayer.view.play_program_hover"), "/music play program " + program.id(), ChatFormatting.GREEN),
-                program.radioId().isBlank() ? null : Messages.clickableCommand(new TranslatableComponent("musicplayer.view.radio_label"), new TranslatableComponent("musicplayer.view.owning_radio_hover"), "/music view radio " + program.radioId(), ChatFormatting.AQUA),
+                Java8.isBlank(program.radioId()) ? null : Messages.clickableCommand(new TranslatableComponent("musicplayer.view.radio_label"), new TranslatableComponent("musicplayer.view.owning_radio_hover"), "/music view radio " + program.radioId(), ChatFormatting.AQUA),
                 Messages.clickableCommand(new TranslatableComponent("musicplayer.common.help_label"), new TranslatableComponent("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
         Messages.sendSuccess(source,  sectionHeader(new TranslatableComponent("musicplayer.view.program_title"), new TextComponent(program.name())), false);
         Messages.sendSuccess(source,  spacer(), false);
         Messages.sendSuccess(source,  new TranslatableComponent("musicplayer.view.program_prefix").withStyle(ChatFormatting.GOLD)
                 .append(new TextComponent(program.name()).withStyle(ChatFormatting.WHITE)), false);
-        if (!program.radioName().isBlank()) {
+        if (Java8.isNotBlank(program.radioName())) {
             Messages.sendSuccess(source,  new TranslatableComponent("musicplayer.view.radio_prefix").withStyle(ChatFormatting.GRAY)
                     .append(clickableText(program.radioName(), "/music view radio " + program.radioId(), new TranslatableComponent("musicplayer.common.view_radio_hover"), ChatFormatting.AQUA)), false);
         }
@@ -1363,11 +1383,11 @@ public final class MusicCommands {
             Messages.sendSuccess(source,  new TranslatableComponent("musicplayer.view.duration_prefix").withStyle(ChatFormatting.GRAY)
                     .append(new TextComponent(Messages.formatDuration(program.durationMillis())).withStyle(ChatFormatting.WHITE)), false);
         }
-        if (program.coverUrl() != null && !program.coverUrl().isBlank()) {
+        if (program.coverUrl() != null && Java8.isNotBlank(program.coverUrl())) {
             Messages.sendSuccess(source,  new TranslatableComponent("musicplayer.view.cover_prefix").withStyle(ChatFormatting.GRAY)
                     .append(Messages.clickableUrl(new TranslatableComponent("musicplayer.common.click_view_label"), new TranslatableComponent("musicplayer.view.cover_hover"), program.coverUrl(), ChatFormatting.BLUE)), false);
         }
-        if (program.description() != null && !program.description().isBlank()) {
+        if (program.description() != null && Java8.isNotBlank(program.description())) {
             Messages.sendSuccess(source,  spacer(), false);
             Messages.sendSuccess(source,  new TextComponent(program.description()).withStyle(ChatFormatting.GRAY), false);
         }
@@ -1396,7 +1416,7 @@ public final class MusicCommands {
         line.append(clickableText(track.title(), "/music play song " + track.id(), new TranslatableComponent("musicplayer.random.request_hover"), ChatFormatting.AQUA));
         line.append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY));
         line.append(clickableText(track.artist(),
-                track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
+                Java8.isBlank(track.artistId()) ? "" : "/music view artist " + track.artistId(),
                 new TranslatableComponent("musicplayer.common.view_artist_hover"),
                 ChatFormatting.GRAY));
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
@@ -1410,7 +1430,7 @@ public final class MusicCommands {
         MutableComponent line = new TranslatableComponent("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
                 .append(clickableText(track.title(), "/music play song " + track.id(), new TranslatableComponent("musicplayer.common.rerequest_hover"), ChatFormatting.AQUA))
                 .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY))
-                .append(clickableText(track.artist(), track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(), new TranslatableComponent("musicplayer.common.click_artist_hover"), ChatFormatting.GRAY));
+                .append(clickableText(track.artist(), Java8.isBlank(track.artistId()) ? "" : "/music view artist " + track.artistId(), new TranslatableComponent("musicplayer.common.click_artist_hover"), ChatFormatting.GRAY));
         MutableComponent burnAction = buildBurnAction(source, track.id());
         if (burnAction != null) {
             line.append(new TextComponent(" "));
@@ -1434,8 +1454,8 @@ public final class MusicCommands {
             int filled = (int) (barLen * elapsedMs / Math.max(1L, durationMs));
             filled = Math.max(0, Math.min(barLen, filled));
             line.append(new TextComponent("[").withStyle(ChatFormatting.DARK_GRAY));
-            line.append(new TextComponent("█".repeat(filled)).withStyle(ChatFormatting.GREEN));
-            line.append(new TextComponent("░".repeat(barLen - filled)).withStyle(ChatFormatting.DARK_GRAY));
+            line.append(new TextComponent(Java8.repeat("█", filled)).withStyle(ChatFormatting.GREEN));
+            line.append(new TextComponent(Java8.repeat("░", barLen - filled)).withStyle(ChatFormatting.DARK_GRAY));
             line.append(new TextComponent("] ").withStyle(ChatFormatting.DARK_GRAY));
         }
 
@@ -1464,9 +1484,10 @@ public final class MusicCommands {
     }
 
     private static MutableComponent buildBurnAction(CommandSourceStack source, String songId) {
-        if (!(source.getEntity() instanceof ServerPlayer player)) {
+        if (!(source.getEntity() instanceof ServerPlayer)) {
             return null;
         }
+        ServerPlayer player = (ServerPlayer) source.getEntity();
         if (!MusicDiscHelper.isBurnableDisc(player.getItemInHand(InteractionHand.MAIN_HAND))) {
             return null;
         }
@@ -1489,8 +1510,8 @@ public final class MusicCommands {
     }
 
     private static MutableComponent clickableText(Component text, String command, Component hover, ChatFormatting color) {
-        return command != null && !command.isBlank()
-                ? Messages.clickableCommand(text, hover == null || hover.getString().isBlank() ? text : hover, command, color)
+        return Java8.isNotBlank(command)
+                ? Messages.clickableCommand(text, hover == null || Java8.isBlank(hover.getString()) ? text : hover, command, color)
                 : text.copy().withStyle(color);
     }
 
@@ -1533,7 +1554,7 @@ public final class MusicCommands {
             player.setItemInHand(InteractionHand.MAIN_HAND, burnedDisc);
         } else {
             mainHand.shrink(1);
-            if (!player.getInventory().add(burnedDisc)) {
+            if (!player.inventory.add(burnedDisc)) {
                 player.drop(burnedDisc, false, true);
             }
         }
@@ -1583,7 +1604,7 @@ public final class MusicCommands {
     private static MutableComponent sectionHeader(Component title, Component subtitle) {
         MutableComponent line = new TextComponent("◆ ").withStyle(ChatFormatting.GOLD)
                 .append(title.copy().withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
-        if (subtitle != null && !subtitle.getString().isBlank()) {
+        if (subtitle != null && Java8.isNotBlank(subtitle.getString())) {
             line.append(new TextComponent("  ").withStyle(ChatFormatting.DARK_GRAY));
             line.append(subtitle.copy().withStyle(ChatFormatting.DARK_GRAY));
         }
@@ -1592,11 +1613,11 @@ public final class MusicCommands {
 
     private static <T> List<T> slicePage(List<T> entries, PageWindow page) {
         if (entries.isEmpty()) {
-            return List.of();
+            return Java8.listOf();
         }
         int start = (page.page() - 1) * page.pageSize();
         if (start >= entries.size()) {
-            return List.of();
+            return Java8.listOf();
         }
         int end = Math.min(entries.size(), start + page.pageSize());
         return entries.subList(start, end);
@@ -1644,6 +1665,49 @@ public final class MusicCommands {
         void execute(CommandSourceStack source, String id, int page);
     }
 
-    private record PageWindow(int page, int totalPages, int pageSize) {
+    private static final class PageWindow {
+        private final int page;
+        private final int totalPages;
+        private final int pageSize;
+
+        private PageWindow(int page, int totalPages, int pageSize) {
+            this.page = page;
+            this.totalPages = totalPages;
+            this.pageSize = pageSize;
+        }
+
+        private int page() {
+            return page;
+        }
+
+        private int totalPages() {
+            return totalPages;
+        }
+
+        private int pageSize() {
+            return pageSize;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof PageWindow)) {
+                return false;
+            }
+            PageWindow that = (PageWindow) o;
+            return page == that.page && totalPages == that.totalPages && pageSize == that.pageSize;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(page, totalPages, pageSize);
+        }
+
+        @Override
+        public String toString() {
+            return "PageWindow{page=" + page + ", totalPages=" + totalPages + ", pageSize=" + pageSize + "}";
+        }
     }
 }

@@ -4,7 +4,55 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
-public record MusicPlaybackReportPayload(String action, String trackId, String message) {
+import java.util.Objects;
+
+public final class MusicPlaybackReportPayload {
+    private final String action;
+    private final String trackId;
+    private final String message;
+
+    public MusicPlaybackReportPayload(String action, String trackId, String message) {
+        this.action = action;
+        this.trackId = trackId;
+        this.message = message;
+    }
+
+    public String action() {
+        return action;
+    }
+
+    public String trackId() {
+        return trackId;
+    }
+
+    public String message() {
+        return message;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof MusicPlaybackReportPayload)) {
+            return false;
+        }
+        MusicPlaybackReportPayload that = (MusicPlaybackReportPayload) o;
+        return Objects.equals(action, that.action)
+                && Objects.equals(trackId, that.trackId)
+                && Objects.equals(message, that.message);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(action, trackId, message);
+    }
+
+    @Override
+    public String toString() {
+        return "MusicPlaybackReportPayload{action='" + action + "', trackId='" + trackId + "', message='" + message + "'}";
+    }
+
     public static final ResourceLocation ID = new ResourceLocation(MusicPlayerMod.MOD_ID, "music_playback_report");
 
     public static MusicPlaybackReportPayload decode(FriendlyByteBuf buffer) {

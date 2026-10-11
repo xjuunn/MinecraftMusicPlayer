@@ -1,7 +1,8 @@
 package com.junhsiun.musicplayer.platform.url;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.junhsiun.musicplayer.util.Java8;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -13,7 +14,7 @@ import java.util.concurrent.CompletableFuture;
  * （Content-Type 为 audio/mpeg），因此将原始 URL 作为可播放源返回，支持 VIP 歌曲。
  */
 public final class QijieyaUrlProvider implements SongUrlProvider {
-    private static final Logger LOGGER = LoggerFactory.getLogger(QijieyaUrlProvider.class);
+    private static final Logger LOGGER = LogManager.getLogger(QijieyaUrlProvider.class);
     private static final String BASE_URL = "https://api.qijieya.cn/meting/";
 
     private final SongUrlHttp http;
@@ -38,12 +39,12 @@ public final class QijieyaUrlProvider implements SongUrlProvider {
             String url = BASE_URL + "?type=url&id=" + songId;
             try {
                 if (http.getContentType(url).startsWith("audio/")) {
-                    return List.of(url);
+                    return Java8.listOf(url);
                 }
             } catch (Exception e) {
                 LOGGER.trace("Qijieya 音源失败 id={}: {}", songId, UrlUtil.rootMessage(e));
             }
-            return List.of();
+            return Java8.listOf();
         });
     }
 }

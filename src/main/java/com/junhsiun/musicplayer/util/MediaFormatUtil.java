@@ -11,7 +11,7 @@ import java.util.Set;
  * JLayer 无法解码的无损/其他格式（如 FLAC、M4A、AAC、WAV、OGG、OPUS 等）。
  */
 public final class MediaFormatUtil {
-    private static final Set<String> JLAYER_UNSUPPORTED = Set.of(
+    private static final Set<String> JLAYER_UNSUPPORTED = Java8.setOf(
             "flac", "m4a", "aac", "wav", "wave", "ogg", "oga", "opus",
             "ape", "wma", "alac", "aiff", "aif", "amr", "mid", "midi", "mp4", "m4b"
     );
@@ -27,7 +27,7 @@ public final class MediaFormatUtil {
      *         无扩展名或扩展名未知时按可播放处理（避免误杀与请求路径形式的直链）。
      */
     public static boolean isJlayerPlayable(String url) {
-        if (url == null || url.isBlank()) {
+        if (url == null || Java8.isBlank(url)) {
             return false;
         }
         String lower = url.toLowerCase(Locale.ROOT);

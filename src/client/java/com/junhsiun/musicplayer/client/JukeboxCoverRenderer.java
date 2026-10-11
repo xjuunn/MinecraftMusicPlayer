@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.junhsiun.musicplayer.util.Java8;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -49,7 +50,7 @@ public final class JukeboxCoverRenderer {
             }
 
             ResourceLocation coverTexture = null;
-            if (state.coverUrl() != null && !state.coverUrl().isBlank()) {
+            if (state.coverUrl() != null && Java8.isNotBlank(state.coverUrl())) {
                 coverTexture = CoverArtTextureCache.getInstance().getTextureId(state.coverUrl());
                 if (coverTexture == null) {
                     CoverArtTextureCache.getInstance().request(state.coverUrl());

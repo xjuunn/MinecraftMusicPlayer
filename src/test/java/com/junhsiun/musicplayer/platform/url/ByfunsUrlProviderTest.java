@@ -1,5 +1,6 @@
 package com.junhsiun.musicplayer.platform.url;
 
+import com.junhsiun.musicplayer.util.Java8;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -25,7 +26,7 @@ class ByfunsUrlProviderTest {
         http.stubText("https://api.byfuns.top/1/", "https://byfuns-a.mp3");
         ByfunsUrlProvider provider = new ByfunsUrlProvider(http);
 
-        assertEquals(List.of("https://byfuns-a.mp3"), resolve(provider, "1"));
+        assertEquals(Java8.listOf("https://byfuns-a.mp3"), resolve(provider, "1"));
     }
 
     @Test
@@ -34,7 +35,7 @@ class ByfunsUrlProviderTest {
         http.stubText("https://api.byfuns.top/1/", "   https://byfuns-a.mp3  \n");
         ByfunsUrlProvider provider = new ByfunsUrlProvider(http);
 
-        assertEquals(List.of("https://byfuns-a.mp3"), resolve(provider, "1"));
+        assertEquals(Java8.listOf("https://byfuns-a.mp3"), resolve(provider, "1"));
     }
 
     @Test
@@ -49,7 +50,7 @@ class ByfunsUrlProviderTest {
         FakeSongUrlHttp http = new FakeSongUrlHttp();
         http.stubText("https://api.byfuns.top/1/", "https://standard.mp3");
         ByfunsUrlProvider provider = new ByfunsUrlProvider(http);
-        assertEquals(List.of("https://standard.mp3"), resolve(provider, "1"));
+        assertEquals(Java8.listOf("https://standard.mp3"), resolve(provider, "1"));
     }
 
     @Test
@@ -58,7 +59,7 @@ class ByfunsUrlProviderTest {
         http.stubText("https://api.byfuns.top/1/", "https://higher.mp3");
         ByfunsUrlProvider provider = new ByfunsUrlProvider(http);
 
-        assertEquals(List.of("https://higher.mp3"), resolve(provider, "1"));
+        assertEquals(Java8.listOf("https://higher.mp3"), resolve(provider, "1"));
     }
 
     @Test
@@ -112,7 +113,7 @@ class ByfunsUrlProviderTest {
         http.stubText("https://api.byfuns.top/1/", "https://song999.mp3");
         ByfunsUrlProvider provider = new ByfunsUrlProvider(http);
 
-        assertEquals(List.of("https://song999.mp3"), resolve(provider, "999"));
+        assertEquals(Java8.listOf("https://song999.mp3"), resolve(provider, "999"));
     }
 
     @Test
@@ -121,7 +122,7 @@ class ByfunsUrlProviderTest {
         http.stubText("https://api.byfuns.top/1/", "https://empty-id.mp3");
         ByfunsUrlProvider provider = new ByfunsUrlProvider(http);
 
-        assertEquals(List.of("https://empty-id.mp3"), resolve(provider, ""));
+        assertEquals(Java8.listOf("https://empty-id.mp3"), resolve(provider, ""));
     }
 
     @Test
@@ -130,7 +131,7 @@ class ByfunsUrlProviderTest {
         http.stubText("https://api.byfuns.top/1/", "http://insecure.mp3");
         ByfunsUrlProvider provider = new ByfunsUrlProvider(http);
 
-        assertEquals(List.of("http://insecure.mp3"), resolve(provider, "1"));
+        assertEquals(Java8.listOf("http://insecure.mp3"), resolve(provider, "1"));
     }
 
     @Test
@@ -151,7 +152,7 @@ class ByfunsUrlProviderTest {
         ByfunsUrlProvider provider = new ByfunsUrlProvider(http);
         resolve(provider, "42");
 
-        List<String> expectedFirst = List.of("id", "42", "level", "standard");
+        List<String> expectedFirst = Java8.listOf("id", "42", "level", "standard");
         List<List<String>> calls = http.callParams("https://api.byfuns.top/1/");
         assertFalse(calls.isEmpty());
         assertEquals(expectedFirst, calls.get(0));

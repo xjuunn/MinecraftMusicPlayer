@@ -4,6 +4,7 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
+import com.junhsiun.musicplayer.util.Java8;
 import com.junhsiun.musicplayer.util.MediaFormatUtil;
 import com.junhsiun.musicplayer.util.Messages;
 import javazoom.jl.decoder.JavaLayerException;
@@ -54,7 +55,7 @@ public final class ClientMusicController {
     }
 
     public void tick() {
-        if (!backgroundMusicPlaying || currentTrackId.isBlank() || player == null) return;
+        if (!backgroundMusicPlaying || Java8.isBlank(currentTrackId) || player == null) return;
         long now = System.currentTimeMillis();
         if (now - lastPositionReportTime < 2000) return;
         lastPositionReportTime = now;
@@ -69,9 +70,15 @@ public final class ClientMusicController {
 
     public void handle(MusicControlPayload payload) {
         switch (payload.action()) {
-            case "play" -> play(payload.trackId(), payload.urls(), payload.title(), payload.subtitle(), payload.offsetMillis());
-            case "stop" -> stop(payload.message());
-            default -> MusicPlayerMod.LOGGER.warn("未知的音乐控制动作: {}", payload.action());
+            case "play":
+                play(payload.trackId(), payload.urls(), payload.title(), payload.subtitle(), payload.offsetMillis());
+                break;
+            case "stop":
+                stop(payload.message());
+                break;
+            default:
+                MusicPlayerMod.LOGGER.warn("未知的音乐控制动作: {}", payload.action());
+                break;
         }
     }
 
@@ -88,7 +95,7 @@ public final class ClientMusicController {
         currentTrackId = "";
         backgroundMusicPlaying = false;
         lastPositionReportTime = 0L;
-        if (reason != null && !reason.isBlank()) {
+        if (reason != null && Java8.isNotBlank(reason)) {
             MusicPlayerMod.LOGGER.info("客户端已停止播放: {}", reason);
         }
     }
@@ -192,14 +199,14 @@ public final class ClientMusicController {
     }
 
     private void reportEnded(String trackId) {
-        if (trackId == null || trackId.isBlank()) {
+        if (trackId == null || Java8.isBlank(trackId)) {
             return;
         }
         sendReport(MusicPlaybackReportPayload.ended(trackId));
     }
 
     private void reportFailed(String trackId, String message) {
-        if (trackId == null || trackId.isBlank()) {
+        if (trackId == null || Java8.isBlank(trackId)) {
             return;
         }
         sendReport(MusicPlaybackReportPayload.failed(trackId, message));
@@ -281,12 +288,13 @@ public final class ClientMusicController {
             DataLine.Info lineInfo = new DataLine.Info(SourceDataLine.class, audioFormat);
             try {
                 Line line = AudioSystem.getLine(lineInfo);
-                if (line instanceof SourceDataLine dataLine) {
+                if (line instanceof SourceDataLine) {
+                    SourceDataLine dataLine = (SourceDataLine) line;
                     sourceLine = dataLine;
                     sourceLine.open(audioFormat);
                     if (sourceLine.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
                         javax.sound.sampled.Control ctrl = sourceLine.getControl(FloatControl.Type.MASTER_GAIN);
-                        if (ctrl instanceof FloatControl fc) gainControl = fc;
+                        if (ctrl instanceof FloatControl) gainControl = (FloatControl) ctrl;
                     }
                     sourceLine.start();
                 }

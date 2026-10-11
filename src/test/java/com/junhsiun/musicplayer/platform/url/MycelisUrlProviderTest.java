@@ -1,5 +1,6 @@
 package com.junhsiun.musicplayer.platform.url;
 
+import com.junhsiun.musicplayer.util.Java8;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -25,7 +26,7 @@ class MycelisUrlProviderTest {
         http.stubJson("https://example.com/song/url/v1", "{\"data\":[{\"url\":\"https://mycelis.mp3\"}]}");
         MycelisUrlProvider provider = new MycelisUrlProvider(http, () -> "https://example.com");
 
-        assertEquals(List.of("https://mycelis.mp3"), resolve(provider, "1"));
+        assertEquals(Java8.listOf("https://mycelis.mp3"), resolve(provider, "1"));
     }
 
     @Test
@@ -42,7 +43,7 @@ class MycelisUrlProviderTest {
         // 模拟默认构造器的逻辑：supplier 负责去掉尾斜杠
         MycelisUrlProvider provider = new MycelisUrlProvider(http, () -> "https://example.com");
 
-        assertEquals(List.of("https://m.mp3"), resolve(provider, "1"));
+        assertEquals(Java8.listOf("https://m.mp3"), resolve(provider, "1"));
     }
 
     @Test
@@ -51,7 +52,7 @@ class MycelisUrlProviderTest {
         http.stubJson("https://other.host/song/url/v1", "{\"data\":[{\"url\":\"https://o.mp3\"}]}");
         MycelisUrlProvider provider = new MycelisUrlProvider(http, () -> "https://other.host");
 
-        assertEquals(List.of("https://o.mp3"), resolve(provider, "1"));
+        assertEquals(Java8.listOf("https://o.mp3"), resolve(provider, "1"));
     }
 
     // ── data 结构异常 ─────────────────────────────────────
@@ -111,7 +112,7 @@ class MycelisUrlProviderTest {
         http.stubJson("https://example.com/song/url/v1", "{\"data\":[{\"url\":\"  https://trimmed.mp3  \"}]}");
         MycelisUrlProvider provider = new MycelisUrlProvider(http, () -> "https://example.com");
 
-        assertEquals(List.of("https://trimmed.mp3"), resolve(provider, "1"));
+        assertEquals(Java8.listOf("https://trimmed.mp3"), resolve(provider, "1"));
     }
 
     @Test
