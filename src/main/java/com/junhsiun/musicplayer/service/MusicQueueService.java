@@ -22,8 +22,8 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.network.chat.TextComponent;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayDeque;
@@ -434,7 +434,7 @@ public final class MusicQueueService {
     }
 
     public void initLyricsState(MinecraftServer server) {
-        lyricsPreferenceState = server.overworld().getDataStorage()
+        lyricsPreferenceState = server.getLevel(DimensionType.OVERWORLD).getDataStorage()
                 .computeIfAbsent(LyricsPreferenceState::new, LyricsPreferenceState.storageId());
     }
 
@@ -1105,7 +1105,7 @@ public final class MusicQueueService {
             lines.add(new TranslatableComponent("musicplayer.queue.page", safePage, totalPages).withStyle(ChatFormatting.YELLOW));
             for (int index = start; index < end; index++) {
                 QueuedTrack queuedTrack = all.get(index);
-                MutableComponent line = new TextComponent((index + 1) + ". ").withStyle(ChatFormatting.DARK_GRAY)
+                Component line = new TextComponent((index + 1) + ". ").withStyle(ChatFormatting.DARK_GRAY)
                         .append(Messages.clickableCommand(new TextComponent(queuedTrack.title()), new TranslatableComponent("musicplayer.queue.replay_hover"), "/music play song " + queuedTrack.songId(), ChatFormatting.GREEN))
                         .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY));
                 if (queuedTrack.artistCommand() != null && Java8.isNotBlank(queuedTrack.artistCommand())) {
@@ -1410,13 +1410,13 @@ public final class MusicQueueService {
     }
 
     private void broadcast(MinecraftServer server, Component message) {
-        server.getPlayerList().broadcastMessage(message, net.minecraft.network.chat.ChatType.CHAT, java.util.UUID.randomUUID());
+        server.getPlayerList().broadcastMessage(message, false);
     }
 
     // ── Render ───────────────────────────────────────────────────────
 
     private Component renderNowPlayingBroadcast(TrackInfo track) {
-        MutableComponent line = new TranslatableComponent("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
+        Component line = new TranslatableComponent("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
                 .append(Messages.clickableUrl(new TextComponent(track.title()), new TranslatableComponent("musicplayer.common.open_browser_hover"), Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
                 .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY));
         if (track.artistId() != null && Java8.isNotBlank(track.artistId())) {
@@ -1437,7 +1437,7 @@ public final class MusicQueueService {
     }
 
     private Component renderCurrentTrackLine(TrackInfo track) {
-        MutableComponent line = new TranslatableComponent("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
+        Component line = new TranslatableComponent("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
                 .append(Messages.clickableUrl(new TextComponent(track.title()), new TranslatableComponent("musicplayer.common.open_browser_hover"), Messages.NETEASE_SONG_URL + track.id(), ChatFormatting.AQUA))
                 .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY));
         if (track.artistId() != null && Java8.isNotBlank(track.artistId())) {

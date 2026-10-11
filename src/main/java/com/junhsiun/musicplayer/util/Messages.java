@@ -7,7 +7,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.network.chat.TextComponent;
 import net.minecraft.network.chat.HoverEvent;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -144,46 +143,46 @@ public final class Messages {
         sendChat(source, component);
     }
 
-    public static MutableComponent clickableCommand(String label, String hover, String command, ChatFormatting color) {
+    public static Component clickableCommand(String label, String hover, String command, ChatFormatting color) {
         return clickableCommand(new TextComponent(label), new TextComponent(hover), command, color);
     }
 
-    public static MutableComponent clickableCommand(Component label, Component hover, String command, ChatFormatting color) {
+    public static Component clickableCommand(Component label, Component hover, String command, ChatFormatting color) {
         return label.copy().setStyle(
-                Style.EMPTY.withColor(color)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command))
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover))
+                new Style().setColor(color)
+                        .setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command))
+                        .setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover))
         );
     }
 
-    public static MutableComponent clickableUrl(String label, String hover, String url, ChatFormatting color) {
+    public static Component clickableUrl(String label, String hover, String url, ChatFormatting color) {
         return clickableUrl(new TextComponent(label), new TextComponent(hover), url, color);
     }
 
-    public static MutableComponent clickableUrl(Component label, Component hover, String url, ChatFormatting color) {
+    public static Component clickableUrl(Component label, Component hover, String url, ChatFormatting color) {
         if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
             return label.copy().withStyle(color);
         }
         try {
             return label.copy().setStyle(
-                    Style.EMPTY.withColor(color)
-                            .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))
-                            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover))
+                    new Style().setColor(color)
+                            .setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))
+                            .setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover))
             );
         } catch (Exception ignored) {
             return label.copy().withStyle(color);
         }
     }
 
-    public static MutableComponent suggestable(String label, String hover, String command, ChatFormatting color) {
+    public static Component suggestable(String label, String hover, String command, ChatFormatting color) {
         return suggestable(new TextComponent(label), new TextComponent(hover), command, color);
     }
 
-    public static MutableComponent suggestable(Component label, Component hover, String command, ChatFormatting color) {
+    public static Component suggestable(Component label, Component hover, String command, ChatFormatting color) {
         return label.copy().setStyle(
-                Style.EMPTY.withColor(color)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, command))
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover))
+                new Style().setColor(color)
+                        .setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, command))
+                        .setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover))
         );
     }
 }

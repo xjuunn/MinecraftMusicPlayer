@@ -36,7 +36,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
-import net.minecraft.world.level.storage.LevelResource;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -423,23 +422,21 @@ public final class LootMusicDiscService {
     }
 
     private static Path storePath(MinecraftServer srv) {
-        return srv.getWorldPath(LevelResource.ROOT)
-                .resolve("musicplayer")
+        return srv.getStorageSource().getFile(srv.getLevelIdName(), "musicplayer").toPath()
                 .resolve("loot-music-disc-containers.json");
     }
 
     private static Path cachePath(MinecraftServer srv) {
-        return srv.getWorldPath(LevelResource.ROOT)
-                .resolve("musicplayer")
+        return srv.getStorageSource().getFile(srv.getLevelIdName(), "musicplayer").toPath()
                 .resolve("random-track-cache.json");
     }
 
     private static String key(Level world, BlockPos pos) {
-        return world.dimension().toString() + ":" + pos.asLong();
+        return world.getDimension().getType().toString() + ":" + pos.asLong();
     }
 
     private static String key(Entity entity) {
-        return entity.level.dimension().toString() + ":entity:" + entity.getUUID();
+        return entity.level.getDimension().getType().toString() + ":entity:" + entity.getUUID();
     }
 
     private static final class TrackInfoAdapter implements JsonSerializer<TrackInfo>, JsonDeserializer<TrackInfo> {

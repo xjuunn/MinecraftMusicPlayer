@@ -3,7 +3,8 @@
   "package": "com.junhsiun.musicplayer.mixin.client",
   "compatibilityLevel": "JAVA_8",
   "client": [
-    "MusicManagerMixin"
+    "MusicManagerMixin",
+    "LevelRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

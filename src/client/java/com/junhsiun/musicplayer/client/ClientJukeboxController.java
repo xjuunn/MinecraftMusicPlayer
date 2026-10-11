@@ -441,7 +441,7 @@ public final class ClientJukeboxController {
             return;
         }
         String text = Java8.isBlank(subtitle) ? title : title + " - " + subtitle;
-        minecraft.gui.setNowPlaying(new TextComponent(text));
+        minecraft.gui.setNowPlaying(text);
     }
 
     private String getInvalidStateReason(ClientLevel level, long jukeboxPos) {

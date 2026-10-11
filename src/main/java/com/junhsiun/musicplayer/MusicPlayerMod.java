@@ -57,8 +57,16 @@ public final class MusicPlayerMod implements ModInitializer {
             }
 
             BlockState state = world.getBlockState(hitResult.getBlockPos());
-            if (state.getBlock() instanceof JukeboxBlock && !state.getValue(JukeboxBlock.HAS_RECORD)) {
-                if (MusicDiscHelper.isMusicPlayerDisc(heldStack)) {
+            boolean isJukeboxNoRecord = state.getBlock() instanceof JukeboxBlock && !state.getValue(JukeboxBlock.HAS_RECORD);
+            boolean isMusicDisc = MusicDiscHelper.isMusicPlayerDisc(heldStack);
+            LOGGER.info("[DEBUG] UseBlockCallback: block={}, isJukebox={}, hasRecord={}, isMusicDisc={}, isClient={}",
+                    state.getBlock().getClass().getSimpleName(),
+                    state.getBlock() instanceof JukeboxBlock,
+                    state.getBlock() instanceof JukeboxBlock ? state.getValue(JukeboxBlock.HAS_RECORD) : "N/A",
+                    isMusicDisc,
+                    world.isClientSide());
+            if (isJukeboxNoRecord) {
+                if (isMusicDisc) {
                     if (world.isClientSide()) {
                         return InteractionResult.SUCCESS;
                     }
@@ -83,7 +91,7 @@ public final class MusicPlayerMod implements ModInitializer {
             net.minecraft.server.level.ServerPlayer serverPlayer = (net.minecraft.server.level.ServerPlayer) player;
             if (MusicDiscHelper.isPendingDisc(player.getItemInHand(hand))) {
                 LOOT_MUSIC_DISC_SERVICE.useRandomDisc(serverPlayer, hand);
-                return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), world.isClientSide());
+                return InteractionResultHolder.success(player.getItemInHand(hand));
             }
             return InteractionResultHolder.pass(player.getItemInHand(hand));
         });

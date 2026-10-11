@@ -44,19 +44,28 @@ public final class MusicDiscHelper {
             Items.MUSIC_DISC_STRAD,
             Items.MUSIC_DISC_WARD,
             Items.MUSIC_DISC_11,
-            Items.MUSIC_DISC_WAIT,
-            Items.MUSIC_DISC_PIGSTEP
+            Items.MUSIC_DISC_WAIT
     );
 
     private MusicDiscHelper() {
     }
 
     public static boolean isBurnableDisc(ItemStack stack) {
-        return stack != null && !stack.isEmpty() && SUPPORTED_DISCS.contains(stack.getItem());
+        boolean result = stack != null && !stack.isEmpty() && SUPPORTED_DISCS.contains(stack.getItem());
+        com.junhsiun.musicplayer.MusicPlayerMod.LOGGER.info("[DEBUG] isBurnableDisc: stack={}, item={}, inSet={}",
+                stack == null ? "null" : stack.getItem().getClass().getSimpleName(),
+                stack == null || stack.isEmpty() ? "N/A" : String.valueOf(stack.getItem()),
+                SUPPORTED_DISCS.contains(stack == null || stack.isEmpty() ? net.minecraft.world.item.Items.AIR : stack.getItem()));
+        return result;
     }
 
     public static boolean isMusicPlayerDisc(ItemStack stack) {
-        return read(stack).isPresent();
+        boolean result = read(stack).isPresent();
+        com.junhsiun.musicplayer.MusicPlayerMod.LOGGER.info("[DEBUG] isMusicPlayerDisc: stack={}, hasTag={}, result={}",
+                stack == null ? "null" : stack.getItem().getClass().getSimpleName(),
+                stack == null ? "N/A" : String.valueOf(stack.hasTag()),
+                result);
+        return result;
     }
 
     public static boolean isPendingDisc(ItemStack stack) {
@@ -120,10 +129,14 @@ public final class MusicDiscHelper {
 
     public static Optional<DiscTrackData> read(ItemStack stack) {
         if (stack == null || stack.isEmpty() || !stack.hasTag()) {
+            com.junhsiun.musicplayer.MusicPlayerMod.LOGGER.info("[DEBUG] read: early return - stackNull={}, empty={}, hasTag={}",
+                    stack == null, stack != null && stack.isEmpty(), stack != null && stack.hasTag());
             return Optional.empty();
         }
         CompoundTag wrapper = stack.getTag();
-        if (!wrapper.contains(ROOT_KEY, 10)) {
+        boolean hasRoot = wrapper.contains(ROOT_KEY, 10);
+        com.junhsiun.musicplayer.MusicPlayerMod.LOGGER.info("[DEBUG] read: hasRoot={}, keys={}", hasRoot, wrapper.getAllKeys());
+        if (!hasRoot) {
             return Optional.empty();
         }
         CompoundTag root = wrapper.getCompound(ROOT_KEY);

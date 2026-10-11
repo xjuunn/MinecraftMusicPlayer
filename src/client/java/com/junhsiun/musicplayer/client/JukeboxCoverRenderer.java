@@ -7,7 +7,6 @@ import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.math.Vector3f;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -28,14 +27,13 @@ public final class JukeboxCoverRenderer {
     private JukeboxCoverRenderer() {
     }
 
-    public static void render(WorldRenderContext context) {
+    public static void render(PoseStack poseStack) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || minecraft.player == null || context.consumers() == null || context.matrixStack() == null) {
+        if (minecraft.level == null || minecraft.player == null || poseStack == null) {
             return;
         }
 
         ensureBlackTexture();
-        PoseStack poseStack = context.matrixStack();
         Vec3 camera = minecraft.gameRenderer.getMainCamera().getPosition();
         long now = System.currentTimeMillis();
 

@@ -8,7 +8,6 @@ import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.util.Java8;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -20,6 +19,7 @@ import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.HashMap;
@@ -49,6 +49,11 @@ public final class JukeboxPlaybackService {
         }
 
         ItemStack heldStack = player.getItemInHand(hand);
+        MusicPlayerMod.LOGGER.info("[DEBUG] tryInsertCustomDisc: heldStack={}, hasTag={}, isPending={}, isMusicDisc={}",
+                heldStack.getItem().getClass().getSimpleName(),
+                heldStack.hasTag(),
+                MusicDiscHelper.isPendingDisc(heldStack),
+                MusicDiscHelper.isMusicPlayerDisc(heldStack));
         if (MusicDiscHelper.isPendingDisc(heldStack)) {
             return InteractionResult.FAIL;
         }
@@ -128,7 +133,7 @@ public final class JukeboxPlaybackService {
             stopPlayback(level.getServer(), existing);
         }
 
-        ActiveJukebox active = new ActiveJukebox(key, level.dimension(), pos.immutable(), discData);
+        ActiveJukebox active = new ActiveJukebox(key, level.getDimension().getType(), pos.immutable(), discData);
         activeJukeboxes.put(key, active);
         syncListeners(level, active);
         return active;
@@ -354,7 +359,7 @@ public final class JukeboxPlaybackService {
 
     private static final class ActiveJukebox {
         private final long key;
-        private final ResourceKey<Level> dimension;
+        private final DimensionType dimension;
         private final BlockPos pos;
         private final String sourceTrackId;
         private final String sourceTitle;
@@ -364,7 +369,7 @@ public final class JukeboxPlaybackService {
         private final long startedAtMillis;
         private boolean firstPlaySent;
 
-        private ActiveJukebox(long key, ResourceKey<Level> dimension, BlockPos pos, DiscTrackData discData) {
+        private ActiveJukebox(long key, DimensionType dimension, BlockPos pos, DiscTrackData discData) {
             this.key = key;
             this.dimension = dimension;
             this.pos = pos;
@@ -379,7 +384,7 @@ public final class JukeboxPlaybackService {
             return key;
         }
 
-        private ResourceKey<Level> dimension() {
+        private DimensionType dimension() {
             return dimension;
         }
 

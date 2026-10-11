@@ -121,6 +121,7 @@
 - 1.19.2 需从集合中剔除 `RELIC` 与 `5`。
 - 1.18.2 已含 `PIGSTEP` 与 `OTHERSIDE`（javap 实测），仍需剔除 `RELIC` 与 `5`（代码继承 1.19.2 分支时已满足）。
 - 1.17.1 无 `MUSIC_DISC_OTHERSIDE`（1.18 加入），需剔除；`PIGSTEP`（1.16）保留。
+- 1.15.2 无 `MUSIC_DISC_PIGSTEP`（1.16 加入），需剔除；`SUPPORTED_DISCS` 只保留 1.13–1.15 的 12 张唱片。
 
 ## 1.17.x 专项注意
 
@@ -138,6 +139,26 @@
 - **`Player.getInventory()` 不存在**：用公开字段 `player.inventory`。
 - **fabric-api 版本后缀是 `+1.16`**（如 `0.42.0+1.16`）。
 - **fabric-loader 版本**：0.15+ 要求 Java 21；对齐 Java 8 时使用 `loader_version=0.14.22`。
+
+## 1.15.2 专项注意（基于 1.16.5 分支）
+
+- **无 `ResourceKey<Level>` / `LevelResource`**：维度标识改用 `DimensionType`（`net.minecraft.world.level.dimension.DimensionType`）。
+  - `level.dimension()` → `level.getDimension().getType()`。
+  - `server.overworld()` → `server.getLevel(DimensionType.OVERWORLD)`。
+  - `server.getLevel(...)` 参数类型为 `DimensionType`。
+  - `world.dimension().toString()` → `world.getDimension().getType().toString()`。
+  - 保存路径：`srv.getWorldPath(LevelResource.ROOT).resolve(...)` → `srv.getStorageSource().getFile(srv.getLevelIdName(), "musicplayer").toPath().resolve(...)`（`LevelStorageSource.getFile(String, String)` 返回 `File`）。
+- **无 `MutableComponent`**：`Component` 本身可变（`append`/`setStyle`/`withStyle` 均返回 `Component`）；所有 `MutableComponent` 类型引用改为 `Component`。
+- **`Style` 可变且无 `EMPTY` 常量**：
+  - `Style.EMPTY.withColor(c).withClickEvent(e).withHoverEvent(h)` → `new Style().setColor(c).setClickEvent(e).setHoverEvent(h)`（setter 返回 `Style` 供链式调用）。
+  - `style.withColor(...)` / `style.withBold(true)` / `style.withClickEvent(...)` / `style.withHoverEvent(...)`（Consumer 内）→ `style.setColor(...)` / `style.setBold(true)` / `style.setClickEvent(...)` / `style.setHoverEvent(...)`。
+- **`InteractionResultHolder.sidedSuccess(stack, isClient)` 不存在**：用 `success(stack)`（仅四参 `success/consume/pass/fail`）。
+- **`Items.MUSIC_DISC_PIGSTEP` 不存在**（1.16 加入）：从 `SUPPORTED_DISCS` 中剔除。
+- **`Gui.setNowPlaying(Component)` 不存在**：签名是 `setNowPlaying(String)`，传字符串而非组件。
+- **`PlayerList.broadcastMessage`**：只有 `broadcastMessage(Component)` 与 `broadcastMessage(Component, boolean)`，无 `(Component, ChatType, UUID)` 三参版本；用 `broadcastMessage(message, false)`。
+- **无 `WorldRenderEvents` / `WorldRenderContext`**（fabric-api 0.28.5+1.15 无 `fabric-rendering-v1`）：客户端世界渲染事件改为 Mixin 注入 `LevelRenderer.renderLevel(PoseStack, float, long, boolean, Camera, GameRenderer, LightTexture, Matrix4f)` 的 `TAIL`，自行调用渲染方法（如 `JukeboxCoverRenderer.render(PoseStack)`）。
+- **`BufferBuilder` 的 `vertex(...)` 返回 `BufferBuilder`**（非 `VertexConsumer`），链式调用 `.color(...).uv(...).overlayCoords(...).uv2(...).normal(...).endVertex()` 可用。
+- **`PoseStack.last()` 返回 `PoseStack$Pose`**，与 1.16 一致。
 
 ## Java 8 对齐（1.16.5 分支）
 
@@ -176,6 +197,7 @@
 | `1.18.2` | 1.18.2 | 17 | `0.77.0+1.18.2` |
 | `1.17.1` | 1.17.1 | 17 | `0.46.1+1.17` |
 | `1.16.5` | 1.16.5 | 17 | `0.42.0+1.16` |
+| `1.15.2` | 1.15.2 | 17 | `0.28.5+1.15` |
 
 - `fabric_api_version` 以 [fabricmc.net/develop](https://fabricmc.net/develop) 查询为准，解析失败（TLS/404）时重试或换邻近版本。
 - loader 版本注意：fabric-loader 0.15+ 需要 Java 21 运行时；低版本 MC 常见 Java 17 环境，如需兼容运行时可考虑 pin 到 0.14.x（仅在用户要求时调整）。

@@ -3,7 +3,6 @@ package com.junhsiun.musicplayer;
 import com.junhsiun.musicplayer.client.CoverArtTextureCache;
 import com.junhsiun.musicplayer.client.ClientJukeboxController;
 import com.junhsiun.musicplayer.client.ClientMusicController;
-import com.junhsiun.musicplayer.client.JukeboxCoverRenderer;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
@@ -13,7 +12,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConfirmLinkScreen;
@@ -62,7 +60,6 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
                 }
             });
         });
-        WorldRenderEvents.AFTER_ENTITIES.register(JukeboxCoverRenderer::render);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClientJukeboxController.getInstance().tick(client);
             ClientMusicController.getInstance().tick();

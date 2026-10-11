@@ -33,9 +33,9 @@ import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.network.chat.TextComponent;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.HoverEvent;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -90,16 +90,16 @@ public final class MusicCommands {
 
     private static int sendHelpOverview(CommandSourceStack source) {
         sendHeader(source);
-        MutableComponent title = sectionHeader(new TranslatableComponent("musicplayer.help.title"), null);
+        Component title = sectionHeader(new TranslatableComponent("musicplayer.help.title"), null);
         title.append(new TextComponent("  ").withStyle(ChatFormatting.DARK_GRAY));
         title.append(Messages.clickableCommand(new TextComponent("Junhsiun"), new TranslatableComponent("musicplayer.help.author_hover"), "/music view user " + AUTHOR_USER_ID, ChatFormatting.AQUA));
         title.append(new TextComponent("  ").withStyle(ChatFormatting.DARK_GRAY));
         title.append(new TranslatableComponent("musicplayer.help.repository")
                 .withStyle(style -> style
-                        .withColor(ChatFormatting.WHITE)
-                        .withBold(true)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music star"))
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, renderRepositoryHover()))));
+                        .setColor(ChatFormatting.WHITE)
+                        .setBold(true)
+                        .setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music star"))
+                        .setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, renderRepositoryHover()))));
         Messages.sendSuccess(source, title, false);
         helpEntry(source, "now", new TranslatableComponent("musicplayer.help.desc.now"));
         helpEntry(source, "play", new TranslatableComponent("musicplayer.help.desc.play"));
@@ -155,7 +155,7 @@ public final class MusicCommands {
     }
 
     private static void helpEntry(CommandSourceStack source, String command, Component description) {
-        MutableComponent line = Messages.clickableCommand(new TextComponent(command), new TranslatableComponent("musicplayer.help.view_usage", command), "/music help " + command, ChatFormatting.GOLD);
+        Component line = Messages.clickableCommand(new TextComponent(command), new TranslatableComponent("musicplayer.help.view_usage", command), "/music help " + command, ChatFormatting.GOLD);
         line.append(new TextComponent("  ").withStyle(ChatFormatting.DARK_GRAY));
         line.append(description.copy().withStyle(ChatFormatting.GRAY));
         Messages.sendSuccess(source, line, false);
@@ -292,7 +292,7 @@ public final class MusicCommands {
     }
 
     private static void detailLine(CommandSourceStack source, Component command, Component description) {
-        MutableComponent line = command.copy().withStyle(ChatFormatting.GOLD);
+        Component line = command.copy().withStyle(ChatFormatting.GOLD);
         line.append(new TextComponent("  ").withStyle(ChatFormatting.DARK_GRAY));
         line.append(description.copy().withStyle(ChatFormatting.GRAY));
         Messages.sendSuccess(source,  line, false);
@@ -428,7 +428,7 @@ public final class MusicCommands {
         for (int index = 0; index < entries.size(); index++) {
             SearchEntry entry = entries.get(index);
             int order = (page.page() - 1) * page.pageSize() + index + 1;
-            MutableComponent line = new TextComponent(order + ". ").withStyle(ChatFormatting.DARK_GRAY)
+            Component line = new TextComponent(order + ". ").withStyle(ChatFormatting.DARK_GRAY)
                     .append(Messages.clickableCommand(new TranslatableComponent("musicplayer.queue.next_label"), new TranslatableComponent("musicplayer.queue.next_hover"), "/music queue promote " + entry.id(), ChatFormatting.GREEN))
                     .append(new TextComponent(" "))
                     .append(clickableText(entry.title(), entry.titleCommand(), new TranslatableComponent("musicplayer.queue.replay_hover"), ChatFormatting.AQUA));
@@ -502,7 +502,7 @@ public final class MusicCommands {
         }
 
         Messages.sendSuccess(source,  spacer(), false);
-        MutableComponent statusLine = new TranslatableComponent("musicplayer.playlist.queue_status",
+        Component statusLine = new TranslatableComponent("musicplayer.playlist.queue_status",
                 new TextComponent(String.valueOf(queueSize)).withStyle(ChatFormatting.AQUA)).withStyle(ChatFormatting.GOLD);
         if (isPlaylistMode) {
             statusLine.append(new TextComponent("  ·  ").withStyle(ChatFormatting.GOLD))
@@ -547,7 +547,7 @@ public final class MusicCommands {
 
         for (int index = 0; index < entries.size(); index++) {
             SearchEntry entry = entries.get(index);
-            MutableComponent line = new TextComponent((index + 1) + ". ").withStyle(ChatFormatting.DARK_GRAY)
+            Component line = new TextComponent((index + 1) + ". ").withStyle(ChatFormatting.DARK_GRAY)
                     .append(Messages.clickableCommand(new TranslatableComponent("musicplayer.common.request_label"), new TranslatableComponent("musicplayer.common.rerequest_hover"), "/music play song " + entry.id(), ChatFormatting.GREEN))
                     .append(new TextComponent(" "))
                     .append(clickableText(entry.title(), entry.titleCommand(), new TranslatableComponent("musicplayer.common.open_browser_hover"), ChatFormatting.AQUA));
@@ -1264,11 +1264,11 @@ public final class MusicCommands {
 
         Messages.sendSuccess(source,  new TextComponent("ID: ").withStyle(ChatFormatting.GRAY)
                 .append(new TextComponent(track.id()).withStyle(style -> style
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, track.id()))
-                        .withColor(ChatFormatting.WHITE)
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new TranslatableComponent("musicplayer.common.copy_hover"))))), false);
+                        .setClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, track.id()))
+                        .setColor(ChatFormatting.WHITE)
+                        .setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new TranslatableComponent("musicplayer.common.copy_hover"))))), false);
 
-        MutableComponent burnAction = buildBurnAction(source, track.id());
+        Component burnAction = buildBurnAction(source, track.id());
         if (burnAction != null) {
             Messages.sendSuccess(source,  spacer(), false);
             Messages.sendSuccess(source,  new TranslatableComponent("musicplayer.common.actions_prefix").withStyle(ChatFormatting.GOLD)
@@ -1291,7 +1291,7 @@ public final class MusicCommands {
         Messages.sendSuccess(source,  sectionHeader(new TranslatableComponent("musicplayer.search.radios_title"), new TranslatableComponent("musicplayer.search.radios_hint")), false);
         Messages.sendSuccess(source,  spacer(), false);
         for (SearchEntry entry : results) {
-            MutableComponent actions = Messages.clickableCommand(new TranslatableComponent("musicplayer.radio.play_label"), new TranslatableComponent("musicplayer.common.play_in_order_hover"), "/music play radio " + entry.id(), ChatFormatting.GREEN)
+            Component actions = Messages.clickableCommand(new TranslatableComponent("musicplayer.radio.play_label"), new TranslatableComponent("musicplayer.common.play_in_order_hover"), "/music play radio " + entry.id(), ChatFormatting.GREEN)
                     .append(new TextComponent(" "))
                     .append(Messages.clickableCommand(new TranslatableComponent("musicplayer.common.view_label"), new TranslatableComponent("musicplayer.common.view_radio_hover"), "/music view radio " + entry.id(), ChatFormatting.GRAY));
             Messages.sendSuccess(source,  renderEntry(entry, actions, new TranslatableComponent("musicplayer.radio.play_hover"), new TranslatableComponent("musicplayer.radio.play_hover")), false);
@@ -1321,7 +1321,7 @@ public final class MusicCommands {
                             Messages.clickableCommand(new TranslatableComponent("musicplayer.radio.play_all_label"), new TranslatableComponent("musicplayer.common.play_in_order_hover"), "/music play radio " + radioId, ChatFormatting.GREEN),
                             Messages.clickableCommand(new TranslatableComponent("musicplayer.radio.reverse_label"), new TranslatableComponent("musicplayer.radio.reverse_hover"), "/music play radio " + radioId + " reverse", ChatFormatting.GOLD),
                             Messages.clickableCommand(new TranslatableComponent("musicplayer.common.help_label"), new TranslatableComponent("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
-                    MutableComponent headerLine = new TextComponent("──").withStyle(ChatFormatting.GOLD)
+                    Component headerLine = new TextComponent("──").withStyle(ChatFormatting.GOLD)
                             .append(new TranslatableComponent("musicplayer.radio.detail_title").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
                     if (Java8.isNotBlank(radio.name())) {
                         headerLine.append(new TextComponent("  " + radio.name()).withStyle(ChatFormatting.GRAY));
@@ -1397,8 +1397,8 @@ public final class MusicCommands {
         Messages.sendSuccess(source,  spacer(), false);
     }
 
-    private static MutableComponent renderProgramEntry(CommandSourceStack source, ProgramInfo program) {
-        MutableComponent line = Messages.clickableCommand(new TranslatableComponent("musicplayer.common.play_label"), new TranslatableComponent("musicplayer.view.play_now_hover"), "/music play program " + program.id(), ChatFormatting.GREEN);
+    private static Component renderProgramEntry(CommandSourceStack source, ProgramInfo program) {
+        Component line = Messages.clickableCommand(new TranslatableComponent("musicplayer.common.play_label"), new TranslatableComponent("musicplayer.view.play_now_hover"), "/music play program " + program.id(), ChatFormatting.GREEN);
         line.append(new TextComponent(" "));
         line.append(Messages.clickableCommand(new TextComponent(program.name()), new TranslatableComponent("musicplayer.view.play_now_hover"), "/music play program " + program.id(), ChatFormatting.AQUA));
         if (program.durationMillis() > 0L) {
@@ -1410,8 +1410,8 @@ public final class MusicCommands {
         return line;
     }
 
-    private static MutableComponent renderRandomTrack(CommandSourceStack source, TrackInfo track) {
-        MutableComponent line = trackActions(source, track.id(), new TranslatableComponent("musicplayer.common.request_label"), new TranslatableComponent("musicplayer.random.request_hover"), ChatFormatting.GREEN);
+    private static Component renderRandomTrack(CommandSourceStack source, TrackInfo track) {
+        Component line = trackActions(source, track.id(), new TranslatableComponent("musicplayer.common.request_label"), new TranslatableComponent("musicplayer.random.request_hover"), ChatFormatting.GREEN);
         line.append(new TextComponent(" "));
         line.append(clickableText(track.title(), "/music play song " + track.id(), new TranslatableComponent("musicplayer.random.request_hover"), ChatFormatting.AQUA));
         line.append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY));
@@ -1426,12 +1426,12 @@ public final class MusicCommands {
         return line;
     }
 
-    private static MutableComponent renderCurrentTrack(CommandSourceStack source, TrackInfo track, String elapsed, String duration, String requesterName) {
-        MutableComponent line = new TranslatableComponent("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
+    private static Component renderCurrentTrack(CommandSourceStack source, TrackInfo track, String elapsed, String duration, String requesterName) {
+        Component line = new TranslatableComponent("musicplayer.now.playing_prefix").withStyle(ChatFormatting.GOLD)
                 .append(clickableText(track.title(), "/music play song " + track.id(), new TranslatableComponent("musicplayer.common.rerequest_hover"), ChatFormatting.AQUA))
                 .append(new TextComponent(" - ").withStyle(ChatFormatting.DARK_GRAY))
                 .append(clickableText(track.artist(), Java8.isBlank(track.artistId()) ? "" : "/music view artist " + track.artistId(), new TranslatableComponent("musicplayer.common.click_artist_hover"), ChatFormatting.GRAY));
-        MutableComponent burnAction = buildBurnAction(source, track.id());
+        Component burnAction = buildBurnAction(source, track.id());
         if (burnAction != null) {
             line.append(new TextComponent(" "));
             line.append(burnAction);
@@ -1447,7 +1447,7 @@ public final class MusicCommands {
         String progress = duration != null && !duration.isEmpty()
                 ? elapsed + " / " + duration
                 : elapsed;
-        MutableComponent line = new TextComponent("");
+        Component line = new TextComponent("");
 
         if (durationMs > 0L) {
             int barLen = 20;
@@ -1473,9 +1473,9 @@ public final class MusicCommands {
         return line;
     }
 
-    private static MutableComponent trackActions(CommandSourceStack source, String songId, Component primaryLabel, Component primaryHover, ChatFormatting primaryColor) {
-        MutableComponent actions = Messages.clickableCommand(primaryLabel, primaryHover, "/music play song " + songId, primaryColor);
-        MutableComponent burnAction = buildBurnAction(source, songId);
+    private static Component trackActions(CommandSourceStack source, String songId, Component primaryLabel, Component primaryHover, ChatFormatting primaryColor) {
+        Component actions = Messages.clickableCommand(primaryLabel, primaryHover, "/music play song " + songId, primaryColor);
+        Component burnAction = buildBurnAction(source, songId);
         if (burnAction != null) {
             actions.append(new TextComponent(" "));
             actions.append(burnAction);
@@ -1483,19 +1483,27 @@ public final class MusicCommands {
         return actions;
     }
 
-    private static MutableComponent buildBurnAction(CommandSourceStack source, String songId) {
-        if (!(source.getEntity() instanceof ServerPlayer)) {
+    private static Component buildBurnAction(CommandSourceStack source, String songId) {
+        Entity entity = source.getEntity();
+        MusicPlayerMod.LOGGER.info("[DEBUG] buildBurnAction: entity={}, isServerPlayer={}",
+                entity == null ? "null" : entity.getClass().getSimpleName(),
+                entity instanceof ServerPlayer);
+        if (!(entity instanceof ServerPlayer)) {
             return null;
         }
-        ServerPlayer player = (ServerPlayer) source.getEntity();
-        if (!MusicDiscHelper.isBurnableDisc(player.getItemInHand(InteractionHand.MAIN_HAND))) {
+        ServerPlayer player = (ServerPlayer) entity;
+        ItemStack mainHand = player.getItemInHand(InteractionHand.MAIN_HAND);
+        boolean burnable = MusicDiscHelper.isBurnableDisc(mainHand);
+        MusicPlayerMod.LOGGER.info("[DEBUG] buildBurnAction: mainHand={}, burnable={}",
+                mainHand.getItem().getClass().getSimpleName(), burnable);
+        if (!burnable) {
             return null;
         }
         return Messages.clickableCommand(new TranslatableComponent("musicplayer.burn.action_label"), new TranslatableComponent("musicplayer.burn.action_hover"), "/music burn song " + songId, ChatFormatting.LIGHT_PURPLE);
     }
 
-    private static MutableComponent renderEntry(SearchEntry entry, MutableComponent action, Component titleHover, Component subtitleHover) {
-        MutableComponent line = action.copy();
+    private static Component renderEntry(SearchEntry entry, Component action, Component titleHover, Component subtitleHover) {
+        Component line = action.deepCopy();
         line.append(new TextComponent(" "));
         line.append(clickableText(entry.title(), entry.titleCommand(), titleHover, ChatFormatting.AQUA));
         if (entry.hasSubtitle()) {
@@ -1505,11 +1513,11 @@ public final class MusicCommands {
         return line;
     }
 
-    private static MutableComponent clickableText(String text, String command, Component hover, ChatFormatting color) {
+    private static Component clickableText(String text, String command, Component hover, ChatFormatting color) {
         return clickableText(new TextComponent(text), command, hover, color);
     }
 
-    private static MutableComponent clickableText(Component text, String command, Component hover, ChatFormatting color) {
+    private static Component clickableText(Component text, String command, Component hover, ChatFormatting color) {
         return Java8.isNotBlank(command)
                 ? Messages.clickableCommand(text, hover == null || Java8.isBlank(hover.getString()) ? text : hover, command, color)
                 : text.copy().withStyle(color);
@@ -1523,7 +1531,7 @@ public final class MusicCommands {
     }
 
     private static void sendNavigation(CommandSourceStack source, int page, int totalPages, String commandPattern, boolean hasKnownNext, String suggestCommand) {
-        MutableComponent nav = new TextComponent("");
+        Component nav = new TextComponent("");
         if (page > 1) {
             nav.append(Messages.clickableCommand(new TranslatableComponent("musicplayer.common.prev_label"), new TranslatableComponent("musicplayer.common.prev_hover"), String.format(commandPattern, page - 1), ChatFormatting.YELLOW));
             nav.append(new TextComponent(" "));
@@ -1566,10 +1574,10 @@ public final class MusicCommands {
     }
 
     @SafeVarargs
-    private static void sendQuickBar(CommandSourceStack source, MutableComponent... actions) {
-        MutableComponent line = new TextComponent("");
+    private static void sendQuickBar(CommandSourceStack source, Component... actions) {
+        Component line = new TextComponent("");
         boolean first = true;
-        for (MutableComponent action : actions) {
+        for (Component action : actions) {
             if (action == null) {
                 continue;
             }
@@ -1601,8 +1609,8 @@ public final class MusicCommands {
         Messages.sendSuccess(source,  spacer(), false);
     }
 
-    private static MutableComponent sectionHeader(Component title, Component subtitle) {
-        MutableComponent line = new TextComponent("◆ ").withStyle(ChatFormatting.GOLD)
+    private static Component sectionHeader(Component title, Component subtitle) {
+        Component line = new TextComponent("◆ ").withStyle(ChatFormatting.GOLD)
                 .append(title.copy().withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
         if (subtitle != null && Java8.isNotBlank(subtitle.getString())) {
             line.append(new TextComponent("  ").withStyle(ChatFormatting.DARK_GRAY));
