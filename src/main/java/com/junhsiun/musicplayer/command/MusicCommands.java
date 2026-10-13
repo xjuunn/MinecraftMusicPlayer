@@ -867,6 +867,8 @@ public final class MusicCommands {
                 .then(Commands.literal("reload").executes(context -> {
                     MusicPlayerConfigManager.load();
                     MusicPlayerMod.queueService().clearTrackCache();
+                    // 配置文件中的 bgmPlaylistId 可能已变更，同步给在线客户端
+                    MusicPlayerMod.syncBgmConfig(context.getSource().getServer());
                     Messages.success(context.getSource(), Component.translatable("musicplayer.config.reloaded"), false);
                     return 1;
                 }))
@@ -902,6 +904,8 @@ public final class MusicCommands {
                             }
                             config.neteaseBaseUrl = "default".equalsIgnoreCase(value) ? MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL : value;
                             MusicPlayerConfigManager.save();
+                            // 更换 API 地址后旧缓存音源 URL 已失效，清空点播音源缓存
+                            MusicPlayerMod.queueService().clearTrackCache();
                             Messages.success(context.getSource(), Component.translatable("musicplayer.config.base_url_updated", config.neteaseBaseUrl), false);
                             return 1;
                         })))
@@ -972,7 +976,8 @@ public final class MusicCommands {
                             Messages.success(context.getSource(), Component.translatable("musicplayer.config.reset_all"), false);
                             return 1;
                         }))
-                        .then(resetSetting("baseUrl", (config, defaults) -> config.neteaseBaseUrl = defaults.neteaseBaseUrl))
+                        .then(resetSetting("baseUrl", (config, defaults) -> config.neteaseBaseUrl = defaults.neteaseBaseUrl,
+                                context -> MusicPlayerMod.queueService().clearTrackCache()))
                         .then(resetSetting("allowCustomServer", (config, defaults) -> config.allowCustomServer = defaults.allowCustomServer))
                         .then(resetSetting("allowSongRequest", (config, defaults) -> config.allowSongRequest = defaults.allowSongRequest))
                         .then(resetSetting("allowPlaylistRequest", (config, defaults) -> config.allowPlaylistRequest = defaults.allowPlaylistRequest))

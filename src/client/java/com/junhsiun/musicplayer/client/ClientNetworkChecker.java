@@ -41,7 +41,8 @@ public final class ClientNetworkChecker {
     public static CompletableFuture<Status> check() {
         CompletableFuture<Status> future = new CompletableFuture<>();
         String baseUrl = MusicPlayerConfigManager.get().neteaseBaseUrl;
-        OkHttpClient client = HttpClientFactory.create().newBuilder()
+        // 基于缓存的 API 客户端派生（共享连接池/分发线程），仅覆盖短超时
+        OkHttpClient client = HttpClientFactory.createApiClient().newBuilder()
                 .connectTimeout(Duration.ofSeconds(3))
                 .readTimeout(Duration.ofSeconds(3))
                 .callTimeout(Duration.ofSeconds(4))
