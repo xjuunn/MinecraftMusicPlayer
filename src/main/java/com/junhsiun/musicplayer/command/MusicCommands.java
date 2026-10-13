@@ -26,6 +26,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.advancements.Advancement;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.network.chat.Component;
@@ -38,6 +39,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BiConsumer;
@@ -75,9 +78,9 @@ public final class MusicCommands {
                 .then(lyrics())
                 .then(search())
                 .then(view())
+                .then(share())
                 .then(radio())
-                .then(config())
-                .then(Commands.literal("star").executes(ctx -> sendStarAchievement(ctx.getSource()))));
+                .then(config()));
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> help() {
@@ -99,7 +102,7 @@ public final class MusicCommands {
                 .withStyle(style -> style
                         .withColor(ChatFormatting.WHITE)
                         .withBold(true)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music star"))
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music help star"))
                         .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, renderRepositoryHover()))));
         Messages.sendSuccess(source, title, false);
         helpEntry(source, "now", new TranslatableComponent("musicplayer.help.desc.now"));
@@ -110,6 +113,7 @@ public final class MusicCommands {
         helpEntry(source, "playlist", new TranslatableComponent("musicplayer.help.desc.playlist"));
         helpEntry(source, "search", new TranslatableComponent("musicplayer.help.desc.search"));
         helpEntry(source, "view", new TranslatableComponent("musicplayer.help.desc.view"));
+        helpEntry(source, "share", new TranslatableComponent("musicplayer.help.desc.share"));
         helpEntry(source, "join", new TranslatableComponent("musicplayer.help.desc.join"));
         helpEntry(source, "leave", new TranslatableComponent("musicplayer.help.desc.leave"));
         helpEntry(source, "mute", new TranslatableComponent("musicplayer.help.desc.mute"));
@@ -163,6 +167,11 @@ public final class MusicCommands {
     }
 
     private static int sendHelpFor(CommandSourceStack source, String subcommand) {
+        if ("star".equals(subcommand)) {
+            // 仓库入口彩蛋：点击 /music help 中的仓库链接触发（不作为可见子命令注册）
+            sendStarAchievement(source);
+            return 1;
+        }
         sendHeader(source);
         switch (subcommand) {
             case "now": {
@@ -215,6 +224,11 @@ public final class MusicCommands {
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.view_artist"), new TranslatableComponent("musicplayer.help.usage.view_artist"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.view_user"), new TranslatableComponent("musicplayer.help.usage.view_user"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.view_url"), new TranslatableComponent("musicplayer.help.usage.view_url"));
+                break;
+            }
+            case "share": {
+                Messages.sendSuccess(source,  sectionHeader(new TextComponent("share"), null), false);
+                detailLine(source, new TranslatableComponent("musicplayer.help.cmd.share"), new TranslatableComponent("musicplayer.help.usage.share"));
                 break;
             }
             case "join": {
@@ -873,6 +887,59 @@ public final class MusicCommands {
         });
     }
 
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> share() {
+        return Commands.literal("share")
+                .then(Commands.argument("targets", EntityArgument.players())
+                        .then(sharePagedView("playlist"))
+                        .then(sharePagedView("user"))
+                        .then(sharePagedView("artist"))
+                        .then(sharePagedView("author"))
+                        .then(sharePagedView("radio"))
+                        .then(sharePagedView("program"))
+                        .then(Commands.argument("url", StringArgumentType.greedyString()).executes(context -> {
+                            String url = StringArgumentType.getString(context, "url");
+                            Collection<ServerPlayer> targets = EntityArgument.getPlayers(context, "targets");
+                            sendShare(context.getSource(), targets, "/music view " + url);
+                            return targets.size();
+                        })));
+    }
+
+    /** 与 /music view 的分页子命令结构一致：{@code <ID>} 与 {@code <ID> page <页码>}。 */
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> sharePagedView(String literal) {
+        String argumentName = literal + "_id";
+        return Commands.literal(literal)
+                .then(Commands.argument(argumentName, StringArgumentType.string()).executes(context -> {
+                    String id = StringArgumentType.getString(context, argumentName);
+                    Collection<ServerPlayer> targets = EntityArgument.getPlayers(context, "targets");
+                    sendShare(context.getSource(), targets, "/music view " + literal + " " + id);
+                    return targets.size();
+                }).then(Commands.literal("page")
+                        .then(Commands.argument("page", IntegerArgumentType.integer(1)).executes(context -> {
+                            String id = StringArgumentType.getString(context, argumentName);
+                            int page = IntegerArgumentType.getInteger(context, "page");
+                            Collection<ServerPlayer> targets = EntityArgument.getPlayers(context, "targets");
+                            sendShare(context.getSource(), targets, "/music view " + literal + " " + id + " page " + page);
+                            return targets.size();
+                        }))));
+    }
+
+    /** 向目标玩家发送可点击的分享消息，点击后等价于执行对应的 /music view 命令。 */
+    private static void sendShare(CommandSourceStack source, Collection<ServerPlayer> targets, String viewCommand) {
+        MutableComponent message = new TranslatableComponent("musicplayer.share.received",
+                new TextComponent(source.getTextName()).withStyle(ChatFormatting.AQUA))
+                .withStyle(ChatFormatting.GRAY)
+                .append(" ")
+                .append(Messages.clickableCommand(
+                        new TranslatableComponent("musicplayer.share.click_view"),
+                        new TranslatableComponent("musicplayer.share.click_view_hover"),
+                        viewCommand,
+                        ChatFormatting.GREEN));
+        for (ServerPlayer player : targets) {
+            player.displayClientMessage(message, false);
+        }
+        Messages.success(source, new TranslatableComponent("musicplayer.share.sent", targets.size()), false);
+    }
+
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> stop() {
         return Commands.literal("stop")
                 .requires(source -> source.hasPermission(2))
@@ -1099,6 +1166,15 @@ public final class MusicCommands {
         }));
     }
 
+    /** 列表中的分享按钮：点击后向聊天框填入 /music share 命令（默认目标 @a，可修改后发送）。 */
+    private static MutableComponent shareSuggest(String viewType, String id, int page) {
+        return Messages.suggestable(
+                new TranslatableComponent("musicplayer.common.share_label"),
+                new TranslatableComponent("musicplayer.common.share_hover"),
+                "/music share @a " + viewType + " " + id + " page " + page,
+                ChatFormatting.AQUA);
+    }
+
     private static void sendSongResults(CommandSourceStack source, String keyword, int page, String literal, List<SearchEntry> results, Throwable throwable) {
         if (throwable != null) {
             Messages.warning(source, new TranslatableComponent("musicplayer.search.song_failed", Messages.textOrTranslatable(rootMessage(throwable))));
@@ -1131,7 +1207,9 @@ public final class MusicCommands {
         Messages.sendSuccess(source,  sectionHeader(new TranslatableComponent("musicplayer.search.artists_title"), new TranslatableComponent("musicplayer.search.artists_hint")), false);
         Messages.sendSuccess(source,  spacer(), false);
         for (SearchEntry entry : results) {
-            Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(new TranslatableComponent("musicplayer.common.view_label"), new TranslatableComponent("musicplayer.common.view_artist_hover"), "/music view artist " + entry.id(), ChatFormatting.GREEN), new TranslatableComponent("musicplayer.common.view_artist_hover"), new TextComponent("")), false);
+            Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(new TranslatableComponent("musicplayer.common.view_label"), new TranslatableComponent("musicplayer.common.view_artist_hover"), "/music view artist " + entry.id(), ChatFormatting.GREEN)
+                    .append(new TextComponent(" "))
+                    .append(shareSuggest("artist", entry.id(), 1)), new TranslatableComponent("musicplayer.common.view_artist_hover"), new TextComponent("")), false);
         }
         Messages.sendSuccess(source,  spacer(), false);
         sendSearchNavigation(source, literal, keyword, page, results.size());
@@ -1150,7 +1228,9 @@ public final class MusicCommands {
         Messages.sendSuccess(source,  sectionHeader(new TranslatableComponent("musicplayer.search.playlists_title"), new TranslatableComponent("musicplayer.search.playlists_hint")), false);
         Messages.sendSuccess(source,  spacer(), false);
         for (SearchEntry entry : results) {
-            Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(new TranslatableComponent("musicplayer.common.view_label"), new TranslatableComponent("musicplayer.common.view_playlist_hover"), "/music view playlist " + entry.id(), ChatFormatting.GREEN), new TranslatableComponent("musicplayer.common.view_playlist_hover"), new TranslatableComponent("musicplayer.common.click_creator_hover")), false);
+            Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(new TranslatableComponent("musicplayer.common.view_label"), new TranslatableComponent("musicplayer.common.view_playlist_hover"), "/music view playlist " + entry.id(), ChatFormatting.GREEN)
+                    .append(new TextComponent(" "))
+                    .append(shareSuggest("playlist", entry.id(), 1)), new TranslatableComponent("musicplayer.common.view_playlist_hover"), new TranslatableComponent("musicplayer.common.click_creator_hover")), false);
         }
         Messages.sendSuccess(source,  spacer(), false);
         sendSearchNavigation(source, literal, keyword, page, results.size());
@@ -1169,7 +1249,9 @@ public final class MusicCommands {
         Messages.sendSuccess(source,  sectionHeader(new TranslatableComponent("musicplayer.search.users_title"), new TranslatableComponent("musicplayer.search.users_hint")), false);
         Messages.sendSuccess(source,  spacer(), false);
         for (SearchEntry entry : results) {
-            Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(new TranslatableComponent("musicplayer.common.view_label"), new TranslatableComponent("musicplayer.common.view_user_playlists_hover"), "/music view user " + entry.id(), ChatFormatting.GREEN), new TranslatableComponent("musicplayer.common.view_user_playlists_hover"), new TextComponent("")), false);
+            Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(new TranslatableComponent("musicplayer.common.view_label"), new TranslatableComponent("musicplayer.common.view_user_playlists_hover"), "/music view user " + entry.id(), ChatFormatting.GREEN)
+                    .append(new TextComponent(" "))
+                    .append(shareSuggest("user", entry.id(), 1)), new TranslatableComponent("musicplayer.common.view_user_playlists_hover"), new TextComponent("")), false);
         }
         Messages.sendSuccess(source,  spacer(), false);
         sendSearchNavigation(source, literal, keyword, page, results.size());
@@ -1221,7 +1303,9 @@ public final class MusicCommands {
                             .append(new TextComponent(" "))
                             .append(Messages.clickableCommand(new TranslatableComponent("musicplayer.playlist.play_label"), new TranslatableComponent("musicplayer.playlist.play_hover"), "/music play playlist " + playlist.id(), ChatFormatting.GREEN))
                             .append(new TextComponent(" "))
-                            .append(Messages.clickableCommand(new TranslatableComponent("musicplayer.playlist.reverse_label"), new TranslatableComponent("musicplayer.playlist.reverse_hover"), "/music play playlist " + playlist.id() + " reverse", ChatFormatting.GOLD)), false);
+                            .append(Messages.clickableCommand(new TranslatableComponent("musicplayer.playlist.reverse_label"), new TranslatableComponent("musicplayer.playlist.reverse_hover"), "/music play playlist " + playlist.id() + " reverse", ChatFormatting.GOLD))
+                            .append(new TextComponent(" "))
+                            .append(shareSuggest("playlist", playlist.id(), page)), false);
                     Messages.sendSuccess(source,  spacer(), false);
 
                     if (t != null) {
@@ -1251,19 +1335,28 @@ public final class MusicCommands {
             return;
         }
         sendHeader(source);
+        // 隐藏作为背景音乐的歌单，仅展示其他歌单
+        List<SearchEntry> visiblePlaylists = new ArrayList<>(user.playlists());
+        String bgmPlaylistId = MusicPlayerConfigManager.get().bgmPlaylistId;
+        if (bgmPlaylistId != null && !Java8.isBlank(bgmPlaylistId)) {
+            String hiddenId = bgmPlaylistId.trim();
+            visiblePlaylists.removeIf(playlist -> hiddenId.equals(playlist.id()));
+        }
+        PageWindow page = pageWindow(visiblePlaylists.size(), requestedPage, pageSize());
         Messages.sendSuccess(source,  new TranslatableComponent("musicplayer.view.user_prefix").withStyle(ChatFormatting.GOLD)
-                .append(clickableText(user.name(), "/music view user " + user.id(), new TranslatableComponent("musicplayer.common.view_user_playlists_hover"), ChatFormatting.AQUA)), false);
-        if (user.signature() != null && Java8.isNotBlank(user.signature())) {
+                .append(clickableText(user.name(), "/music view user " + user.id(), new TranslatableComponent("musicplayer.common.view_user_playlists_hover"), ChatFormatting.AQUA))
+                .append(new TextComponent(" "))
+                .append(shareSuggest("user", user.id(), page.page())), false);
+        if (user.signature() != null && !Java8.isBlank(user.signature())) {
             Messages.sendSuccess(source,  spacer(), false);
             Messages.sendSuccess(source,  new TextComponent(user.signature()).withStyle(ChatFormatting.GRAY), false);
         }
-        if (user.playlists().isEmpty()) {
+        if (visiblePlaylists.isEmpty()) {
             Messages.warning(source, new TranslatableComponent("musicplayer.view.user_no_playlists"));
             return;
         }
         Messages.sendSuccess(source,  spacer(), false);
-        PageWindow page = pageWindow(user.playlists().size(), requestedPage, pageSize());
-        for (SearchEntry playlist : slicePage(user.playlists(), page)) {
+        for (SearchEntry playlist : slicePage(visiblePlaylists, page)) {
             Messages.sendSuccess(source,  renderEntry(playlist, Messages.clickableCommand(new TranslatableComponent("musicplayer.common.view_label"), new TranslatableComponent("musicplayer.common.view_playlist_hover"), "/music view playlist " + playlist.id(), ChatFormatting.GREEN), new TranslatableComponent("musicplayer.common.view_playlist_hover"), new TextComponent("")), false);
         }
         Messages.sendSuccess(source,  spacer(), false);
@@ -1291,8 +1384,10 @@ public final class MusicCommands {
                 .whenComplete((tracks, t) -> server.execute(() -> {
                     sendHeader(source);
                     Messages.sendSuccess(source,  new TranslatableComponent("musicplayer.view.artist_prefix").withStyle(ChatFormatting.GOLD)
-                            .append(clickableText(artist.name(), "/music view " + literal + " " + artist.id(), new TranslatableComponent("musicplayer.common.view_artist_hover"), ChatFormatting.AQUA)), false);
-                    if (artist.description() != null && Java8.isNotBlank(artist.description())) {
+                            .append(clickableText(artist.name(), "/music view " + literal + " " + artist.id(), new TranslatableComponent("musicplayer.common.view_artist_hover"), ChatFormatting.AQUA))
+                            .append(new TextComponent(" "))
+                            .append(shareSuggest(literal, artist.id(), page)), false);
+                    if (artist.description() != null && !Java8.isBlank(artist.description())) {
                         Messages.sendSuccess(source,  spacer(), false);
                         Messages.sendSuccess(source,  new TextComponent(artist.description()).withStyle(ChatFormatting.GRAY), false);
                     }
@@ -1377,7 +1472,9 @@ public final class MusicCommands {
         for (SearchEntry entry : results) {
             MutableComponent actions = Messages.clickableCommand(new TranslatableComponent("musicplayer.radio.play_label"), new TranslatableComponent("musicplayer.common.play_in_order_hover"), "/music play radio " + entry.id(), ChatFormatting.GREEN)
                     .append(new TextComponent(" "))
-                    .append(Messages.clickableCommand(new TranslatableComponent("musicplayer.common.view_label"), new TranslatableComponent("musicplayer.common.view_radio_hover"), "/music view radio " + entry.id(), ChatFormatting.GRAY));
+                    .append(Messages.clickableCommand(new TranslatableComponent("musicplayer.common.view_label"), new TranslatableComponent("musicplayer.common.view_radio_hover"), "/music view radio " + entry.id(), ChatFormatting.GRAY))
+                    .append(new TextComponent(" "))
+                    .append(shareSuggest("radio", entry.id(), 1));
             Messages.sendSuccess(source,  renderEntry(entry, actions, new TranslatableComponent("musicplayer.radio.play_hover"), new TranslatableComponent("musicplayer.radio.play_hover")), false);
         }
         Messages.sendSuccess(source,  spacer(), false);
@@ -1404,10 +1501,11 @@ public final class MusicCommands {
                     sendQuickBar(source,
                             Messages.clickableCommand(new TranslatableComponent("musicplayer.radio.play_all_label"), new TranslatableComponent("musicplayer.common.play_in_order_hover"), "/music play radio " + radioId, ChatFormatting.GREEN),
                             Messages.clickableCommand(new TranslatableComponent("musicplayer.radio.reverse_label"), new TranslatableComponent("musicplayer.radio.reverse_hover"), "/music play radio " + radioId + " reverse", ChatFormatting.GOLD),
+                            shareSuggest("radio", radioId, page),
                             Messages.clickableCommand(new TranslatableComponent("musicplayer.common.help_label"), new TranslatableComponent("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
                     MutableComponent headerLine = new TextComponent("──").withStyle(ChatFormatting.GOLD)
                             .append(new TranslatableComponent("musicplayer.radio.detail_title").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
-                    if (Java8.isNotBlank(radio.name())) {
+                    if (!Java8.isBlank(radio.name())) {
                         headerLine.append(new TextComponent("  " + radio.name()).withStyle(ChatFormatting.GRAY));
                     }
                     Messages.sendSuccess(source, headerLine, false);
@@ -1454,6 +1552,7 @@ public final class MusicCommands {
         sendQuickBar(source,
                 Messages.clickableCommand(new TranslatableComponent("musicplayer.common.play_label"), new TranslatableComponent("musicplayer.view.play_program_hover"), "/music play program " + program.id(), ChatFormatting.GREEN),
                 Java8.isBlank(program.radioId()) ? null : Messages.clickableCommand(new TranslatableComponent("musicplayer.view.radio_label"), new TranslatableComponent("musicplayer.view.owning_radio_hover"), "/music view radio " + program.radioId(), ChatFormatting.AQUA),
+                shareSuggest("program", program.id(), 1),
                 Messages.clickableCommand(new TranslatableComponent("musicplayer.common.help_label"), new TranslatableComponent("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
         Messages.sendSuccess(source,  sectionHeader(new TranslatableComponent("musicplayer.view.program_title"), new TextComponent(program.name())), false);
         Messages.sendSuccess(source,  spacer(), false);
