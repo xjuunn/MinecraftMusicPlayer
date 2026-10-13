@@ -64,6 +64,11 @@ public final class MusicPlayerConfigManager {
         return config;
     }
 
+    public static void resetAll() {
+        config = new MusicPlayerConfig();
+        save();
+    }
+
     private static void migrateLegacyDefaults() {
         if (config.neteaseBaseUrl == null || Java8.isBlank(config.neteaseBaseUrl)
                 || "http://127.0.0.1:3000".equalsIgnoreCase(config.neteaseBaseUrl.trim())) {
@@ -71,6 +76,13 @@ public final class MusicPlayerConfigManager {
         }
         if (config.proxy == null) {
             config.proxy = "";
+        }
+        if (config.bgmPlaylistId == null) {
+            config.bgmPlaylistId = MusicPlayerConfig.DEFAULT_BGM_PLAYLIST_ID;
+        }
+        config.bgmPlaylistId = config.bgmPlaylistId.trim();
+        if (Double.isNaN(config.bgmVolume) || config.bgmVolume < 0.0D || config.bgmVolume > 1.0D) {
+            config.bgmVolume = 0.7D;
         }
         if (config.connectTimeoutSeconds <= 0) {
             config.connectTimeoutSeconds = 10;

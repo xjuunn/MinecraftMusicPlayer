@@ -3,7 +3,10 @@
   "package": "com.junhsiun.musicplayer.mixin.client",
   "compatibilityLevel": "JAVA_8",
   "client": [
-    "MusicManagerMixin"
+    "MusicManagerAccessor",
+    "MusicManagerMixin",
+    "OptionsMixin",
+    "SoundOptionsScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1
