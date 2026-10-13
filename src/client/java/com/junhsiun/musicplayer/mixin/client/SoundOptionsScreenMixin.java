@@ -1,7 +1,7 @@
 package com.junhsiun.musicplayer.mixin.client;
 
 import com.junhsiun.musicplayer.client.ClientBgmController;
-import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
+import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfigManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.OptionInstance;
 import net.minecraft.client.Options;
@@ -37,20 +37,20 @@ public abstract class SoundOptionsScreenMixin {
 
     /** 是否使用网络背景音乐的全局开关（客户端本地设置）。 */
     private OptionInstance<Boolean> musicplayer$createNetworkBgmToggle() {
-        boolean initial = MusicPlayerConfigManager.get().enableNetworkBgm;
+        boolean initial = MusicPlayerClientConfigManager.get().enableNetworkBgm;
         return OptionInstance.createBoolean(
                 "musicplayer.options.enable_network_bgm",
                 OptionInstance.noTooltip(),
                 initial,
                 value -> {
-                    MusicPlayerConfigManager.get().enableNetworkBgm = value;
-                    MusicPlayerConfigManager.save();
+                    MusicPlayerClientConfigManager.get().enableNetworkBgm = value;
+                    MusicPlayerClientConfigManager.save();
                     ClientBgmController.getInstance().onGlobalToggleChanged();
                 });
     }
 
     private OptionInstance<Double> musicplayer$createBgmVolumeOption() {
-        double initial = musicplayer$clampVolume(MusicPlayerConfigManager.get().bgmVolume);
+        double initial = musicplayer$clampVolume(MusicPlayerClientConfigManager.get().bgmVolume);
         return new OptionInstance<>(
                 "musicplayer.options.bgm_volume",
                 OptionInstance.noTooltip(),
@@ -58,8 +58,8 @@ public abstract class SoundOptionsScreenMixin {
                 OptionInstance.UnitDouble.INSTANCE,
                 initial,
                 value -> {
-                    MusicPlayerConfigManager.get().bgmVolume = musicplayer$clampVolume(value);
-                    MusicPlayerConfigManager.save();
+                    MusicPlayerClientConfigManager.get().bgmVolume = musicplayer$clampVolume(value);
+                    MusicPlayerClientConfigManager.save();
                     Minecraft minecraft = Minecraft.getInstance();
                     SoundManager soundManager = minecraft.getSoundManager();
                     if (minecraft.options.getFinalSoundSourceVolume(SoundSource.MUSIC) > 0.0F) {
