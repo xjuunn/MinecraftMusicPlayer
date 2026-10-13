@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.junhsiun.musicplayer.mixin.client.OptionsAccessor;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
@@ -33,6 +34,13 @@ import java.io.InterruptedIOException;
 import java.util.List;
 
 public final class ClientMusicController {
+    /** 网络背景音乐（BGM）播放结果回调，全部在播放线程触发。 */
+    public interface BgmListener {
+        void onBgmEnded();
+
+        void onBgmFailed(String message);
+    }
+
     private static final ClientMusicController INSTANCE = new ClientMusicController();
 
     private final BackgroundMusicAudioDevice audioDevice = new BackgroundMusicAudioDevice();
@@ -40,6 +48,8 @@ public final class ClientMusicController {
     private volatile Thread playbackThread;
     private String currentTrackId = "";
     private volatile boolean backgroundMusicPlaying;
+    private volatile boolean bgmPlaying;
+    private volatile BgmListener bgmListener;
     private long lastPositionReportTime;
 
     private ClientMusicController() {
@@ -51,6 +61,11 @@ public final class ClientMusicController {
 
     public boolean isBackgroundMusicPlaying() {
         return backgroundMusicPlaying;
+    }
+
+    /** 网络背景音乐是否正在播放（与队列播放标志相互独立）。 */
+    public boolean isBgmPlaying() {
+        return bgmPlaying;
     }
 
     public void tick() {
@@ -87,6 +102,8 @@ public final class ClientMusicController {
         audioDevice.reset();
         currentTrackId = "";
         backgroundMusicPlaying = false;
+        bgmPlaying = false;
+        bgmListener = null;
         lastPositionReportTime = 0L;
         if (reason != null && !reason.isBlank()) {
             MusicPlayerMod.LOGGER.info("客户端已停止播放: {}", reason);
@@ -102,15 +119,36 @@ public final class ClientMusicController {
         }
         backgroundMusicPlaying = true;
         audioDevice.setSeekPosition(offsetMillis);
-        playbackThread = new Thread(() -> playWithFallback(urls, currentTrackId, title, subtitle), "musicplayer-client-playback");
+        playbackThread = new Thread(() -> playWithFallback(urls, currentTrackId, title, subtitle, false, null), "musicplayer-client-playback");
         playbackThread.setDaemon(true);
         playbackThread.start();
     }
 
-    private void playWithFallback(List<String> urls, String trackId, String title, String subtitle) {
+    /**
+     * 静默播放网络背景音乐：不上报服务端、不触发歌词与提示，
+     * 播放结束/失败通过 {@code listener} 回调给 BGM 控制器。
+     */
+    public synchronized void playBgm(String trackId, List<String> urls, String title, String subtitle, BgmListener listener) {
+        stop(null);
+        currentTrackId = trackId == null ? "" : trackId;
+        bgmPlaying = true;
+        bgmListener = listener;
+        audioDevice.setSeekPosition(0L);
+        playbackThread = new Thread(() -> playWithFallback(urls, currentTrackId, title, subtitle, true, listener), "musicplayer-client-bgm");
+        playbackThread.setDaemon(true);
+        playbackThread.start();
+    }
+
+    private void playWithFallback(List<String> urls, String trackId, String title, String subtitle, boolean bgm, BgmListener listener) {
         if (urls == null || urls.isEmpty()) {
             MusicPlayerMod.LOGGER.warn("没有可用的播放源: {} - {}", title, subtitle);
-            reportFailed(trackId, "musicplayer.playback.no_source");
+            if (bgm) {
+                if (listener != null) {
+                    listener.onBgmFailed("musicplayer.playback.no_source");
+                }
+            } else {
+                reportFailed(trackId, "musicplayer.playback.no_source");
+            }
             return;
         }
 
@@ -130,7 +168,13 @@ public final class ClientMusicController {
                 MusicPlayerMod.LOGGER.debug("开始尝试播放源 {}/{}: {} - {}", index + 1, urls.size(), title, Messages.sanitizeForLog(url));
                 playSingle(url, title, subtitle);
                 if (!Thread.currentThread().isInterrupted()) {
-                    reportEnded(trackId);
+                    if (bgm) {
+                        if (listener != null) {
+                            listener.onBgmEnded();
+                        }
+                    } else {
+                        reportEnded(trackId);
+                    }
                 }
                 return;
             } catch (Exception exception) {
@@ -143,7 +187,13 @@ public final class ClientMusicController {
         }
 
         MusicPlayerMod.LOGGER.warn("所有播放源都不可用: {} - {}", title, subtitle, lastException);
-        reportFailed(trackId, lastException == null ? "musicplayer.playback.all_sources_failed" : lastException.getMessage());
+        if (bgm) {
+            if (listener != null) {
+                listener.onBgmFailed(lastException == null ? "musicplayer.playback.all_sources_failed" : lastException.getMessage());
+            }
+        } else {
+            reportFailed(trackId, lastException == null ? "musicplayer.playback.all_sources_failed" : lastException.getMessage());
+        }
     }
 
     private void playSingle(String url, String title, String subtitle) throws IOException, JavaLayerException {
@@ -186,6 +236,7 @@ public final class ClientMusicController {
                 if (Thread.currentThread() == playbackThread) {
                     playbackThread = null;
                     backgroundMusicPlaying = false;
+                    bgmPlaying = false;
                 }
             }
         }
@@ -329,7 +380,12 @@ public final class ClientMusicController {
                 return;
             }
             Minecraft minecraft = Minecraft.getInstance();
-            float musicVolume = minecraft.options.getSoundSourceVolume(SoundSource.MUSIC);
+            float musicVolume;
+            if (getInstance().isBgmPlaying()) {
+                musicVolume = minecraft.options.getSoundSourceVolume(SoundSource.MUSIC);
+            } else {
+                musicVolume = ((OptionsAccessor) (Object) minecraft.options).getSourceVolumes().getFloat(SoundSource.MUSIC);
+            }
             float masterVolume = minecraft.options.getSoundSourceVolume(SoundSource.MASTER);
             double baseVolume = Math.max(0.0D, masterVolume * musicVolume);
             if (baseVolume <= 0.0001D) {
