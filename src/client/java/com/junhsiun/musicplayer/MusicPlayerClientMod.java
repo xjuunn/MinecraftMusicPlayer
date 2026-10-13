@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer;
 
 import com.junhsiun.musicplayer.client.ClientBgmController;
+import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfigManager;
 import com.junhsiun.musicplayer.client.CoverArtTextureCache;
 import com.junhsiun.musicplayer.client.ClientJukeboxController;
 import com.junhsiun.musicplayer.client.ClientMusicController;
@@ -28,6 +29,8 @@ import java.net.URI;
 public final class MusicPlayerClientMod implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        // 客户端本地配置（BGM 音量/开关）独立于服务端共享配置
+        MusicPlayerClientConfigManager.load();
         ClientPlayNetworking.registerGlobalReceiver(MusicControlPayload.ID, (client, player, buf, sender) -> {
             MusicControlPayload payload = MusicControlPayload.decode(buf);
             client.execute(() -> ClientMusicController.getInstance().handle(payload));

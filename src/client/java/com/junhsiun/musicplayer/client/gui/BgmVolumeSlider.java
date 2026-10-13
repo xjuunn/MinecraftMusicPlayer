@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.client.gui;
 
-import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
+import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfig;
+import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfigManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.resources.language.I18n;
@@ -9,7 +10,7 @@ import net.minecraft.sounds.SoundSource;
 public class BgmVolumeSlider extends AbstractSliderButton {
 
     public BgmVolumeSlider(int x, int y) {
-        super(x, y, 150, 20, musicplayer$clampVolume(MusicPlayerConfigManager.get().bgmVolume));
+        super(x, y, 150, 20, musicplayer$clampVolume(MusicPlayerClientConfigManager.get().bgmVolume));
     }
 
     @Override
@@ -19,8 +20,9 @@ public class BgmVolumeSlider extends AbstractSliderButton {
 
     @Override
     protected void applyValue() {
-        MusicPlayerConfigManager.get().bgmVolume = musicplayer$clampVolume(this.value);
-        MusicPlayerConfigManager.save();
+        MusicPlayerClientConfig config = MusicPlayerClientConfigManager.get();
+        config.bgmVolume = musicplayer$clampVolume(this.value);
+        MusicPlayerClientConfigManager.save();
         Minecraft minecraft = Minecraft.getInstance();
         float volume = minecraft.options.getSoundSourceVolume(SoundSource.MUSIC);
         minecraft.getSoundManager().updateSourceVolume(SoundSource.MUSIC, volume);

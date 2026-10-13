@@ -21,7 +21,7 @@ public final class MusicPlayerConfigManager {
     private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("minecraft-music-player.json");
     private static final Path LEGACY_CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("music-player-config.json");
 
-    private static MusicPlayerConfig config = new MusicPlayerConfig();
+    private static volatile MusicPlayerConfig config = new MusicPlayerConfig();
 
     private MusicPlayerConfigManager() {
     }
@@ -81,9 +81,6 @@ public final class MusicPlayerConfigManager {
             config.bgmPlaylistId = MusicPlayerConfig.DEFAULT_BGM_PLAYLIST_ID;
         }
         config.bgmPlaylistId = config.bgmPlaylistId.trim();
-        if (Double.isNaN(config.bgmVolume) || config.bgmVolume < 0.0D || config.bgmVolume > 1.0D) {
-            config.bgmVolume = 0.7D;
-        }
         if (config.connectTimeoutSeconds <= 0) {
             config.connectTimeoutSeconds = 10;
         }
