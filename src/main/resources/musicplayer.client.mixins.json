@@ -6,7 +6,10 @@
     "ClientLevelAccessor",
     "LevelEventHandlerAccessor",
     "LevelEventHandlerMixin",
-    "MusicManagerMixin"
+    "MusicManagerAccessor",
+    "MusicManagerMixin",
+    "OptionsMixin",
+    "SoundOptionsScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1
