@@ -888,6 +888,8 @@ public final class MusicCommands {
                 .then(Commands.literal("reload").executes(context -> {
                     MusicPlayerConfigManager.load();
                     MusicPlayerMod.queueService().clearTrackCache();
+                    // 配置文件中的 bgmPlaylistId 可能已变更，同步给在线客户端
+                    MusicPlayerMod.syncBgmConfig(context.getSource().getServer());
                     Messages.success(context.getSource(), new TranslatableComponent("musicplayer.config.reloaded"), false);
                     return 1;
                 }))
@@ -900,9 +902,13 @@ public final class MusicCommands {
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_bgm",
                             config.bgmPlaylistId == null || Java8.isBlank(config.bgmPlaylistId) ? "off" : config.bgmPlaylistId), false);
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_proxy",
-                            Java8.isNotBlank(config.proxy)
+                            !Java8.isBlank(config.proxy)
                                     ? new TranslatableComponent("musicplayer.config.proxy_manual", config.proxy)
                                     : new TranslatableComponent(config.useSystemProxy ? "musicplayer.config.proxy_auto" : "musicplayer.config.proxy_direct")), false);
+                    Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_network", yesNo(config.preferIpv4), config.connectTimeoutSeconds, config.readTimeoutSeconds), false);
+                    Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_limits", config.searchLimit, config.maxQueueSize, config.maxSongsPerPlayer, config.playlistQueueLimit, config.queueCacheSize), false);
+                    Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_vote_skip", config.voteSkipPercent), false);
+                    Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_loot", yesNo(config.enableLootMusicDiscs), config.lootMusicDiscChance, config.lootMusicDiscCount), false);
                     return 1;
                 }))
                 .then(Commands.literal("clearqueue").executes(context -> {
@@ -919,6 +925,8 @@ public final class MusicCommands {
                             }
                             config.neteaseBaseUrl = "default".equalsIgnoreCase(value) ? MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL : value;
                             MusicPlayerConfigManager.save();
+                            // 更换 API 地址后旧缓存音源 URL 已失效，清空点播音源缓存
+                            MusicPlayerMod.queueService().clearTrackCache();
                             Messages.success(context.getSource(), new TranslatableComponent("musicplayer.config.base_url_updated", config.neteaseBaseUrl), false);
                             return 1;
                         })))
@@ -989,7 +997,8 @@ public final class MusicCommands {
                             Messages.success(context.getSource(), new TranslatableComponent("musicplayer.config.reset_all"), false);
                             return 1;
                         }))
-                        .then(resetSetting("baseUrl", (config, defaults) -> config.neteaseBaseUrl = defaults.neteaseBaseUrl))
+                        .then(resetSetting("baseUrl", (config, defaults) -> config.neteaseBaseUrl = defaults.neteaseBaseUrl,
+                                context -> MusicPlayerMod.queueService().clearTrackCache()))
                         .then(resetSetting("allowCustomServer", (config, defaults) -> config.allowCustomServer = defaults.allowCustomServer))
                         .then(resetSetting("allowSongRequest", (config, defaults) -> config.allowSongRequest = defaults.allowSongRequest))
                         .then(resetSetting("allowPlaylistRequest", (config, defaults) -> config.allowPlaylistRequest = defaults.allowPlaylistRequest))
@@ -1343,7 +1352,7 @@ public final class MusicCommands {
 
         Messages.sendSuccess(source,  new TextComponent("ID: ").withStyle(ChatFormatting.GRAY)
                 .append(new TextComponent(track.id()).withStyle(style -> style
-                        .setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, track.id()))
+                        .setClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, track.id()))
                         .setColor(ChatFormatting.WHITE)
                         .setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new TranslatableComponent("musicplayer.common.copy_hover"))))), false);
 

@@ -1,7 +1,8 @@
 package com.junhsiun.musicplayer.mixin.client;
 
 import com.junhsiun.musicplayer.client.ClientBgmController;
-import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
+import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfig;
+import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfigManager;
 import com.junhsiun.musicplayer.client.gui.BgmVolumeSlider;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -25,8 +26,9 @@ public abstract class SoundOptionsScreenMixin extends Screen {
         int y = (this.height / 6 - 12) + 144;
         this.addButton(new Button(this.width / 2 - 155, y, 150, 20,
                 musicplayer$toggleLabel(), button -> {
-                    MusicPlayerConfigManager.get().enableNetworkBgm = !MusicPlayerConfigManager.get().enableNetworkBgm;
-                    MusicPlayerConfigManager.save();
+                    MusicPlayerClientConfig config = MusicPlayerClientConfigManager.get();
+                    config.enableNetworkBgm = !config.enableNetworkBgm;
+                    MusicPlayerClientConfigManager.save();
                     ClientBgmController.getInstance().onGlobalToggleChanged();
                     button.setMessage(musicplayer$toggleLabel());
                 }));
@@ -34,7 +36,7 @@ public abstract class SoundOptionsScreenMixin extends Screen {
     }
 
     private static String musicplayer$toggleLabel() {
-        boolean enabled = MusicPlayerConfigManager.get().enableNetworkBgm;
+        boolean enabled = MusicPlayerClientConfigManager.get().enableNetworkBgm;
         return I18n.get("musicplayer.options.enable_network_bgm") + ": "
                 + I18n.get(enabled ? "options.on" : "options.off");
     }

@@ -24,18 +24,42 @@ public final class HttpClientFactory {
     /** 缓存的 API 客户端，复用连接池，降低重复建连开销。 */
     private static volatile OkHttpClient cachedApiClient;
     private static volatile String cachedApiClientConfigKey = "";
+    /** 缓存的全配置客户端（超时/代理/IPv4 完整生效），供播放与下载复用连接池。 */
+    private static volatile OkHttpClient cachedFullClient;
+    private static volatile String cachedFullClientConfigKey = "";
 
     private HttpClientFactory() {
     }
 
-    /** 供配置重载时清空缓存的 API 客户端。 */
+    /** 供配置重载时清空缓存客户端。 */
     public static void invalidateApiClient() {
         cachedApiClient = null;
         cachedApiClientConfigKey = "";
+        cachedFullClient = null;
+        cachedFullClientConfigKey = "";
     }
 
     public static OkHttpClient create() {
         MusicPlayerConfig config = MusicPlayerConfigManager.get();
+        String configKey = config.connectTimeoutSeconds + "|" + config.readTimeoutSeconds + "|" + config.proxy
+                + "|" + config.useSystemProxy + "|" + config.preferIpv4;
+        OkHttpClient cached = cachedFullClient;
+        if (cached != null && cachedFullClientConfigKey.equals(configKey)) {
+            return cached;
+        }
+        synchronized (HttpClientFactory.class) {
+            cached = cachedFullClient;
+            if (cached != null && cachedFullClientConfigKey.equals(configKey)) {
+                return cached;
+            }
+            OkHttpClient client = buildFullClient(config);
+            cachedFullClient = client;
+            cachedFullClientConfigKey = configKey;
+            return client;
+        }
+    }
+
+    private static OkHttpClient buildFullClient(MusicPlayerConfig config) {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
                 .connectTimeout(Duration.ofSeconds(config.connectTimeoutSeconds))
                 .readTimeout(Duration.ofSeconds(config.readTimeoutSeconds))
