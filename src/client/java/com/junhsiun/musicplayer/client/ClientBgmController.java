@@ -1,7 +1,7 @@
 package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
-import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
+import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfigManager;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import net.minecraft.client.Minecraft;
@@ -32,18 +32,21 @@ public final class ClientBgmController {
     private static final ClientBgmController INSTANCE = new ClientBgmController();
     private static final int POOL_BATCH_SIZE = 3;
     private static final int PLAYLIST_PAGE_SIZE = 100;
+    /** 歌单 ID 收集上限，避免超大歌单触发过多请求。 */
+    private static final int MAX_TRACK_IDS = 1000;
     private static final int MAX_TRACK_FAILURES = 3;
     private static final long FALLBACK_MILLIS = 60_000L;
 
     private final Object lock = new Object();
     private final Random random = new Random();
     private final List<TrackInfo> pool = new ArrayList<>();
-    private final List<String> pageIds = new ArrayList<>();
+    /** 歌单全部曲目 ID（分页拉取后洗牌循环）。 */
+    private final List<String> trackIds = new ArrayList<>();
     private final List<Runnable> refillWaiters = new ArrayList<>();
 
     private String playlistId = "";
-    private String pagePlaylistId = "";
-    private int pageCursor;
+    private String trackIdsPlaylistId = "";
+    private int cursor;
     private int generation;
     private boolean refillInFlight;
     private boolean bypassOnce;
@@ -111,7 +114,9 @@ public final class ClientBgmController {
     }
 
     /**
-     * 进入存档时调用：停止主菜单背景音乐（对齐原版行为），存档内的下一次触发按原版节奏重新开始。
+     * 进入存档时调用：停止主菜单背景音乐（对齐原版行为）。
+     * 存档内默认继续使用当前歌单（客户端本地歌单）；
+     * 若服务端安装了本模组，会通过 {@code BgmConfigPayload} 覆盖为服务端配置的歌单（空串 = 关闭）。
      * 客户端主线程调用。
      */
     public void onEnteredWorld() {
@@ -132,10 +137,10 @@ public final class ClientBgmController {
             playlistId = id;
             nowEnabled = isEnabledLocked();
             pool.clear();
-            pageIds.clear();
+            trackIds.clear();
             refillWaiters.clear();
-            pagePlaylistId = "";
-            pageCursor = 0;
+            trackIdsPlaylistId = "";
+            cursor = 0;
             generation++;
             refillInFlight = false;
             bypassOnce = false;
@@ -152,6 +157,10 @@ public final class ClientBgmController {
                 minecraft.getMusicManager().stopPlaying();
             }
         }
+        if (nowEnabled) {
+            // 预热补池：主菜单启动与进入存档（服务端已同步歌单）时提前拉取，降低首次播放延迟
+            ensurePoolRefill();
+        }
     }
 
     /**
@@ -164,7 +173,7 @@ public final class ClientBgmController {
     }
 
     private boolean isEnabledLocked() {
-        return MusicPlayerConfigManager.get().enableNetworkBgm && !playlistId.isBlank();
+        return MusicPlayerClientConfigManager.get().enableNetworkBgm && !playlistId.isBlank();
     }
 
     /**
@@ -185,8 +194,7 @@ public final class ClientBgmController {
             if (ClientMusicController.getInstance().isBgmPlaying()) {
                 return Decision.HOLD;
             }
-            if (ClientMusicController.getInstance().isBackgroundMusicPlaying()
-                    || ClientJukeboxController.getInstance().isPlayerNearAnyActiveJukebox()) {
+            if (!canStartBgmNow()) {
                 return Decision.PASS;
             }
             return Decision.PLAY;
@@ -220,6 +228,11 @@ public final class ClientBgmController {
                 playVanillaNow(vanillaMusic);
                 return;
             }
+            // 异步补池期间点播音乐/唱机可能已接管，放弃本次启动并交还原版间隔
+            if (!canStartBgmNow()) {
+                abandonToVanillaDelay();
+                return;
+            }
             TrackInfo next = pollPool();
             if (next != null) {
                 ensurePoolRefill();
@@ -237,6 +250,11 @@ public final class ClientBgmController {
             handleFailure(null, message);
             return;
         }
+        // 重试前确认点播音乐/唱机未接管，避免掐断正在播放的点播歌曲
+        if (!canStartBgmNow()) {
+            abandonToVanillaDelay();
+            return;
+        }
         TrackInfo next = pollPool();
         if (next != null) {
             playTrack(next);
@@ -244,6 +262,10 @@ public final class ClientBgmController {
         }
         refill(() -> {
             if (!isEnabled()) {
+                return;
+            }
+            if (!canStartBgmNow()) {
+                abandonToVanillaDelay();
                 return;
             }
             TrackInfo retry = pollPool();
@@ -254,6 +276,20 @@ public final class ClientBgmController {
                 handleFailure(null, "重试后仍无可用曲目");
             }
         });
+    }
+
+    /** 点播音乐或唱机已在播放时不允许启动/重试网络背景音乐（与拦截决策的守卫保持一致）。 */
+    private boolean canStartBgmNow() {
+        return !ClientMusicController.getInstance().isBackgroundMusicPlaying()
+                && !ClientJukeboxController.getInstance().isPlayerNearAnyActiveJukebox();
+    }
+
+    /** 放弃本次启动，把下一次触发的间隔交还原版计算。 */
+    private void abandonToVanillaDelay() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.getMusicManager() != null) {
+            minecraft.getMusicManager().stopPlaying();
+        }
     }
 
     /** 播放不可用时的静默降级：网络检测 → 需要时进入降级窗口 → 立即放行原版。 */
@@ -285,10 +321,10 @@ public final class ClientBgmController {
             return;
         }
         Music situational = vanillaMusic != null ? vanillaMusic : minecraft.getSituationalMusic();
-        if (situational == null) {
-            return;
-        }
-        if (minecraft.screen instanceof LevelLoadingScreen) {
+        if (situational == null || minecraft.screen instanceof LevelLoadingScreen) {
+            // 无法立即放行（加载界面/暂无情境音乐）：重置倒计时，
+            // 避免 nextSongDelay 卡在 MAX_VALUE 导致本局原版音乐永久静音
+            minecraft.getMusicManager().stopPlaying();
             return;
         }
         synchronized (lock) {
@@ -345,7 +381,7 @@ public final class ClientBgmController {
             return;
         }
         try {
-            ensurePage(wanted, gen)
+            ensureTrackIds(wanted, gen)
                     .thenCompose(ignored -> resolveBatch(wanted, gen))
                     .whenComplete((added, error) -> completeRefill(gen, error));
         } catch (RuntimeException exception) {
@@ -364,50 +400,74 @@ public final class ClientBgmController {
         }
     }
 
-    private CompletableFuture<Void> ensurePage(String pid, int gen) {
+    /** 拉取歌单全部曲目 ID（按 trackCount 分页并行请求，超过上限截断）。 */
+    private CompletableFuture<Void> ensureTrackIds(String pid, int gen) {
         synchronized (lock) {
-            if (gen == generation && pid.equals(pagePlaylistId) && !pageIds.isEmpty()) {
-                if (pageCursor >= pageIds.size()) {
-                    Collections.shuffle(pageIds, random);
-                    pageCursor = 0;
-                }
+            if (gen == generation && pid.equals(trackIdsPlaylistId) && !trackIds.isEmpty()) {
+                shuffleTrackIdsIfExhausted();
                 return CompletableFuture.completedFuture(null);
             }
         }
-        return MusicPlayerMod.netease().playlistTracksPage(pid, 0, PLAYLIST_PAGE_SIZE).thenAccept(entries -> {
-            List<String> ids = new ArrayList<>();
-            if (entries != null) {
-                for (SearchEntry entry : entries) {
-                    if (entry != null && entry.id() != null && !entry.id().isBlank()) {
-                        ids.add(entry.id());
+        return MusicPlayerMod.netease().playlistDetail(pid).thenCompose(detail -> {
+            int total = Math.max(0, detail.trackCount());
+            int capped = Math.min(total, MAX_TRACK_IDS);
+            if (capped == 0) {
+                applyTrackIds(pid, gen, List.of());
+                return CompletableFuture.completedFuture(null);
+            }
+            List<CompletableFuture<List<SearchEntry>>> futures = new ArrayList<>();
+            for (int offset = 0; offset < capped; offset += PLAYLIST_PAGE_SIZE) {
+                futures.add(MusicPlayerMod.netease().playlistTracksPage(pid, offset, PLAYLIST_PAGE_SIZE));
+            }
+            CompletableFuture<Void> all = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+            return all.thenAccept(ignored -> {
+                List<String> ids = new ArrayList<>();
+                for (CompletableFuture<List<SearchEntry>> future : futures) {
+                    List<SearchEntry> entries = future.getNow(null);
+                    if (entries == null) {
+                        continue;
+                    }
+                    for (SearchEntry entry : entries) {
+                        if (entry != null && entry.id() != null && !entry.id().isBlank()) {
+                            ids.add(entry.id());
+                        }
                     }
                 }
-            }
-            synchronized (lock) {
-                if (gen != generation) {
-                    return;
-                }
-                pageIds.clear();
-                pageIds.addAll(ids);
-                Collections.shuffle(pageIds, random);
-                pageCursor = 0;
-                pagePlaylistId = pid;
-            }
+                applyTrackIds(pid, gen, ids);
+            });
         });
+    }
+
+    private void applyTrackIds(String pid, int gen, List<String> ids) {
+        synchronized (lock) {
+            if (gen != generation) {
+                return;
+            }
+            trackIds.clear();
+            trackIds.addAll(ids);
+            Collections.shuffle(trackIds, random);
+            cursor = 0;
+            trackIdsPlaylistId = pid;
+        }
+    }
+
+    /** 遍历完一轮后重新洗牌。调用前必须已持有 lock。 */
+    private void shuffleTrackIdsIfExhausted() {
+        if (cursor >= trackIds.size()) {
+            Collections.shuffle(trackIds, random);
+            cursor = 0;
+        }
     }
 
     private CompletableFuture<Integer> resolveBatch(String pid, int gen) {
         List<String> chosen = new ArrayList<>();
         synchronized (lock) {
-            if (gen != generation || pageIds.isEmpty()) {
+            if (gen != generation || trackIds.isEmpty()) {
                 return CompletableFuture.completedFuture(0);
             }
             for (int i = 0; i < POOL_BATCH_SIZE; i++) {
-                if (pageCursor >= pageIds.size()) {
-                    Collections.shuffle(pageIds, random);
-                    pageCursor = 0;
-                }
-                chosen.add(pageIds.get(pageCursor++));
+                shuffleTrackIdsIfExhausted();
+                chosen.add(trackIds.get(cursor++));
             }
         }
         List<CompletableFuture<TrackInfo>> futures = new ArrayList<>();
