@@ -1,10 +1,13 @@
 package com.junhsiun.musicplayer;
 
+import com.junhsiun.musicplayer.client.ClientBgmController;
 import com.junhsiun.musicplayer.client.CoverArtTextureCache;
 import com.junhsiun.musicplayer.client.ClientJukeboxController;
 import com.junhsiun.musicplayer.client.ClientMusicController;
 import com.junhsiun.musicplayer.client.JukeboxCoverRenderer;
+import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
+import com.junhsiun.musicplayer.network.BgmConfigPayload;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.OpenUrlPayload;
@@ -56,6 +59,10 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
                 }
             });
         });
+        ClientPlayNetworking.registerGlobalReceiver(BgmConfigPayload.ID, (client, player, buf, sender) -> {
+            BgmConfigPayload payload = BgmConfigPayload.decode(buf);
+            client.execute(() -> ClientBgmController.getInstance().configureServer(payload.playlistId()));
+        });
         WorldRenderEvents.AFTER_ENTITIES.register(JukeboxCoverRenderer::render);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClientJukeboxController.getInstance().tick(client);
@@ -76,15 +83,23 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             return InteractionResult.PASS;
         });
 
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) ->
+                ClientBgmController.getInstance().onEnteredWorld());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ClientMusicController.getInstance().stop("Disconnected.");
+            // 退回主菜单：恢复使用客户端本地歌单
+            ClientBgmController.getInstance().configureLocal(MusicPlayerConfigManager.get().bgmPlaylistId);
             ClientJukeboxController.getInstance().stopAll("Disconnected.");
             CoverArtTextureCache.getInstance().clear();
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             ClientMusicController.getInstance().stop("Client stopping.");
+            ClientBgmController.getInstance().reset();
             ClientJukeboxController.getInstance().stopAll("Client stopping.");
             CoverArtTextureCache.getInstance().shutdown();
         });
+
+        // 主菜单（未连接存档）也使用客户端本地歌单替换原版背景音乐
+        ClientBgmController.getInstance().configureLocal(MusicPlayerConfigManager.get().bgmPlaylistId);
     }
 }
