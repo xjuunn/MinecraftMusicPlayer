@@ -38,6 +38,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.DoubleConsumer;
 import java.util.function.IntConsumer;
@@ -245,6 +246,7 @@ public final class MusicCommands {
                 detailLine(source, "/music config reload", new TranslatableComponent("musicplayer.help.usage.config_reload"));
                 detailLine(source, "/music config status", new TranslatableComponent("musicplayer.help.usage.config_status"));
                 detailLine(source, "/music config clearqueue", new TranslatableComponent("musicplayer.help.usage.config_clearqueue"));
+                detailLine(source, "/music config reset <bgmPlaylist|all>", new TranslatableComponent("musicplayer.help.usage.config_reset"));
                 detailLine(source, new TranslatableComponent("musicplayer.help.cmd.config_set"), new TranslatableComponent("musicplayer.help.usage.config_set"));
             }
             case "radio" -> {
@@ -875,6 +877,8 @@ public final class MusicCommands {
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_requests", yesNo(config.allowSongRequest), yesNo(config.allowPlaylistRequest)), false);
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_auto", yesNo(config.autoAdvance), yesNo(config.showLoadingHints)), false);
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_lyrics", yesNo(config.showLyrics)), false);
+                    Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_bgm",
+                            config.bgmPlaylistId == null || config.bgmPlaylistId.isBlank() ? "off" : config.bgmPlaylistId), false);
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_proxy",
                             !config.proxy.isBlank()
                                     ? new TranslatableComponent("musicplayer.config.proxy_manual", config.proxy)
@@ -918,6 +922,27 @@ public final class MusicCommands {
                             Messages.success(context.getSource(), new TranslatableComponent("musicplayer.config.proxy_updated", MusicPlayerConfigManager.get().proxy.isBlank() ? "<none>" : MusicPlayerConfigManager.get().proxy), false);
                             return 1;
                         })))
+                        .then(Commands.literal("bgmPlaylist").then(Commands.argument("value", StringArgumentType.string()).executes(context -> {
+                            String value = StringArgumentType.getString(context, "value").trim();
+                            String normalized;
+                            if ("off".equalsIgnoreCase(value)) {
+                                normalized = "";
+                            } else if ("reset".equalsIgnoreCase(value)) {
+                                normalized = MusicPlayerConfig.DEFAULT_BGM_PLAYLIST_ID;
+                            } else if (!value.isEmpty() && value.length() <= 20
+                                    && value.chars().allMatch(c -> c >= '0' && c <= '9')) {
+                                normalized = value;
+                            } else {
+                                Messages.warning(context.getSource(), Component.translatable("musicplayer.config.bgm_playlist_invalid"));
+                                return 0;
+                            }
+                            MusicPlayerConfigManager.get().bgmPlaylistId = normalized;
+                            MusicPlayerConfigManager.save();
+                            MusicPlayerMod.syncBgmConfig(context.getSource().getServer());
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.config.bgm_playlist_updated",
+                                    normalized.isBlank() ? "off" : normalized), false);
+                            return 1;
+                        })))
                         .then(intSetting("connectTimeoutSeconds", 3, 60, value -> MusicPlayerConfigManager.get().connectTimeoutSeconds = value))
                         .then(intSetting("readTimeoutSeconds", 3, 120, value -> MusicPlayerConfigManager.get().readTimeoutSeconds = value))
                         .then(intSetting("searchLimit", 3, 20, value -> MusicPlayerConfigManager.get().searchLimit = value))
@@ -931,7 +956,46 @@ public final class MusicCommands {
                         .then(boolSetting("enableLootMusicDiscs", value -> MusicPlayerConfigManager.get().enableLootMusicDiscs = value))
                         .then(intSetting("lootMusicDiscCount", 0, 5, value -> MusicPlayerConfigManager.get().lootMusicDiscCount = value))
                         .then(doubleSetting("lootMusicDiscChance", 0.0D, 1.0D, value -> MusicPlayerConfigManager.get().lootMusicDiscChance = value))
-                        .then(doubleSetting("voteSkipPercent", 0.1D, 1.0D, value -> MusicPlayerConfigManager.get().voteSkipPercent = value)));
+                        .then(doubleSetting("voteSkipPercent", 0.1D, 1.0D, value -> MusicPlayerConfigManager.get().voteSkipPercent = value)))
+                .then(Commands.literal("reset")
+                        .then(Commands.literal("bgmPlaylist").executes(context -> {
+                            MusicPlayerConfigManager.get().bgmPlaylistId = MusicPlayerConfig.DEFAULT_BGM_PLAYLIST_ID;
+                            MusicPlayerConfigManager.save();
+                            MusicPlayerMod.syncBgmConfig(context.getSource().getServer());
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.config.bgm_playlist_updated",
+                                    MusicPlayerConfig.DEFAULT_BGM_PLAYLIST_ID), false);
+                            return 1;
+                        }))
+                        .then(Commands.literal("all").executes(context -> {
+                            MusicPlayerConfigManager.resetAll();
+                            MusicPlayerMod.queueService().clearTrackCache();
+                            MusicPlayerMod.syncBgmConfig(context.getSource().getServer());
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.config.reset_all"), false);
+                            return 1;
+                        }))
+                        .then(resetSetting("baseUrl", (config, defaults) -> config.neteaseBaseUrl = defaults.neteaseBaseUrl))
+                        .then(resetSetting("allowCustomServer", (config, defaults) -> config.allowCustomServer = defaults.allowCustomServer))
+                        .then(resetSetting("allowSongRequest", (config, defaults) -> config.allowSongRequest = defaults.allowSongRequest))
+                        .then(resetSetting("allowPlaylistRequest", (config, defaults) -> config.allowPlaylistRequest = defaults.allowPlaylistRequest))
+                        .then(resetSetting("autoAdvance", (config, defaults) -> config.autoAdvance = defaults.autoAdvance))
+                        .then(resetSetting("announceQueueChanges", (config, defaults) -> config.announceQueueChanges = defaults.announceQueueChanges))
+                        .then(resetSetting("showLoadingHints", (config, defaults) -> config.showLoadingHints = defaults.showLoadingHints))
+                        .then(resetSetting("showLyrics", (config, defaults) -> config.showLyrics = defaults.showLyrics))
+                        .then(resetSetting("useSystemProxy", (config, defaults) -> config.useSystemProxy = defaults.useSystemProxy))
+                        .then(resetSetting("preferIpv4", (config, defaults) -> config.preferIpv4 = defaults.preferIpv4))
+                        .then(resetSetting("proxy", (config, defaults) -> config.proxy = defaults.proxy))
+                        .then(resetSetting("connectTimeoutSeconds", (config, defaults) -> config.connectTimeoutSeconds = defaults.connectTimeoutSeconds))
+                        .then(resetSetting("readTimeoutSeconds", (config, defaults) -> config.readTimeoutSeconds = defaults.readTimeoutSeconds))
+                        .then(resetSetting("searchLimit", (config, defaults) -> config.searchLimit = defaults.searchLimit))
+                        .then(resetSetting("maxQueueSize", (config, defaults) -> config.maxQueueSize = defaults.maxQueueSize))
+                        .then(resetSetting("maxSongsPerPlayer", (config, defaults) -> config.maxSongsPerPlayer = defaults.maxSongsPerPlayer))
+                        .then(resetSetting("playlistQueueLimit", (config, defaults) -> config.playlistQueueLimit = defaults.playlistQueueLimit))
+                        .then(resetSetting("queueCacheSize", (config, defaults) -> config.queueCacheSize = defaults.queueCacheSize,
+                                context -> MusicPlayerMod.queueService().refreshCacheSettings()))
+                        .then(resetSetting("enableLootMusicDiscs", (config, defaults) -> config.enableLootMusicDiscs = defaults.enableLootMusicDiscs))
+                        .then(resetSetting("lootMusicDiscCount", (config, defaults) -> config.lootMusicDiscCount = defaults.lootMusicDiscCount))
+                        .then(resetSetting("lootMusicDiscChance", (config, defaults) -> config.lootMusicDiscChance = defaults.lootMusicDiscChance))
+                        .then(resetSetting("voteSkipPercent", (config, defaults) -> config.voteSkipPercent = defaults.voteSkipPercent)));
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> pagedSearch(String literal, Component loadingText, PagedSearchExecutor executor) {
@@ -966,10 +1030,29 @@ public final class MusicCommands {
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> boolSetting(String name, Consumer<Boolean> setter) {
+        return boolSetting(name, setter, context -> { });
+    }
+
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> resetSetting(String name, BiConsumer<MusicPlayerConfig, MusicPlayerConfig> resetter) {
+        return resetSetting(name, resetter, context -> { });
+    }
+
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> resetSetting(String name, BiConsumer<MusicPlayerConfig, MusicPlayerConfig> resetter, Consumer<com.mojang.brigadier.context.CommandContext<CommandSourceStack>> afterSet) {
+        return Commands.literal(name).executes(context -> {
+            resetter.accept(MusicPlayerConfigManager.get(), new MusicPlayerConfig());
+            MusicPlayerConfigManager.save();
+            afterSet.accept(context);
+            Messages.success(context.getSource(), Component.translatable("musicplayer.config.reset_done", name), false);
+            return 1;
+        });
+    }
+
+    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> boolSetting(String name, Consumer<Boolean> setter, Consumer<com.mojang.brigadier.context.CommandContext<CommandSourceStack>> afterSet) {
         return Commands.literal(name).then(Commands.argument("value", BoolArgumentType.bool()).executes(context -> {
             boolean value = BoolArgumentType.getBool(context, "value");
             setter.accept(value);
             MusicPlayerConfigManager.save();
+            afterSet.accept(context);
             Messages.success(context.getSource(), new TranslatableComponent("musicplayer.config.updated", name, value), false);
             return 1;
         }));
