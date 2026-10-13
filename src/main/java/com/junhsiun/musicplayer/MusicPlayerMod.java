@@ -3,6 +3,7 @@ package com.junhsiun.musicplayer;
 import com.junhsiun.musicplayer.command.MusicCommands;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
+import com.junhsiun.musicplayer.network.BgmConfigPayload;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
@@ -20,6 +21,8 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.JukeboxBlock;
@@ -105,7 +108,10 @@ public final class MusicPlayerMod implements ModInitializer {
             MusicPlaybackReportPayload payload = MusicPlaybackReportPayload.decode(buf);
             server.execute(() -> MUSIC_QUEUE_SERVICE.handlePlaybackReport(server, player, payload));
         });
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> MUSIC_QUEUE_SERVICE.handleJoin(handler.player));
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            MUSIC_QUEUE_SERVICE.handleJoin(handler.player);
+            sendBgmConfig(handler.player);
+        });
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> MUSIC_QUEUE_SERVICE.handleDisconnect(handler.player));
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             MUSIC_QUEUE_SERVICE.initLyricsState(server);
@@ -117,6 +123,20 @@ public final class MusicPlayerMod implements ModInitializer {
             JUKEBOX_PLAYBACK_SERVICE.shutdown(server);
             NETEASE_API_CLIENT.shutdownExecutor();
         });
+    }
+
+    public static void sendBgmConfig(ServerPlayer player) {
+        if (!ServerPlayNetworking.canSend(player, BgmConfigPayload.ID)) {
+            return;
+        }
+        String playlistId = MusicPlayerConfigManager.get().bgmPlaylistId;
+        BgmConfigPayload.send(player, new BgmConfigPayload(playlistId == null ? "" : playlistId.trim()));
+    }
+
+    public static void syncBgmConfig(MinecraftServer server) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            sendBgmConfig(player);
+        }
     }
 
     public static MusicQueueService queueService() {

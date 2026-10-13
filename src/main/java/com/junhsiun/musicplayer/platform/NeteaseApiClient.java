@@ -43,11 +43,33 @@ import java.util.stream.Collectors;
 public final class NeteaseApiClient {
     private static final int DETAIL_FETCH_BATCH_SIZE = 100;
     private static final int HOT_PLAYLIST_FETCH_SIZE = 30;
-    private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(4, runnable -> {
-        Thread thread = new Thread(runnable, "musicplayer-http");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private static volatile ExecutorService EXECUTOR = createExecutor();
+
+    private static ExecutorService createExecutor() {
+        return Executors.newFixedThreadPool(4, runnable -> {
+            Thread thread = new Thread(runnable, "musicplayer-http");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    /**
+     * 返回可用的 HTTP 线程池。退出世界时 {@code shutdownExecutor()} 会关闭静态线程池，
+     * 再次进入世界后调用会自动重建，避免 {@code RejectedExecutionException}。
+     */
+    private static ExecutorService executor() {
+        ExecutorService executor = EXECUTOR;
+        if (executor == null || executor.isShutdown()) {
+            synchronized (NeteaseApiClient.class) {
+                executor = EXECUTOR;
+                if (executor == null || executor.isShutdown()) {
+                    executor = createExecutor();
+                    EXECUTOR = executor;
+                }
+            }
+        }
+        return executor;
+    }
 
     /** 单曲音源解析器：Byfuns/Qijieya 优先，Mycelis 保底。 */
     private final SongUrlResolver urlResolver;
@@ -192,7 +214,7 @@ public final class NeteaseApiClient {
             }
 
             return new UserPlaylistView(resolvedUserId, nickname, signature, entries);
-        }, EXECUTOR);
+        }, executor());
     }
 
     public CompletableFuture<List<TrackInfo>> artistTopSongs(String artistId) {
@@ -329,7 +351,7 @@ public final class NeteaseApiClient {
                 throw new IllegalStateException("musicplayer.error.random_hot_resolve_failed");
             }
             return tracks;
-        }, EXECUTOR);
+        }, executor());
     }
 
     private CompletableFuture<List<SearchEntry>> search(String keyword, int type, int page) {
@@ -689,7 +711,7 @@ public final class NeteaseApiClient {
         return CompletableFuture.supplyAsync(() -> {
             Request request = baseRequest(absoluteUrl, queryPairs, "application/json,text/plain,*/*");
             return executeJson(request);
-        }, EXECUTOR);
+        }, executor());
     }
 
     private static Request baseRequest(String absoluteUrl, String[] queryPairs, String accept) {
