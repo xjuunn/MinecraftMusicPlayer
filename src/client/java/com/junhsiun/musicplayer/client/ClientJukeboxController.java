@@ -50,6 +50,8 @@ public final class ClientJukeboxController {
     private static final ClientJukeboxController INSTANCE = new ClientJukeboxController();
     private static final double AUDIBLE_RANGE = 64.0D;
     private static final long PENDING_TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(5);
+    /** 单曲音频下载大小上限（字节）。 */
+    private static final long MAX_AUDIO_BYTES = 50L * 1024 * 1024;
 
     private final Map<Long, PlaybackHandle> playbackHandles = new ConcurrentHashMap<>();
     private final Map<Long, Long> pendingInsertions = new ConcurrentHashMap<>();
@@ -318,7 +320,7 @@ public final class ClientJukeboxController {
         OkHttpClient client = HttpClientFactory.create();
         Request request = new Request.Builder()
                 .url(url)
-                .header("User-Agent", "MinecraftMusicPlayer/2.0")
+                .header("User-Agent", "MinecraftMusicPlayer/" + com.junhsiun.musicplayer.MusicPlayerMod.VERSION)
                 .get()
                 .build();
 
@@ -332,9 +334,16 @@ public final class ClientJukeboxController {
             if (body == null) {
                 throw new IOException("Empty response body");
             }
+            long contentLength = body.contentLength();
+            if (contentLength > MAX_AUDIO_BYTES) {
+                throw new IOException("Audio too large: " + contentLength);
+            }
             byte[] audioBytes = body.bytes();
             if (audioBytes.length == 0) {
                 throw new IOException("Empty audio data");
+            }
+            if (audioBytes.length > MAX_AUDIO_BYTES) {
+                throw new IOException("Audio too large: " + audioBytes.length);
             }
             try (BufferedInputStream inputStream = new BufferedInputStream(new ByteArrayInputStream(audioBytes))) {
                 SpatialAudioDevice audioDevice = new SpatialAudioDevice(jukeboxPos);
@@ -429,7 +438,7 @@ public final class ClientJukeboxController {
 
     private static final class SpatialAudioDevice extends AudioDeviceBase {
         private final BlockPos jukeboxPos;
-        private SourceDataLine sourceLine;
+        private volatile SourceDataLine sourceLine;
         private AudioFormat audioFormat;
         private byte[] byteBuffer;
         private FloatControl gainControl;

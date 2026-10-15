@@ -45,4 +45,18 @@ public final class UrlUtil {
         String msg = current.getMessage();
         return msg != null && !msg.isBlank() ? msg : current.getClass().getSimpleName();
     }
+
+    /** 提取异常链最内层的消息，用于玩家可见提示；null 时返回翻译键。 */
+    public static String rootMessageKey(Throwable throwable) {
+        if (throwable == null) {
+            return "musicplayer.common.unknown_error";
+        }
+        Throwable current = throwable;
+        int depth = 0;
+        while (current.getCause() != null && depth < 100) {
+            current = current.getCause();
+            depth++;
+        }
+        return current.getMessage() == null ? current.toString() : current.getMessage();
+    }
 }
