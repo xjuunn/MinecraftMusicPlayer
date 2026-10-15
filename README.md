@@ -63,7 +63,7 @@ Minecraft Music Player 是一个 Fabric 双端音乐模组，提供网易云音�
 | 命令 | 说明 |
 | --- | --- |
 | `/music queue` | 查看单点队列 |
-| `/music queue promote <ID>` | 提升到下一首 |
+| `/music queue promote <ID>` | 置顶，下一个播放 |
 | `/music queue remove <ID>` | 从队列移除 |
 
 ### 歌单与播客
@@ -120,7 +120,6 @@ Minecraft Music Player 是一个 Fabric 双端音乐模组，提供网易云音�
 | 命令 | 说明 |
 | --- | --- |
 | `/music skip` | 直接跳过 |
-| `/music stop` | 完全停止播放 |
 | `/music pause` | 暂停播放 |
 | `/music resume` | 继续播放 |
 | `/music queue clear` | 清空单点队列 |

@@ -69,7 +69,7 @@ class MusicPlayerConfigTest {
         assertTrue(config.autoAdvance);
         assertTrue(config.announceQueueChanges);
         assertTrue(config.showLoadingHints);
-        assertFalse(config.showLyrics);
+        assertTrue(config.showLyrics);
         assertTrue(config.useSystemProxy);
         assertTrue(config.preferIpv4);
     }
@@ -103,5 +103,23 @@ class MusicPlayerConfigTest {
     void 常量DEFAULT_NETEASE_BASE_URL与字段一致() {
         MusicPlayerConfig config = new MusicPlayerConfig();
         assertEquals(MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL, config.neteaseBaseUrl);
+    }
+
+    @Test
+    void 规范化API地址会去除成对引号() {
+        assertEquals("http://localhost:3000/",
+                MusicPlayerConfig.normalizeBaseUrl("\"http://localhost:3000/\""));
+        assertEquals("http://localhost:3000/",
+                MusicPlayerConfig.normalizeBaseUrl("'http://localhost:3000/'"));
+    }
+
+    @Test
+    void 规范化API地址会去除首尾空白并保留原值() {
+        assertEquals("http://localhost:3000/",
+                MusicPlayerConfig.normalizeBaseUrl("  http://localhost:3000/  "));
+        assertEquals(MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL,
+                MusicPlayerConfig.normalizeBaseUrl(MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL));
+        assertEquals("", MusicPlayerConfig.normalizeBaseUrl(null));
+        assertEquals("", MusicPlayerConfig.normalizeBaseUrl("\"\""));
     }
 }

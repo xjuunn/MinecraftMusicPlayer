@@ -321,7 +321,7 @@ public final class ClientBgmController {
             return;
         }
         Music situational = vanillaMusic != null ? vanillaMusic : minecraft.getSituationalMusic();
-        if (situational == null || minecraft.gui.screen() instanceof LevelLoadingScreen) {
+        if (situational == null || minecraft.screen instanceof LevelLoadingScreen) {
             // 无法立即放行（加载界面/暂无情境音乐）：重置倒计时，
             // 避免 nextSongDelay 卡在 MAX_VALUE 导致本局原版音乐永久静音
             minecraft.getMusicManager().stopPlaying();
