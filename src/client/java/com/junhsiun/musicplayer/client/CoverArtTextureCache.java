@@ -25,6 +25,12 @@ import java.util.concurrent.Executors;
 
 public final class CoverArtTextureCache {
     private static final int MAX_CACHE_SIZE = 32;
+    /** 封面下载大小上限（字节）。 */
+    private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
+    /** 封面解码最大边长，防止超大图触发 OOM。 */
+    private static final int MAX_IMAGE_DIMENSION = 4096;
+    /** 处理后纹理最大边长：唱片封面在世界中显示尺寸很小，上传也发生在渲染线程，必须封顶。 */
+    private static final int MAX_PROCESSED_DIMENSION = 512;
     private static final CoverArtTextureCache INSTANCE = new CoverArtTextureCache();
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
@@ -45,13 +51,20 @@ public final class CoverArtTextureCache {
         if (coverUrl == null || coverUrl.isBlank()) {
             return;
         }
+        if (executor.isShutdown()) {
+            return;
+        }
         CacheEntry existing = entries.get(coverUrl);
         if (existing != null) {
             return;
         }
         MusicPlayerMod.LOGGER.debug("Requesting cover art: {}", coverUrl);
         entries.put(coverUrl, CacheEntry.pending());
-        executor.execute(() -> downloadAndRegister(coverUrl));
+        try {
+            executor.execute(() -> downloadAndRegister(coverUrl));
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            entries.remove(coverUrl);
+        }
     }
 
     public synchronized Identifier getTextureId(String coverUrl) {
@@ -79,7 +92,7 @@ public final class CoverArtTextureCache {
             OkHttpClient client = HttpClientFactory.create();
             Request request = new Request.Builder()
                     .url(coverUrl)
-                    .header("User-Agent", "MinecraftMusicPlayer/2.0")
+                    .header("User-Agent", "MinecraftMusicPlayer/" + com.junhsiun.musicplayer.MusicPlayerMod.VERSION)
                     .get()
                     .build();
             byte[] bytes;
@@ -91,17 +104,30 @@ public final class CoverArtTextureCache {
                 if (body == null) {
                     throw new IOException("Empty image body");
                 }
+                long contentLength = body.contentLength();
+                if (contentLength > MAX_IMAGE_BYTES) {
+                    throw new IOException("Image too large: " + contentLength);
+                }
                 bytes = body.bytes();
+            }
+            if (bytes.length > MAX_IMAGE_BYTES) {
+                throw new IOException("Image too large: " + bytes.length);
             }
 
             try (NativeImage image = readImage(bytes)) {
+                if (image.getWidth() <= 0 || image.getHeight() <= 0
+                        || image.getWidth() > MAX_IMAGE_DIMENSION || image.getHeight() > MAX_IMAGE_DIMENSION) {
+                    throw new IOException("Image dimensions out of range: " + image.getWidth() + "x" + image.getHeight());
+                }
                 NativeImage processedImage = toCircularTexture(image);
                 Identifier textureId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "cover/" + hashUrl(coverUrl));
                 Minecraft.getInstance().execute(() -> registerTexture(coverUrl, textureId, processedImage));
             }
         } catch (Exception exception) {
             synchronized (this) {
-                entries.put(coverUrl, CacheEntry.failure());
+                if (entries.containsKey(coverUrl)) {
+                    entries.put(coverUrl, CacheEntry.failure());
+                }
             }
             MusicPlayerMod.LOGGER.warn("Failed to download cover art: {}", coverUrl, exception);
         }
@@ -110,6 +136,13 @@ public final class CoverArtTextureCache {
     private synchronized void registerTexture(String coverUrl, Identifier textureId, NativeImage image) {
         Minecraft client = Minecraft.getInstance();
         try {
+            // clear() 期间在途下载完成：直接释放纹理，避免泄漏
+            CacheEntry current = entries.get(coverUrl);
+            if (current == null || !current.loading()) {
+                client.getTextureManager().release(textureId);
+                image.close();
+                return;
+            }
             DynamicTexture texture = new DynamicTexture(() -> "musicplayer_cover", image);
             texture.upload();
             client.getTextureManager().register(textureId, texture);
@@ -138,9 +171,14 @@ public final class CoverArtTextureCache {
             if (bufferedImage == null) {
                 throw ignored;
             }
-            NativeImage image = new NativeImage(bufferedImage.getWidth(), bufferedImage.getHeight(), true);
-            for (int y = 0; y < bufferedImage.getHeight(); y++) {
-                for (int x = 0; x < bufferedImage.getWidth(); x++) {
+            int width = bufferedImage.getWidth();
+            int height = bufferedImage.getHeight();
+            if (width <= 0 || height <= 0 || width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+                throw new IOException("Image dimensions out of range: " + width + "x" + height);
+            }
+            NativeImage image = new NativeImage(width, height, true);
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
                     int argb = bufferedImage.getRGB(x, y);
                     image.setPixel(x, y, argb);
                 }
@@ -150,17 +188,20 @@ public final class CoverArtTextureCache {
     }
 
     private static NativeImage toCircularTexture(NativeImage source) {
-        int size = Math.max(1, Math.min(source.getWidth(), source.getHeight()));
-        int offsetX = Math.max(0, (source.getWidth() - size) / 2);
-        int offsetY = Math.max(0, (source.getHeight() - size) / 2);
+        int srcSize = Math.max(1, Math.min(source.getWidth(), source.getHeight()));
+        int offsetX = Math.max(0, (source.getWidth() - srcSize) / 2);
+        int offsetY = Math.max(0, (source.getHeight() - srcSize) / 2);
+        int size = Math.min(srcSize, MAX_PROCESSED_DIMENSION);
         float center = (size - 1) / 2.0F;
         float radius = size / 2.0F;
         float feather = Math.max(1.5F, size * 0.03F);
 
         NativeImage result = new NativeImage(size, size, true);
         for (int y = 0; y < size; y++) {
+            int srcY = offsetY + y * srcSize / size;
             for (int x = 0; x < size; x++) {
-                int color = source.getPixel(offsetX + x, offsetY + y);
+                int srcX = offsetX + x * srcSize / size;
+                int color = source.getPixel(srcX, srcY);
                 float dx = x - center;
                 float dy = y - center;
                 float distance = (float) Math.sqrt(dx * dx + dy * dy);

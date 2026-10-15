@@ -59,7 +59,7 @@ public abstract class SoundOptionsScreenMixin {
                 initial,
                 value -> {
                     MusicPlayerClientConfigManager.get().bgmVolume = musicplayer$clampVolume(value);
-                    MusicPlayerClientConfigManager.save();
+                    MusicPlayerClientConfigManager.markDirty();
                     Minecraft minecraft = Minecraft.getInstance();
                     SoundManager soundManager = minecraft.getSoundManager();
                     if (minecraft.options.getFinalSoundSourceVolume(SoundSource.MUSIC) > 0.0F) {
