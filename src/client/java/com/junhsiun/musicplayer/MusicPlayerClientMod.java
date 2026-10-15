@@ -71,6 +71,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             client.execute(() -> ClientBgmController.getInstance().configureServer(payload.playlistId()));
         });
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            MusicPlayerClientConfigManager.tick();
             ClientJukeboxController.getInstance().tick(client);
             ClientMusicController.getInstance().tick();
         });
@@ -99,6 +100,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             CoverArtTextureCache.getInstance().clear();
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            MusicPlayerClientConfigManager.flushDirty();
             ClientMusicController.getInstance().stop("Client stopping.");
             ClientBgmController.getInstance().reset();
             ClientJukeboxController.getInstance().stopAll("Client stopping.");

@@ -45,6 +45,6 @@ public final class QijieyaUrlProvider implements SongUrlProvider {
                 LOGGER.trace("Qijieya 音源失败 id={}: {}", songId, UrlUtil.rootMessage(e));
             }
             return Java8.listOf();
-        });
+        }, com.junhsiun.musicplayer.platform.NeteaseApiClient.executor());
     }
 }

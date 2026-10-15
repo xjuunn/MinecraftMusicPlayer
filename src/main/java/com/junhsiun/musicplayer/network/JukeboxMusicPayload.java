@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.Objects;
 
 public final class JukeboxMusicPayload {
@@ -118,6 +119,9 @@ public final class JukeboxMusicPayload {
 
     private static List<String> readUrls(FriendlyByteBuf buffer) {
         int size = buffer.readVarInt();
+        if (size < 0 || size > 16) {
+            throw new IllegalArgumentException("Invalid url list size: " + size);
+        }
         List<String> urls = new ArrayList<>(size);
         for (int index = 0; index < size; index++) {
             urls.add(buffer.readUtf());
@@ -125,8 +129,17 @@ public final class JukeboxMusicPayload {
         return urls;
     }
 
+    private static List<String> validUrls(List<String> urls) {
+        if (urls == null) {
+            return Java8.listOf();
+        }
+        return urls.stream()
+                .filter(url -> url != null && url.startsWith("http") && url.length() < 30000)
+                .collect(Collectors.toList());
+    }
+
     public static JukeboxMusicPayload play(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis, String trackId) {
-        return new JukeboxMusicPayload("play", jukeboxPos, Java8.copyOf(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, offsetMillis, trackId == null ? "" : trackId);
+        return new JukeboxMusicPayload("play", jukeboxPos, validUrls(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, offsetMillis, trackId == null ? "" : trackId);
     }
 
     public static JukeboxMusicPayload update(long jukeboxPos, String title, String subtitle, String coverUrl, String trackId) {
@@ -134,7 +147,7 @@ public final class JukeboxMusicPayload {
     }
 
     public static JukeboxMusicPayload refresh(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis, String trackId) {
-        return new JukeboxMusicPayload("refresh", jukeboxPos, Java8.copyOf(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, offsetMillis, trackId == null ? "" : trackId);
+        return new JukeboxMusicPayload("refresh", jukeboxPos, validUrls(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, offsetMillis, trackId == null ? "" : trackId);
     }
 
     public static JukeboxMusicPayload stop(long jukeboxPos) {

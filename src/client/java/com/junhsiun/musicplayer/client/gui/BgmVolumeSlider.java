@@ -22,7 +22,7 @@ public class BgmVolumeSlider extends AbstractSliderButton {
     protected void applyValue() {
         MusicPlayerClientConfig config = MusicPlayerClientConfigManager.get();
         config.bgmVolume = musicplayer$clampVolume(this.value);
-        MusicPlayerClientConfigManager.save();
+        MusicPlayerClientConfigManager.markDirty();
         Minecraft minecraft = Minecraft.getInstance();
         float volume = minecraft.options.getSoundSourceVolume(SoundSource.MUSIC);
         minecraft.getSoundManager().updateSourceVolume(SoundSource.MUSIC, volume);

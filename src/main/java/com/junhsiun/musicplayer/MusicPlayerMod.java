@@ -34,6 +34,10 @@ import org.apache.logging.log4j.Logger;
 public final class MusicPlayerMod implements ModInitializer {
     public static final String MOD_ID = "musicplayer";
     public static final Logger LOGGER = LogManager.getLogger(MOD_ID);
+    public static final String VERSION = net.fabricmc.loader.api.FabricLoader.getInstance()
+            .getModContainer(MOD_ID)
+            .map(container -> container.getMetadata().getVersion().getFriendlyString())
+            .orElse("unknown");
 
     private static final MusicQueueService MUSIC_QUEUE_SERVICE = new MusicQueueService();
     private static final JukeboxPlaybackService JUKEBOX_PLAYBACK_SERVICE = new JukeboxPlaybackService();
