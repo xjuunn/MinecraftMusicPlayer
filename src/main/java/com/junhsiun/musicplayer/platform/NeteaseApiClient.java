@@ -1,5 +1,6 @@
 package com.junhsiun.musicplayer.platform;
 
+import com.junhsiun.musicplayer.util.Java8;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -20,7 +21,7 @@ import com.junhsiun.musicplayer.platform.url.QijieyaUrlProvider;
 import com.junhsiun.musicplayer.platform.url.SongUrlResolver;
 import com.junhsiun.musicplayer.platform.url.VkeysUrlProvider;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
-import com.junhsiun.musicplayer.util.Java8;
+import com.junhsiun.musicplayer.util.Messages;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.network.chat.TextComponent;
@@ -43,6 +44,17 @@ import java.util.stream.Collectors;
 public final class NeteaseApiClient {
     private static final int DETAIL_FETCH_BATCH_SIZE = 100;
     private static final int HOT_PLAYLIST_FETCH_SIZE = 30;
+    /** 随机热门歌曲：每个歌单最多拉取的曲目数，避免大歌单全量分页。 */
+    private static final int RANDOM_HOT_MAX_SONGS_PER_PLAYLIST = 200;
+    /** 随机热门歌曲：整体超时（秒）。 */
+    private static final long RANDOM_HOT_TOTAL_TIMEOUT_SECONDS = 30;
+    /** 搜索类型：网易云 cloudsearch type 参数。 */
+    private static final int SEARCH_TYPE_SONG = 1;
+    private static final int SEARCH_TYPE_ARTIST = 100;
+    private static final int SEARCH_TYPE_PLAYLIST = 1000;
+    private static final int SEARCH_TYPE_USER = 1002;
+    private static final int SEARCH_TYPE_RADIO = 1009;
+    private static final String USER_AGENT = "MinecraftMusicPlayer/" + com.junhsiun.musicplayer.MusicPlayerMod.VERSION;
     private static volatile ExecutorService EXECUTOR = createExecutor();
 
     private static ExecutorService createExecutor() {
@@ -57,7 +69,7 @@ public final class NeteaseApiClient {
      * 返回可用的 HTTP 线程池。退出世界时 {@code shutdownExecutor()} 会关闭静态线程池，
      * 再次进入世界后调用会自动重建，避免 {@code RejectedExecutionException}。
      */
-    private static ExecutorService executor() {
+    public static ExecutorService executor() {
         ExecutorService executor = EXECUTOR;
         if (executor == null || executor.isShutdown()) {
             synchronized (NeteaseApiClient.class) {
@@ -87,13 +99,14 @@ public final class NeteaseApiClient {
     }
 
     public CompletableFuture<TrackInfo> resolveSong(String id) {
-        return songDetail(id).thenCompose(detail ->
-                urlResolver.resolve(id).thenApply(urls ->
-                        new TrackInfo(detail.id(), detail.title(), detail.artist(), detail.artistId(), detail.coverUrl(), urls, detail.durationMillis()))
-        );
+        return resolveTrackDetail(id);
     }
 
     public CompletableFuture<TrackInfo> resolveRadioSong(String id) {
+        return resolveTrackDetail(id);
+    }
+
+    private CompletableFuture<TrackInfo> resolveTrackDetail(String id) {
         return songDetail(id).thenCompose(detail ->
                 urlResolver.resolve(id).thenApply(urls ->
                         new TrackInfo(detail.id(), detail.title(), detail.artist(), detail.artistId(), detail.coverUrl(), urls, detail.durationMillis()))
@@ -105,7 +118,7 @@ public final class NeteaseApiClient {
     }
 
     public CompletableFuture<List<SearchEntry>> searchSongs(String keyword, int page) {
-        return search(keyword, 1, page);
+        return search(keyword, SEARCH_TYPE_SONG, page);
     }
 
     public CompletableFuture<List<SearchEntry>> searchArtists(String keyword) {
@@ -113,7 +126,7 @@ public final class NeteaseApiClient {
     }
 
     public CompletableFuture<List<SearchEntry>> searchArtists(String keyword, int page) {
-        return search(keyword, 100, page);
+        return search(keyword, SEARCH_TYPE_ARTIST, page);
     }
 
     public CompletableFuture<List<SearchEntry>> searchPlaylists(String keyword) {
@@ -121,7 +134,7 @@ public final class NeteaseApiClient {
     }
 
     public CompletableFuture<List<SearchEntry>> searchPlaylists(String keyword, int page) {
-        return search(keyword, 1000, page);
+        return search(keyword, SEARCH_TYPE_PLAYLIST, page);
     }
 
     public CompletableFuture<List<SearchEntry>> searchUsers(String keyword) {
@@ -129,7 +142,7 @@ public final class NeteaseApiClient {
     }
 
     public CompletableFuture<List<SearchEntry>> searchUsers(String keyword, int page) {
-        return search(keyword, 1002, page);
+        return search(keyword, SEARCH_TYPE_USER, page);
     }
 
     public CompletableFuture<List<SearchEntry>> searchRadios(String keyword) {
@@ -137,7 +150,7 @@ public final class NeteaseApiClient {
     }
 
     public CompletableFuture<List<SearchEntry>> searchRadios(String keyword, int page) {
-        return search(keyword, 1009, page);
+        return search(keyword, SEARCH_TYPE_RADIO, page);
     }
 
     public CompletableFuture<PlaylistInfo> playlistDetail(String id) {
@@ -311,7 +324,7 @@ public final class NeteaseApiClient {
             int playlistProbeCount = Math.min(playlists.size(), 8);
             for (int index = 0; index < playlistProbeCount && candidateNodes.size() < safeCount * 4; index++) {
                 SearchEntry playlist = playlists.get(index);
-                List<JsonObject> songNodes = fetchAllPlaylistSongsRawSync(playlist.id());
+                List<JsonObject> songNodes = fetchPlaylistSongsRawSync(playlist.id(), RANDOM_HOT_MAX_SONGS_PER_PLAYLIST);
                 if (songNodes.isEmpty()) {
                     continue;
                 }
@@ -334,12 +347,17 @@ public final class NeteaseApiClient {
             List<CompletableFuture<TrackInfo>> futures = candidateNodes.stream()
                     .map(this::resolveSongFromNode)
                     .collect(Collectors.toList());
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+            try {
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                        .get(RANDOM_HOT_TOTAL_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (Exception ex) {
+                MusicPlayerMod.LOGGER.warn("随机热门歌曲解析超时或失败", ex);
+            }
 
             List<TrackInfo> tracks = new ArrayList<>();
             for (CompletableFuture<TrackInfo> future : futures) {
                 try {
-                    TrackInfo track = future.join();
+                    TrackInfo track = future.getNow(null);
                     if (track != null && track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
                         tracks.add(track);
                     }
@@ -369,19 +387,19 @@ public final class NeteaseApiClient {
             JsonObject result = obj(root, "result");
             JsonArray list;
             switch (type) {
-                case 1:
+                case SEARCH_TYPE_SONG:
                     list = arr(result, "songs");
                     break;
-                case 100:
+                case SEARCH_TYPE_ARTIST:
                     list = arr(result, "artists");
                     break;
-                case 1000:
+                case SEARCH_TYPE_PLAYLIST:
                     list = arr(result, "playlists");
                     break;
-                case 1002:
+                case SEARCH_TYPE_USER:
                     list = arr(result, "userprofiles");
                     break;
-                case 1009:
+                case SEARCH_TYPE_RADIO:
                     list = arr(result, "djRadios");
                     break;
                 default:
@@ -394,7 +412,7 @@ public final class NeteaseApiClient {
 
             for (JsonElement elem : list) {
                 JsonObject node = elem.getAsJsonObject();
-                if (type == 1) {
+                if (type == SEARCH_TYPE_SONG) {
                     String songId = str(node, "id");
                     String artistId = firstArtistId(node);
                     entries.add(new SearchEntry(
@@ -404,7 +422,7 @@ public final class NeteaseApiClient {
                             playSongCommand(songId),
                             Java8.isBlank(artistId) ? "" : viewArtistCommand(artistId)
                     ));
-                } else if (type == 100) {
+                } else if (type == SEARCH_TYPE_ARTIST) {
                     String artistId = str(node, "id");
                     entries.add(new SearchEntry(
                             artistId,
@@ -413,7 +431,7 @@ public final class NeteaseApiClient {
                             viewArtistCommand(artistId),
                             ""
                     ));
-                } else if (type == 1000) {
+                } else if (type == SEARCH_TYPE_PLAYLIST) {
                     String playlistId = str(node, "id");
                     String ownerId = str(obj(node, "creator"), "userId");
                     entries.add(new SearchEntry(
@@ -423,7 +441,7 @@ public final class NeteaseApiClient {
                             viewPlaylistCommand(playlistId),
                             Java8.isBlank(ownerId) ? "" : viewUserCommand(ownerId)
                     ));
-                } else if (type == 1002) {
+                } else if (type == SEARCH_TYPE_USER) {
                     String foundUserId = str(node, "userId");
                     entries.add(new SearchEntry(
                             foundUserId,
@@ -432,7 +450,7 @@ public final class NeteaseApiClient {
                             viewUserCommand(foundUserId),
                             ""
                     ));
-                } else if (type == 1009) {
+                } else if (type == SEARCH_TYPE_RADIO) {
                     String rid = str(node, "id");
                     String rname = str(node, "name");
                     entries.add(new SearchEntry(
@@ -650,11 +668,11 @@ public final class NeteaseApiClient {
         return entries;
     }
 
-    private List<JsonObject> fetchAllPlaylistSongsRawSync(String playlistId) {
+    private List<JsonObject> fetchPlaylistSongsRawSync(String playlistId, int maxSongs) {
         List<JsonObject> songs = new ArrayList<>();
         int offset = 0;
 
-        while (true) {
+        while (songs.size() < maxSongs) {
             JsonObject root = executeJson(baseRequest(
                     baseUrl() + "/playlist/track/all",
                     new String[]{"id", playlistId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
@@ -665,6 +683,7 @@ public final class NeteaseApiClient {
                 break;
             }
             for (JsonElement elem : page) {
+                if (songs.size() >= maxSongs) break;
                 songs.add(elem.getAsJsonObject());
             }
             if (page.size() < DETAIL_FETCH_BATCH_SIZE) {
@@ -725,7 +744,7 @@ public final class NeteaseApiClient {
         }
         return new Request.Builder()
                 .url(builder.build())
-                .header("User-Agent", "MinecraftMusicPlayer/2.0")
+                .header("User-Agent", USER_AGENT)
                 .header("Accept", accept)
                 .get()
                 .build();
@@ -740,7 +759,8 @@ public final class NeteaseApiClient {
             String body = Objects.requireNonNull(response.body()).string();
             return new JsonParser().parse(body).getAsJsonObject();
         } catch (Exception exception) {
-            MusicPlayerMod.LOGGER.debug("请求音乐接口失败: {}", request.url(), exception);
+            MusicPlayerMod.LOGGER.warn("请求音乐接口失败: {} - {}", request.method(), Messages.sanitizeForLog(request.url().toString()), exception.getMessage());
+            MusicPlayerMod.LOGGER.debug("请求音乐接口失败详情", exception);
             throw new RuntimeException(exception);
         }
     }

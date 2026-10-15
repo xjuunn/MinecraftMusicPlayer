@@ -111,6 +111,9 @@ public final class MusicControlPayload {
 
     private static List<String> readUrls(FriendlyByteBuf buffer) {
         int size = buffer.readVarInt();
+        if (size < 0 || size > 16) {
+            throw new IllegalArgumentException("Invalid url list size: " + size);
+        }
         List<String> urls = new ArrayList<>(size);
         for (int index = 0; index < size; index++) {
             urls.add(buffer.readUtf());
