@@ -34,6 +34,10 @@ import org.slf4j.LoggerFactory;
 public final class MusicPlayerMod implements ModInitializer {
     public static final String MOD_ID = "musicplayer";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    public static final String VERSION = net.fabricmc.loader.api.FabricLoader.getInstance()
+            .getModContainer(MOD_ID)
+            .map(container -> container.getMetadata().getVersion().getFriendlyString())
+            .orElse("unknown");
 
     private static final MusicQueueService MUSIC_QUEUE_SERVICE = new MusicQueueService();
     private static final JukeboxPlaybackService JUKEBOX_PLAYBACK_SERVICE = new JukeboxPlaybackService();
@@ -114,11 +118,11 @@ public final class MusicPlayerMod implements ModInitializer {
     }
 
     public static void sendBgmConfig(ServerPlayer player) {
-        if (!ServerPlayNetworking.canSend(player, BgmConfigPayload.TYPE)) {
+        if (!ServerPlayNetworking.canSend(player, BgmConfigPayload.ID)) {
             return;
         }
         String playlistId = MusicPlayerConfigManager.get().bgmPlaylistId;
-        ServerPlayNetworking.send(player, new BgmConfigPayload(playlistId == null ? "" : playlistId.trim()));
+        BgmConfigPayload.send(player, new BgmConfigPayload(playlistId == null ? "" : playlistId.trim()));
     }
 
     public static void syncBgmConfig(MinecraftServer server) {

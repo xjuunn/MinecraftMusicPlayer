@@ -18,7 +18,7 @@ import java.util.Objects;
  * 所有方法均为阻塞调用，供异步执行器内使用。
  */
 public final class ApiHttp {
-    private static final String USER_AGENT = "MinecraftMusicPlayer/2.0";
+    private static final String USER_AGENT = "MinecraftMusicPlayer/" + com.junhsiun.musicplayer.MusicPlayerMod.VERSION;
     private static final String JSON_ACCEPT = "application/json,text/plain,*/*";
 
     private ApiHttp() {

@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.junhsiun.musicplayer.mixin.client.OptionsAccessor;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
@@ -33,6 +34,8 @@ import java.io.InterruptedIOException;
 import java.util.List;
 
 public final class ClientMusicController {
+    /** 单曲音频下载大小上限（字节），超出视为异常源。 */
+    private static final long MAX_AUDIO_BYTES = 50L * 1024 * 1024;
     /** 网络背景音乐（BGM）播放结果回调，全部在播放线程触发。 */
     public interface BgmListener {
         void onBgmEnded();
@@ -45,7 +48,7 @@ public final class ClientMusicController {
     private final BackgroundMusicAudioDevice audioDevice = new BackgroundMusicAudioDevice();
     private volatile Player player;
     private volatile Thread playbackThread;
-    private String currentTrackId = "";
+    private volatile String currentTrackId = "";
     private volatile boolean backgroundMusicPlaying;
     private volatile boolean bgmPlaying;
     private volatile BgmListener bgmListener;
@@ -199,7 +202,7 @@ public final class ClientMusicController {
         OkHttpClient client = HttpClientFactory.create();
         Request request = new Request.Builder()
                 .url(url)
-                .header("User-Agent", "MinecraftMusicPlayer/2.0")
+                .header("User-Agent", "MinecraftMusicPlayer/" + com.junhsiun.musicplayer.MusicPlayerMod.VERSION)
                 .get()
                 .build();
 
@@ -211,9 +214,16 @@ public final class ClientMusicController {
             if (body == null) {
                 throw new IOException("musicplayer.playback.empty_response");
             }
+            long contentLength = body.contentLength();
+            if (contentLength > MAX_AUDIO_BYTES) {
+                throw new IOException("musicplayer.playback.audio_too_large");
+            }
             byte[] audioBytes = body.bytes();
             if (audioBytes.length == 0) {
                 throw new IOException("musicplayer.playback.empty_audio");
+            }
+            if (audioBytes.length > MAX_AUDIO_BYTES) {
+                throw new IOException("musicplayer.playback.audio_too_large");
             }
 
             audioDevice.reset();
@@ -265,7 +275,7 @@ public final class ClientMusicController {
         private static final double FADE_OUT_STEP = 0.1D;
         private static final double FADE_IN_STEP = 0.02D;
 
-        private SourceDataLine sourceLine;
+        private volatile SourceDataLine sourceLine;
         private AudioFormat audioFormat;
         private byte[] byteBuffer;
         private FloatControl gainControl;
@@ -383,7 +393,7 @@ public final class ClientMusicController {
             if (getInstance().isBgmPlaying()) {
                 musicVolume = minecraft.options.getSoundSourceVolume(SoundSource.MUSIC);
             } else {
-                musicVolume = minecraft.options.getSoundSourceOptionInstance(SoundSource.MUSIC).get().floatValue();
+                musicVolume = ((OptionsAccessor) (Object) minecraft.options).getSourceVolumes().getFloat(SoundSource.MUSIC);
             }
             float masterVolume = minecraft.options.getSoundSourceVolume(SoundSource.MASTER);
             double baseVolume = Math.max(0.0D, masterVolume * musicVolume);

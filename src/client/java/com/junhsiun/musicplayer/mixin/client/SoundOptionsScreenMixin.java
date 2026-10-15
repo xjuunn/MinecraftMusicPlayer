@@ -1,88 +1,45 @@
 package com.junhsiun.musicplayer.mixin.client;
 
 import com.junhsiun.musicplayer.client.ClientBgmController;
+import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfig;
 import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfigManager;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.OptionInstance;
-import net.minecraft.client.Options;
-import net.minecraft.client.gui.components.OptionsList;
-import net.minecraft.client.gui.screens.options.SoundOptionsScreen;
-import net.minecraft.client.sounds.SoundManager;
-import net.minecraft.client.sounds.SoundPreviewHandler;
+import com.junhsiun.musicplayer.client.gui.BgmVolumeSlider;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.SoundOptionsScreen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.sounds.SoundSource;
+import net.minecraft.network.chat.TextComponent;
+import net.minecraft.network.chat.TranslatableComponent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(SoundOptionsScreen.class)
-public abstract class SoundOptionsScreenMixin {
+public abstract class SoundOptionsScreenMixin extends Screen {
 
-    @Redirect(
-            method = "addOptions",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/client/gui/components/OptionsList;addSmall([Lnet/minecraft/client/OptionInstance;)V",
-                    ordinal = 0
-            )
-    )
-    private void musicplayer$addBgmEntries(OptionsList list, OptionInstance<?>[] original) {
-        OptionInstance<?>[] entries = new OptionInstance<?>[original.length + 2];
-        entries[0] = musicplayer$createNetworkBgmToggle();
-        entries[1] = musicplayer$createBgmVolumeOption();
-        System.arraycopy(original, 0, entries, 2, original.length);
-        list.addSmall(entries);
+    protected SoundOptionsScreenMixin(Component title) {
+        super(title);
     }
 
-    /** 是否使用网络背景音乐的全局开关（客户端本地设置）。 */
-    private OptionInstance<Boolean> musicplayer$createNetworkBgmToggle() {
-        boolean initial = MusicPlayerClientConfigManager.get().enableNetworkBgm;
-        return OptionInstance.createBoolean(
-                "musicplayer.options.enable_network_bgm",
-                OptionInstance.noTooltip(),
-                initial,
-                value -> {
-                    MusicPlayerClientConfigManager.get().enableNetworkBgm = value;
+    @Inject(method = "init", at = @At("RETURN"))
+    private void musicplayer$addBgmEntries(CallbackInfo ci) {
+        int y = (this.height / 6 - 12) + 8 * 22;
+        this.addRenderableWidget(new Button(this.width / 2 - 155, y, 150, 20,
+                musicplayer$toggleLabel(), button -> {
+                    MusicPlayerClientConfig config = MusicPlayerClientConfigManager.get();
+                    config.enableNetworkBgm = !config.enableNetworkBgm;
                     MusicPlayerClientConfigManager.save();
                     ClientBgmController.getInstance().onGlobalToggleChanged();
-                });
+                    button.setMessage(musicplayer$toggleLabel());
+                }));
+        this.addRenderableWidget(new BgmVolumeSlider(this.width / 2 + 5, y));
     }
 
-    private OptionInstance<Double> musicplayer$createBgmVolumeOption() {
-        double initial = musicplayer$clampVolume(MusicPlayerClientConfigManager.get().bgmVolume);
-        return new OptionInstance<>(
-                "musicplayer.options.bgm_volume",
-                OptionInstance.noTooltip(),
-                SoundOptionsScreenMixin::musicplayer$volumeLabel,
-                OptionInstance.UnitDouble.INSTANCE,
-                initial,
-                value -> {
-                    MusicPlayerClientConfigManager.get().bgmVolume = musicplayer$clampVolume(value);
-                    MusicPlayerClientConfigManager.save();
-                    Minecraft minecraft = Minecraft.getInstance();
-                    SoundManager soundManager = minecraft.getSoundManager();
-                    if (minecraft.options.getFinalSoundSourceVolume(SoundSource.MUSIC) > 0.0F) {
-                        minecraft.getMusicManager().showNowPlayingToastIfNeeded();
-                    }
-                    soundManager.refreshCategoryVolume(SoundSource.MUSIC);
-                    if (minecraft.level == null) {
-                        SoundPreviewHandler.preview(soundManager, SoundSource.MUSIC, value.floatValue());
-                    }
-                });
-    }
-
-    private static double musicplayer$clampVolume(double value) {
-        if (Double.isNaN(value)) {
-            return 0.7D;
-        }
-        return Math.max(0.0D, Math.min(1.0D, value));
-    }
-
-    private static Component musicplayer$volumeLabel(Component caption, double value) {
-        if (value == 0.0D) {
-            return Options.genericValueLabel(caption, CommonComponents.OPTION_OFF);
-        }
-        return Component.translatable("options.percent_value", caption, (int) (value * 100.0D));
+    private static Component musicplayer$toggleLabel() {
+        boolean enabled = MusicPlayerClientConfigManager.get().enableNetworkBgm;
+        return new TranslatableComponent("musicplayer.options.enable_network_bgm").append(": ")
+                .append(enabled ? CommonComponents.OPTION_ON : CommonComponents.OPTION_OFF);
     }
 }
