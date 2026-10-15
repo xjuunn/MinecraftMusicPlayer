@@ -8,7 +8,7 @@
     "junhsiun"
   ],
   "contact": {
-    "sources": "https://github.com/junhsiun/MinecraftMusicPlayer"
+    "sources": "https://github.com/xjuunn/MinecraftMusicPlayer"
   },
   "license": "MIT",
   "icon": "assets/musicplayer/icon.png",
@@ -27,7 +27,7 @@
   "depends": {
     "fabricloader": ">=${loader_version}",
     "minecraft": "~${minecraft_version}",
-    "java": ">=21",
+    "java": ">=25",
     "fabric-api": ">=${fabric_api_version}"
   }
 }

@@ -65,7 +65,6 @@ public final class MusicCommands {
                 .then(resume())
                 .then(play())
                 .then(skip())
-                .then(stop())
                 .then(queue())
                 .then(playlist())
                 .then(join())
@@ -102,11 +101,11 @@ public final class MusicCommands {
                         .withBold(true)
                         .withClickEvent(new ClickEvent.RunCommand("/music help star"))
                         .withHoverEvent(new HoverEvent.ShowText(renderRepositoryHover()))));
-        Messages.sendSuccess(source, title, false);
+        Messages.sendSuccess(source, title);
         helpEntry(source, "now", Component.translatable("musicplayer.help.desc.now"));
         helpEntry(source, "play", Component.translatable("musicplayer.help.desc.play"));
         helpEntry(source, "skip", Component.translatable("musicplayer.help.desc.skip"));
-        helpEntry(source, "stop", Component.translatable("musicplayer.help.desc.stop"));
+        helpEntry(source, "pause", Component.translatable("musicplayer.help.desc.pause"));
         helpEntry(source, "queue", Component.translatable("musicplayer.help.desc.queue"));
         helpEntry(source, "playlist", Component.translatable("musicplayer.help.desc.playlist"));
         helpEntry(source, "search", Component.translatable("musicplayer.help.desc.search"));
@@ -121,9 +120,9 @@ public final class MusicCommands {
         helpEntry(source, "radio", Component.translatable("musicplayer.help.desc.radio"));
         helpEntry(source, "help", Component.translatable("musicplayer.help.desc.help"));
         helpEntry(source, "config", Component.translatable("musicplayer.help.desc.config"));
-        Messages.sendSuccess(source, spacer(), false);
-        Messages.sendSuccess(source, Component.translatable("musicplayer.help.tip").withStyle(ChatFormatting.DARK_GRAY), false);
-        Messages.sendSuccess(source, spacer(), false);
+        Messages.sendSuccess(source, spacer());
+        Messages.sendSuccess(source, Component.translatable("musicplayer.help.tip").withStyle(ChatFormatting.DARK_GRAY));
+        Messages.sendSuccess(source, spacer());
         return 1;
     }
 
@@ -160,7 +159,7 @@ public final class MusicCommands {
         MutableComponent line = Messages.clickableCommand(Component.literal(command), Component.translatable("musicplayer.help.view_usage", command), "/music help " + command, ChatFormatting.GOLD);
         line.append(Component.literal("  ").withStyle(ChatFormatting.DARK_GRAY));
         line.append(description.copy().withStyle(ChatFormatting.GRAY));
-        Messages.sendSuccess(source, line, false);
+        Messages.sendSuccess(source, line);
     }
 
     private static int sendHelpFor(CommandSourceStack source, String subcommand) {
@@ -172,90 +171,91 @@ public final class MusicCommands {
         sendHeader(source);
         switch (subcommand) {
             case "now" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("now"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("now"), null));
                 detailLine(source, "/music now", Component.translatable("musicplayer.help.usage.now"));
             }
             case "queue" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("queue"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("queue"), null));
                 detailLine(source, "/music queue", Component.translatable("musicplayer.help.usage.queue"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.queue_promote"), Component.translatable("musicplayer.help.usage.queue_promote"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.queue_remove"), Component.translatable("musicplayer.help.usage.queue_remove"));
                 detailLine(source, "/music queue clear", Component.translatable("musicplayer.help.usage.queue_clear"));
             }
             case "play" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("play"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("play"), null));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.play_song"), Component.translatable("musicplayer.help.usage.play_song"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.play_playlist"), Component.translatable("musicplayer.help.usage.play_playlist"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.play_playlist_reverse"), Component.translatable("musicplayer.help.usage.play_playlist_reverse"));
             }
             case "playlist" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("playlist"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("playlist"), null));
                 detailLine(source, "/music playlist", Component.translatable("musicplayer.help.usage.playlist"));
                 detailLine(source, "/music playlist list", Component.translatable("musicplayer.help.usage.playlist_list"));
                 detailLine(source, "/music playlist stop", Component.translatable("musicplayer.help.usage.playlist_stop"));
                 detailLine(source, "/music playlist order", Component.translatable("musicplayer.help.usage.playlist_order"));
             }
             case "skip" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("skip"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("skip"), null));
                 detailLine(source, "/music skip", Component.translatable("musicplayer.help.usage.skip"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.skip_requester"), Component.translatable("musicplayer.help.usage.skip_no_vote"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.skip_admin"), Component.translatable("musicplayer.help.usage.skip_no_vote"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.skip_vote"), Component.translatable("musicplayer.help.usage.skip_vote"));
             }
             case "search" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("search"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("search"), null));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.search_song"), Component.translatable("musicplayer.help.usage.search_song"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.search_artist"), Component.translatable("musicplayer.help.usage.search_artist"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.search_playlist"), Component.translatable("musicplayer.help.usage.search_playlist"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.search_user"), Component.translatable("musicplayer.help.usage.search_user"));
             }
             case "view" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("view"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("view"), null));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.view_playlist"), Component.translatable("musicplayer.help.usage.view_playlist"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.view_artist"), Component.translatable("musicplayer.help.usage.view_artist"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.view_user"), Component.translatable("musicplayer.help.usage.view_user"));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.view_url"), Component.translatable("musicplayer.help.usage.view_url"));
             }
             case "share" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("share"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("share"), null));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.share"), Component.translatable("musicplayer.help.usage.share"));
             }
             case "join" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("join"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("join"), null));
                 detailLine(source, "/music join", Component.translatable("musicplayer.help.usage.join"));
             }
             case "leave" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("leave"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("leave"), null));
                 detailLine(source, "/music leave", Component.translatable("musicplayer.help.usage.leave"));
             }
             case "mute" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("mute"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("mute"), null));
                 detailLine(source, "/music mute once", Component.translatable("musicplayer.help.usage.mute_once"));
             }
             case "burn" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("burn"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("burn"), null));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.burn_song"), Component.translatable("musicplayer.help.usage.burn_song"));
             }
             case "random" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("random"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("random"), null));
                 detailLine(source, "/music random", Component.translatable("musicplayer.help.usage.random"));
             }
             case "help" -> {
                 return sendHelpOverview(source);
             }
             case "lyrics" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("lyrics"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("lyrics"), null));
                 detailLine(source, "/music lyrics", Component.translatable("musicplayer.help.usage.lyrics"));
                 detailLine(source, "/music lyrics on", Component.translatable("musicplayer.help.usage.lyrics_on"));
                 detailLine(source, "/music lyrics off", Component.translatable("musicplayer.help.usage.lyrics_off"));
                 detailLine(source, "/music lyrics status", Component.translatable("musicplayer.help.usage.lyrics_status"));
             }
-            case "stop" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("stop"), null), false);
-                detailLine(source, "/music stop", Component.translatable("musicplayer.help.usage.stop"));
+            case "pause" -> {
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("pause"), null));
+                detailLine(source, "/music pause", Component.translatable("musicplayer.help.usage.pause"));
+                detailLine(source, "/music resume", Component.translatable("musicplayer.help.usage.resume"));
             }
             case "config" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("config"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("config"), null));
                 detailLine(source, "/music config reload", Component.translatable("musicplayer.help.usage.config_reload"));
                 detailLine(source, "/music config status", Component.translatable("musicplayer.help.usage.config_status"));
                 detailLine(source, "/music config clearqueue", Component.translatable("musicplayer.help.usage.config_clearqueue"));
@@ -263,7 +263,7 @@ public final class MusicCommands {
                 detailLine(source, Component.translatable("musicplayer.help.cmd.config_set"), Component.translatable("musicplayer.help.usage.config_set"));
             }
             case "radio" -> {
-                Messages.sendSuccess(source,  sectionHeader(Component.literal("radio"), null), false);
+                Messages.sendSuccess(source,  sectionHeader(Component.literal("radio"), null));
                 detailLine(source, Component.translatable("musicplayer.help.cmd.radio_hot"), Component.translatable("musicplayer.help.usage.radio_hot"));
                 detailLine(source, "/music radio categories", Component.translatable("musicplayer.help.usage.radio_categories"));
                 detailLine(source, "/music view radio <id>", Component.translatable("musicplayer.help.usage.view_radio"));
@@ -274,12 +274,12 @@ public final class MusicCommands {
                 detailLine(source, "/music play radio <id> reverse", Component.translatable("musicplayer.help.usage.play_radio_reverse"));
             }
             default -> {
-                Messages.sendSuccess(source,  Component.translatable("musicplayer.help.unknown_subcommand", subcommand).withStyle(ChatFormatting.RED), false);
-                Messages.sendSuccess(source,  spacer(), false);
+                Messages.sendSuccess(source,  Component.translatable("musicplayer.help.unknown_subcommand", subcommand).withStyle(ChatFormatting.RED));
+                Messages.sendSuccess(source,  spacer());
                 return sendHelpOverview(source);
             }
         }
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         return 1;
     }
 
@@ -291,7 +291,7 @@ public final class MusicCommands {
         MutableComponent line = command.copy().withStyle(ChatFormatting.GOLD);
         line.append(Component.literal("  ").withStyle(ChatFormatting.DARK_GRAY));
         line.append(description.copy().withStyle(ChatFormatting.GRAY));
-        Messages.sendSuccess(source,  line, false);
+        Messages.sendSuccess(source,  line);
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> now() {
@@ -345,7 +345,17 @@ public final class MusicCommands {
         return Commands.literal("pause")
                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                 .executes(context -> {
-                    MusicPlayerMod.queueService().pause(context.getSource().getServer());
+                    CommandSourceStack source = context.getSource();
+                    if (MusicPlayerMod.queueService().currentTrack() == null) {
+                        Messages.warning(source, Component.translatable("musicplayer.queue.nothing_playing"));
+                        return 0;
+                    }
+                    MusicPlayerMod.queueService().pause(source.getServer());
+                    broadcastState(source,
+                            controlEcho("musicplayer.control.paused",
+                                    "musicplayer.now.resume_label", "musicplayer.now.resume_hover",
+                                    "/music resume", ChatFormatting.GREEN),
+                            null);
                     return 1;
                 });
     }
@@ -354,7 +364,17 @@ public final class MusicCommands {
         return Commands.literal("resume")
                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                 .executes(context -> {
-                    MusicPlayerMod.queueService().resume(context.getSource().getServer());
+                    CommandSourceStack source = context.getSource();
+                    if (MusicPlayerMod.queueService().currentTrack() == null) {
+                        Messages.warning(source, Component.translatable("musicplayer.queue.nothing_playing"));
+                        return 0;
+                    }
+                    MusicPlayerMod.queueService().resume(source.getServer());
+                    broadcastState(source,
+                            controlEcho("musicplayer.control.resumed",
+                                    "musicplayer.now.pause_label", "musicplayer.now.pause_hover",
+                                    "/music pause", ChatFormatting.YELLOW),
+                            null);
                     return 1;
                 });
     }
@@ -369,7 +389,7 @@ public final class MusicCommands {
                                 Messages.warning(context.getSource(), Component.translatable("musicplayer.queue.promote_not_found"));
                                 return 0;
                             }
-                            Messages.success(context.getSource(), Component.translatable("musicplayer.queue.promoted"), false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.queue.promoted"));
                             return showQueue(context.getSource(), 1);
                         })))
                 .then(Commands.literal("remove")
@@ -379,7 +399,7 @@ public final class MusicCommands {
                                 Messages.warning(context.getSource(), Component.translatable("musicplayer.queue.not_found"));
                                 return 0;
                             }
-                            Messages.success(context.getSource(), Component.translatable("musicplayer.queue.removed"), false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.queue.removed"));
                             return showQueue(context.getSource(), 1);
                         })))
                 .then(Commands.literal("clear")
@@ -403,22 +423,22 @@ public final class MusicCommands {
                 Messages.clickableCommand(Component.translatable("musicplayer.common.skip_label"), Component.translatable("musicplayer.common.skip_hover"), "/music skip", ChatFormatting.GRAY),
                 Messages.clickableCommand(Component.translatable("musicplayer.common.help_label"), Component.translatable("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
         if (currentTrack == null) {
-            Messages.sendSuccess(source,  Component.translatable("musicplayer.queue.nothing_playing").withStyle(ChatFormatting.GRAY), false);
+            Messages.sendSuccess(source,  Component.translatable("musicplayer.queue.nothing_playing").withStyle(ChatFormatting.GRAY));
         } else {
             long elapsedMs = MusicPlayerMod.queueService().playbackElapsedMillis();
             long durationMs = MusicPlayerMod.queueService().playbackDurationMillis();
             String requesterName = MusicPlayerMod.queueService().currentRequesterName();
             String elapsed = Messages.formatDuration(elapsedMs);
             String duration = durationMs > 0L ? Messages.formatDuration(durationMs) : "";
-            Messages.sendSuccess(source,  renderCurrentTrack(source, currentTrack, elapsed, duration, requesterName), false);
-            Messages.sendSuccess(source,  renderProgressLine(elapsed, duration, requesterName, MusicPlayerMod.queueService().isPaused(), elapsedMs, durationMs), false);
+            Messages.sendSuccess(source,  renderCurrentTrack(source, currentTrack, elapsed, duration, requesterName));
+            Messages.sendSuccess(source,  renderProgressLine(elapsed, duration, requesterName, MusicPlayerMod.queueService().isPaused(), elapsedMs, durationMs));
         }
         if (totalEntries == 0) {
-            Messages.sendSuccess(source,  Component.translatable("musicplayer.queue.empty").withStyle(ChatFormatting.GRAY), false);
+            Messages.sendSuccess(source,  Component.translatable("musicplayer.queue.empty").withStyle(ChatFormatting.GRAY));
             return 1;
         }
-        Messages.sendSuccess(source,  spacer(), false);
-        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.queue.title"), Component.translatable("musicplayer.queue.hint")), false);
+        Messages.sendSuccess(source,  spacer());
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.queue.title"), Component.translatable("musicplayer.queue.hint")));
         List<SearchEntry> entries = MusicPlayerMod.queueService().queuedEntries(page.page(), page.pageSize());
         for (int index = 0; index < entries.size(); index++) {
             SearchEntry entry = entries.get(index);
@@ -431,11 +451,11 @@ public final class MusicCommands {
                 line.append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
                 line.append(clickableText(entry.subtitle(), entry.subtitleCommand(), Component.translatable("musicplayer.common.view_artist_hover"), ChatFormatting.GRAY));
             }
-            Messages.sendSuccess(source,  line, false);
+            Messages.sendSuccess(source,  line);
         }
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         sendNavigation(source, page.page(), page.totalPages(), "/music queue %d", true, "/music queue ");
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         return 1;
     }
 
@@ -446,28 +466,46 @@ public final class MusicCommands {
                         .executes(context -> showPlaylistTracks(context.getSource())))
                 .then(Commands.literal("stop")
                         .executes(context -> {
-                            MusicPlayerMod.queueService().stopPlaylist(context.getSource().getServer());
+                            CommandSourceStack source = context.getSource();
+                            var queueService = MusicPlayerMod.queueService();
+                            String playlistId = queueService.currentPlaylistId();
+                            if (!queueService.stopPlaylist(source.getServer())) {
+                                Messages.warning(source, Component.translatable("musicplayer.playlist.none"));
+                                return 0;
+                            }
+                            MutableComponent echo = Component.literal("◆ ").withStyle(ChatFormatting.GOLD)
+                                    .append(Component.translatable("musicplayer.control.playlist_stopped").withStyle(ChatFormatting.GOLD));
+                            if (!playlistId.isBlank()) {
+                                echo.append(Component.literal("  "))
+                                        .append(Messages.suggestable(
+                                                Component.translatable("musicplayer.control.replay_label"),
+                                                Component.translatable("musicplayer.control.replay_hover"),
+                                                "/music play playlist " + playlistId,
+                                                ChatFormatting.GREEN));
+                            }
+                            broadcastState(source, echo,
+                                    Component.translatable("musicplayer.playlist.stopped").withStyle(ChatFormatting.YELLOW));
                             return 1;
                         }))
                 .then(Commands.literal("order")
                         .executes(context -> {
                             PlayOrder current = MusicPlayerMod.queueService().playOrder();
-                            Messages.info(context.getSource(), Component.translatable("musicplayer.playlist.current_order", Component.translatable(current.translationKey())), false);
+                            Messages.info(context.getSource(), Component.translatable("musicplayer.playlist.current_order", Component.translatable(current.translationKey())));
                             return 1;
                         })
                         .then(Commands.literal("sequential").executes(context -> {
                             MusicPlayerMod.queueService().setPlayOrder(PlayOrder.SEQUENTIAL);
-                            Messages.success(context.getSource(), Component.translatable("musicplayer.playlist.order_changed", Component.translatable("musicplayer.play_order.sequential")), false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.playlist.order_changed", Component.translatable("musicplayer.play_order.sequential")));
                             return 1;
                         }))
                         .then(Commands.literal("reverse").executes(context -> {
                             MusicPlayerMod.queueService().setPlayOrder(PlayOrder.REVERSE);
-                            Messages.success(context.getSource(), Component.translatable("musicplayer.playlist.order_changed", Component.translatable("musicplayer.play_order.reverse")), false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.playlist.order_changed", Component.translatable("musicplayer.play_order.reverse")));
                             return 1;
                         }))
                         .then(Commands.literal("shuffle").executes(context -> {
                             MusicPlayerMod.queueService().setPlayOrder(PlayOrder.SHUFFLE);
-                            Messages.success(context.getSource(), Component.translatable("musicplayer.playlist.order_changed", Component.translatable("musicplayer.play_order.shuffle")), false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.playlist.order_changed", Component.translatable("musicplayer.play_order.shuffle")));
                             return 1;
                         })));
     }
@@ -486,17 +524,17 @@ public final class MusicCommands {
 
         TrackInfo currentTrack = MusicPlayerMod.queueService().currentTrack();
         if (currentTrack != null) {
-            Messages.sendSuccess(source,  spacer(), false);
+            Messages.sendSuccess(source,  spacer());
             long elapsedMs = MusicPlayerMod.queueService().playbackElapsedMillis();
             long durationMs = MusicPlayerMod.queueService().playbackDurationMillis();
             String requesterName = MusicPlayerMod.queueService().currentRequesterName();
             String elapsed = Messages.formatDuration(elapsedMs);
             String duration = durationMs > 0L ? Messages.formatDuration(durationMs) : "";
-            Messages.sendSuccess(source,  renderCurrentTrack(source, currentTrack, elapsed, duration, requesterName), false);
-            Messages.sendSuccess(source,  renderProgressLine(elapsed, duration, requesterName, MusicPlayerMod.queueService().isPaused(), elapsedMs, durationMs), false);
+            Messages.sendSuccess(source,  renderCurrentTrack(source, currentTrack, elapsed, duration, requesterName));
+            Messages.sendSuccess(source,  renderProgressLine(elapsed, duration, requesterName, MusicPlayerMod.queueService().isPaused(), elapsedMs, durationMs));
         }
 
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         MutableComponent statusLine = Component.translatable("musicplayer.playlist.queue_status",
                 Component.literal(String.valueOf(queueSize)).withStyle(ChatFormatting.AQUA)).withStyle(ChatFormatting.GOLD);
         if (isPlaylistMode) {
@@ -514,16 +552,16 @@ public final class MusicCommands {
                         Component.translatable("musicplayer.playlist.order_hover"),
                         "/music playlist order",
                         ChatFormatting.AQUA));
-        Messages.sendSuccess(source,  statusLine, false);
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  statusLine);
+        Messages.sendSuccess(source,  spacer());
         return 1;
     }
 
     private static int showPlaylistTracks(CommandSourceStack source) {
         sendHeader(source);
         if (!MusicPlayerMod.queueService().isPlaylistMode()) {
-            Messages.sendSuccess(source,  Component.translatable("musicplayer.playlist.none").withStyle(ChatFormatting.GRAY), false);
-            Messages.sendSuccess(source,  spacer(), false);
+            Messages.sendSuccess(source,  Component.translatable("musicplayer.playlist.none").withStyle(ChatFormatting.GRAY));
+            Messages.sendSuccess(source,  spacer());
             return 1;
         }
 
@@ -536,9 +574,9 @@ public final class MusicCommands {
                 Messages.clickableCommand(Component.translatable("musicplayer.playlist.stop_label"), Component.translatable("musicplayer.playlist.stop_hover"), "/music playlist stop", ChatFormatting.DARK_GRAY),
                 Messages.clickableCommand(Component.translatable("musicplayer.common.help_label"), Component.translatable("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
 
-        Messages.sendSuccess(source,  spacer(), false);
-        Messages.sendSuccess(source,  Component.translatable("musicplayer.playlist.list_status", totalEntries, remaining).withStyle(ChatFormatting.DARK_GRAY), false);
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
+        Messages.sendSuccess(source,  Component.translatable("musicplayer.playlist.list_status", totalEntries, remaining).withStyle(ChatFormatting.DARK_GRAY));
+        Messages.sendSuccess(source,  spacer());
 
         for (int index = 0; index < entries.size(); index++) {
             SearchEntry entry = entries.get(index);
@@ -550,9 +588,9 @@ public final class MusicCommands {
                 line.append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
                 line.append(clickableText(entry.subtitle(), entry.subtitleCommand(), Component.translatable("musicplayer.common.view_artist_hover"), ChatFormatting.GRAY));
             }
-            Messages.sendSuccess(source,  line, false);
+            Messages.sendSuccess(source,  line);
         }
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         return 1;
     }
 
@@ -561,25 +599,25 @@ public final class MusicCommands {
                 .executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
                     boolean now = MusicPlayerMod.queueService().toggleLyrics(player);
-                    Messages.success(context.getSource(), Component.translatable(now ? "musicplayer.lyrics.enabled" : "musicplayer.lyrics.disabled"), false);
+                    Messages.success(context.getSource(), Component.translatable(now ? "musicplayer.lyrics.enabled" : "musicplayer.lyrics.disabled"));
                     return 1;
                 })
                 .then(Commands.literal("on").executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
                     MusicPlayerMod.queueService().toggleLyrics(player, true);
-                    Messages.success(context.getSource(), Component.translatable("musicplayer.lyrics.enabled"), false);
+                    Messages.success(context.getSource(), Component.translatable("musicplayer.lyrics.enabled"));
                     return 1;
                 }))
                 .then(Commands.literal("off").executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
                     MusicPlayerMod.queueService().toggleLyrics(player, false);
-                    Messages.success(context.getSource(), Component.translatable("musicplayer.lyrics.disabled"), false);
+                    Messages.success(context.getSource(), Component.translatable("musicplayer.lyrics.disabled"));
                     return 1;
                 }))
                 .then(Commands.literal("status").executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
                     boolean on = MusicPlayerMod.queueService().isLyricsEnabled(player);
-                    Messages.info(context.getSource(), Component.translatable("musicplayer.lyrics.status", yesNo(on)), false);
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.lyrics.status", yesNo(on)));
                     return 1;
                 }));
     }
@@ -588,7 +626,7 @@ public final class MusicCommands {
         return Commands.literal("join").executes(context -> {
             ServerPlayer player = context.getSource().getPlayerOrException();
             MusicPlayerMod.queueService().joinPlayer(player);
-            Messages.success(context.getSource(), Component.translatable("musicplayer.join.done"), false);
+            Messages.success(context.getSource(), Component.translatable("musicplayer.join.done"));
             return 1;
         });
     }
@@ -597,7 +635,7 @@ public final class MusicCommands {
         return Commands.literal("leave").executes(context -> {
             ServerPlayer player = context.getSource().getPlayerOrException();
             MusicPlayerMod.queueService().leavePlayer(player);
-            Messages.success(context.getSource(), Component.translatable("musicplayer.leave.done"), false);
+            Messages.success(context.getSource(), Component.translatable("musicplayer.leave.done"));
             return 1;
         });
     }
@@ -607,7 +645,7 @@ public final class MusicCommands {
                 .then(Commands.literal("once").executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
                     MusicPlayerMod.queueService().mutePlayerOnce(player);
-                    Messages.success(context.getSource(), Component.translatable("musicplayer.mute.done"), false);
+                    Messages.success(context.getSource(), Component.translatable("musicplayer.mute.done"));
                     return 1;
                 }));
     }
@@ -746,12 +784,12 @@ public final class MusicCommands {
                 return;
             }
             sendHeader(source);
-            Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.radio.hot_title"), Component.translatable("musicplayer.radio.page_hint", page)), false);
-            Messages.sendSuccess(source,  spacer(), false);
+            Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.radio.hot_title"), Component.translatable("musicplayer.radio.page_hint", page)));
+            Messages.sendSuccess(source,  spacer());
             for (SearchEntry entry : results) {
-                Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_radio_hover"), "/music view radio " + entry.id(), ChatFormatting.GREEN), Component.translatable("musicplayer.common.view_radio_hover"), Component.empty()), false);
+                Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_radio_hover"), "/music view radio " + entry.id(), ChatFormatting.GREEN), Component.translatable("musicplayer.common.view_radio_hover"), Component.empty()));
             }
-            Messages.sendSuccess(source,  spacer(), false);
+            Messages.sendSuccess(source,  spacer());
         }));
     }
 
@@ -764,12 +802,12 @@ public final class MusicCommands {
                 return;
             }
             sendHeader(source);
-            Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.radio.categories_title"), Component.translatable("musicplayer.radio.categories_hint")), false);
-            Messages.sendSuccess(source,  spacer(), false);
+            Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.radio.categories_title"), Component.translatable("musicplayer.radio.categories_hint")));
+            Messages.sendSuccess(source,  spacer());
             for (SearchEntry entry : categories) {
-                Messages.sendSuccess(source,  renderEntry(entry, Component.literal("").withStyle(ChatFormatting.GREEN), Component.translatable("musicplayer.radio.category_hover"), Component.empty()), false);
+                Messages.sendSuccess(source,  renderEntry(entry, Component.literal("").withStyle(ChatFormatting.GREEN), Component.translatable("musicplayer.radio.category_hover"), Component.empty()));
             }
-            Messages.sendSuccess(source,  spacer(), false);
+            Messages.sendSuccess(source,  spacer());
         }));
         return 1;
     }
@@ -916,16 +954,7 @@ public final class MusicCommands {
         for (ServerPlayer player : targets) {
             player.sendSystemMessage(message);
         }
-        Messages.success(source, Component.translatable("musicplayer.share.sent", targets.size()), false);
-    }
-
-    private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> stop() {
-        return Commands.literal("stop")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
-                .executes(context -> {
-                    MusicPlayerMod.queueService().stop(context.getSource().getServer(), "musicplayer.stop.admin");
-                    return 1;
-                });
+        Messages.success(source, Component.translatable("musicplayer.share.sent", targets.size()));
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> config() {
@@ -936,25 +965,25 @@ public final class MusicCommands {
                     MusicPlayerMod.queueService().clearTrackCache();
                     // 配置文件中的 bgmPlaylistId 可能已变更，同步给在线客户端
                     MusicPlayerMod.syncBgmConfig(context.getSource().getServer());
-                    Messages.success(context.getSource(), Component.translatable("musicplayer.config.reloaded"), false);
+                    Messages.success(context.getSource(), Component.translatable("musicplayer.config.reloaded"));
                     return 1;
                 }))
                 .then(Commands.literal("status").executes(context -> {
                     MusicPlayerConfig config = MusicPlayerConfigManager.get();
-                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_base_url", config.neteaseBaseUrl), false);
-                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_requests", yesNo(config.allowSongRequest), yesNo(config.allowPlaylistRequest)), false);
-                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_auto", yesNo(config.autoAdvance), yesNo(config.showLoadingHints)), false);
-                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_lyrics", yesNo(config.showLyrics)), false);
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_base_url", config.neteaseBaseUrl));
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_requests", yesNo(config.allowSongRequest), yesNo(config.allowPlaylistRequest)));
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_auto", yesNo(config.autoAdvance), yesNo(config.showLoadingHints)));
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_lyrics", yesNo(config.showLyrics)));
                     Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_bgm",
-                            config.bgmPlaylistId == null || config.bgmPlaylistId.isBlank() ? "off" : config.bgmPlaylistId), false);
+                            config.bgmPlaylistId == null || config.bgmPlaylistId.isBlank() ? "off" : config.bgmPlaylistId));
                     Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_proxy",
                             !config.proxy.isBlank()
                                     ? Component.translatable("musicplayer.config.proxy_manual", config.proxy)
-                                    : Component.translatable(config.useSystemProxy ? "musicplayer.config.proxy_auto" : "musicplayer.config.proxy_direct")), false);
-                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_network", yesNo(config.preferIpv4), config.connectTimeoutSeconds, config.readTimeoutSeconds), false);
-                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_limits", config.searchLimit, config.maxQueueSize, config.maxSongsPerPlayer, config.playlistQueueLimit, config.queueCacheSize), false);
-                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_vote_skip", config.voteSkipPercent), false);
-                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_loot", yesNo(config.enableLootMusicDiscs), config.lootMusicDiscChance, config.lootMusicDiscCount), false);
+                                    : Component.translatable(config.useSystemProxy ? "musicplayer.config.proxy_auto" : "musicplayer.config.proxy_direct")));
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_network", yesNo(config.preferIpv4), config.connectTimeoutSeconds, config.readTimeoutSeconds));
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_limits", config.searchLimit, config.maxQueueSize, config.maxSongsPerPlayer, config.playlistQueueLimit, config.queueCacheSize));
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_vote_skip", config.voteSkipPercent));
+                    Messages.info(context.getSource(), Component.translatable("musicplayer.config.status_loot", yesNo(config.enableLootMusicDiscs), config.lootMusicDiscChance, config.lootMusicDiscCount));
                     return 1;
                 }))
                 .then(Commands.literal("clearqueue").executes(context -> {
@@ -964,7 +993,11 @@ public final class MusicCommands {
                 .then(Commands.literal("set")
                         .then(Commands.literal("baseUrl").then(Commands.argument("value", StringArgumentType.greedyString()).executes(context -> {
                             MusicPlayerConfig config = MusicPlayerConfigManager.get();
-                            String value = StringArgumentType.getString(context, "value").trim();
+                            String value = MusicPlayerConfig.normalizeBaseUrl(StringArgumentType.getString(context, "value"));
+                            if (value.isEmpty()) {
+                                Messages.warning(context.getSource(), Component.translatable("musicplayer.error.invalid_api_url"));
+                                return 0;
+                            }
                             if (!config.allowCustomServer && !"default".equalsIgnoreCase(value) && !MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL.equalsIgnoreCase(value)) {
                                 Messages.warning(context.getSource(), Component.translatable("musicplayer.config.custom_server_disabled"));
                                 return 0;
@@ -973,7 +1006,7 @@ public final class MusicCommands {
                             MusicPlayerConfigManager.save();
                             // 更换 API 地址后旧缓存音源 URL 已失效，清空点播音源缓存
                             MusicPlayerMod.queueService().clearTrackCache();
-                            Messages.success(context.getSource(), Component.translatable("musicplayer.config.base_url_updated", config.neteaseBaseUrl), false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.config.base_url_updated", config.neteaseBaseUrl));
                             return 1;
                         })))
                         .then(boolSetting("allowCustomServer", value -> MusicPlayerConfigManager.get().allowCustomServer = value))
@@ -989,7 +1022,7 @@ public final class MusicCommands {
                             String value = StringArgumentType.getString(context, "value").trim();
                             MusicPlayerConfigManager.get().proxy = "none".equalsIgnoreCase(value) ? "" : value;
                             MusicPlayerConfigManager.save();
-                            Messages.success(context.getSource(), Component.translatable("musicplayer.config.proxy_updated", MusicPlayerConfigManager.get().proxy.isBlank() ? "<none>" : MusicPlayerConfigManager.get().proxy), false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.config.proxy_updated", MusicPlayerConfigManager.get().proxy.isBlank() ? "<none>" : MusicPlayerConfigManager.get().proxy));
                             return 1;
                         })))
                         .then(Commands.literal("bgmPlaylist").then(Commands.argument("value", StringArgumentType.string()).executes(context -> {
@@ -1010,7 +1043,7 @@ public final class MusicCommands {
                             MusicPlayerConfigManager.save();
                             MusicPlayerMod.syncBgmConfig(context.getSource().getServer());
                             Messages.success(context.getSource(), Component.translatable("musicplayer.config.bgm_playlist_updated",
-                                    normalized.isBlank() ? "off" : normalized), false);
+                                    normalized.isBlank() ? "off" : normalized));
                             return 1;
                         })))
                         .then(intSetting("connectTimeoutSeconds", 3, 60, value -> MusicPlayerConfigManager.get().connectTimeoutSeconds = value))
@@ -1033,14 +1066,14 @@ public final class MusicCommands {
                             MusicPlayerConfigManager.save();
                             MusicPlayerMod.syncBgmConfig(context.getSource().getServer());
                             Messages.success(context.getSource(), Component.translatable("musicplayer.config.bgm_playlist_updated",
-                                    MusicPlayerConfig.DEFAULT_BGM_PLAYLIST_ID), false);
+                                    MusicPlayerConfig.DEFAULT_BGM_PLAYLIST_ID));
                             return 1;
                         }))
                         .then(Commands.literal("all").executes(context -> {
                             MusicPlayerConfigManager.resetAll();
                             MusicPlayerMod.queueService().clearTrackCache();
                             MusicPlayerMod.syncBgmConfig(context.getSource().getServer());
-                            Messages.success(context.getSource(), Component.translatable("musicplayer.config.reset_all"), false);
+                            Messages.success(context.getSource(), Component.translatable("musicplayer.config.reset_all"));
                             return 1;
                         }))
                         .then(resetSetting("baseUrl", (config, defaults) -> config.neteaseBaseUrl = defaults.neteaseBaseUrl,
@@ -1113,7 +1146,7 @@ public final class MusicCommands {
             resetter.accept(MusicPlayerConfigManager.get(), new MusicPlayerConfig());
             MusicPlayerConfigManager.save();
             afterSet.accept(context);
-            Messages.success(context.getSource(), Component.translatable("musicplayer.config.reset_done", name), false);
+            Messages.success(context.getSource(), Component.translatable("musicplayer.config.reset_done", name));
             return 1;
         });
     }
@@ -1124,7 +1157,7 @@ public final class MusicCommands {
             setter.accept(value);
             MusicPlayerConfigManager.save();
             afterSet.accept(context);
-            Messages.success(context.getSource(), Component.translatable("musicplayer.config.updated", name, value), false);
+            Messages.success(context.getSource(), Component.translatable("musicplayer.config.updated", name, value));
             return 1;
         }));
     }
@@ -1134,7 +1167,7 @@ public final class MusicCommands {
             int value = IntegerArgumentType.getInteger(context, "value");
             setter.accept(value);
             MusicPlayerConfigManager.save();
-            Messages.success(context.getSource(), Component.translatable("musicplayer.config.updated", name, value), false);
+            Messages.success(context.getSource(), Component.translatable("musicplayer.config.updated", name, value));
             return 1;
         }));
     }
@@ -1144,7 +1177,7 @@ public final class MusicCommands {
             double value = DoubleArgumentType.getDouble(context, "value");
             setter.accept(value);
             MusicPlayerConfigManager.save();
-            Messages.success(context.getSource(), Component.translatable("musicplayer.config.updated", name, value), false);
+            Messages.success(context.getSource(), Component.translatable("musicplayer.config.updated", name, value));
             return 1;
         }));
     }
@@ -1168,12 +1201,12 @@ public final class MusicCommands {
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.songs_title"), Component.translatable("musicplayer.search.songs_hint")), false);
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.songs_title"), Component.translatable("musicplayer.search.songs_hint")));
+        Messages.sendSuccess(source,  spacer());
         for (SearchEntry entry : results) {
-            Messages.sendSuccess(source,  renderEntry(entry, trackActions(source, entry.id(), Component.translatable("musicplayer.common.request_label"), Component.translatable("musicplayer.common.request_hover"), ChatFormatting.GREEN), Component.translatable("musicplayer.common.request_hover"), Component.translatable("musicplayer.common.click_artist_hover")), false);
+            Messages.sendSuccess(source,  renderEntry(entry, trackActions(source, entry.id(), Component.translatable("musicplayer.common.request_label"), Component.translatable("musicplayer.common.request_hover"), ChatFormatting.GREEN), Component.translatable("musicplayer.common.request_hover"), Component.translatable("musicplayer.common.click_artist_hover")));
         }
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         sendSearchNavigation(source, literal, keyword, page, results.size());
     }
 
@@ -1187,14 +1220,14 @@ public final class MusicCommands {
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.artists_title"), Component.translatable("musicplayer.search.artists_hint")), false);
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.artists_title"), Component.translatable("musicplayer.search.artists_hint")));
+        Messages.sendSuccess(source,  spacer());
         for (SearchEntry entry : results) {
             Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_artist_hover"), "/music view artist " + entry.id(), ChatFormatting.GREEN)
                     .append(Component.literal(" "))
-                    .append(shareSuggest("artist", entry.id(), 1)), Component.translatable("musicplayer.common.view_artist_hover"), Component.empty()), false);
+                    .append(shareSuggest("artist", entry.id(), 1)), Component.translatable("musicplayer.common.view_artist_hover"), Component.empty()));
         }
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         sendSearchNavigation(source, literal, keyword, page, results.size());
     }
 
@@ -1208,14 +1241,14 @@ public final class MusicCommands {
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.playlists_title"), Component.translatable("musicplayer.search.playlists_hint")), false);
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.playlists_title"), Component.translatable("musicplayer.search.playlists_hint")));
+        Messages.sendSuccess(source,  spacer());
         for (SearchEntry entry : results) {
             Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_playlist_hover"), "/music view playlist " + entry.id(), ChatFormatting.GREEN)
                     .append(Component.literal(" "))
-                    .append(shareSuggest("playlist", entry.id(), 1)), Component.translatable("musicplayer.common.view_playlist_hover"), Component.translatable("musicplayer.common.click_creator_hover")), false);
+                    .append(shareSuggest("playlist", entry.id(), 1)), Component.translatable("musicplayer.common.view_playlist_hover"), Component.translatable("musicplayer.common.click_creator_hover")));
         }
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         sendSearchNavigation(source, literal, keyword, page, results.size());
     }
 
@@ -1229,14 +1262,14 @@ public final class MusicCommands {
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.users_title"), Component.translatable("musicplayer.search.users_hint")), false);
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.users_title"), Component.translatable("musicplayer.search.users_hint")));
+        Messages.sendSuccess(source,  spacer());
         for (SearchEntry entry : results) {
             Messages.sendSuccess(source,  renderEntry(entry, Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_user_playlists_hover"), "/music view user " + entry.id(), ChatFormatting.GREEN)
                     .append(Component.literal(" "))
-                    .append(shareSuggest("user", entry.id(), 1)), Component.translatable("musicplayer.common.view_user_playlists_hover"), Component.empty()), false);
+                    .append(shareSuggest("user", entry.id(), 1)), Component.translatable("musicplayer.common.view_user_playlists_hover"), Component.empty()));
         }
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         sendSearchNavigation(source, literal, keyword, page, results.size());
     }
 
@@ -1250,12 +1283,12 @@ public final class MusicCommands {
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.random.title"), Component.translatable("musicplayer.random.hint")), false);
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.random.title"), Component.translatable("musicplayer.random.hint")));
+        Messages.sendSuccess(source,  spacer());
         for (TrackInfo track : tracks) {
-            Messages.sendSuccess(source,  renderRandomTrack(source, track), false);
+            Messages.sendSuccess(source,  renderRandomTrack(source, track));
         }
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
     }
 
     private static void showPlaylist(CommandSourceStack source, String playlistId, int requestedPage, PlaylistInfo playlist, Throwable throwable) {
@@ -1288,8 +1321,8 @@ public final class MusicCommands {
                             .append(Component.literal(" "))
                             .append(Messages.clickableCommand(Component.translatable("musicplayer.playlist.reverse_label"), Component.translatable("musicplayer.playlist.reverse_hover"), "/music play playlist " + playlist.id() + " reverse", ChatFormatting.GOLD))
                             .append(Component.literal(" "))
-                            .append(shareSuggest("playlist", playlist.id(), page)), false);
-                    Messages.sendSuccess(source,  spacer(), false);
+                            .append(shareSuggest("playlist", playlist.id(), page)));
+                    Messages.sendSuccess(source,  spacer());
 
                     if (t != null) {
                         Messages.warning(source, Component.translatable("musicplayer.playlist.tracks_failed", Messages.textOrTranslatable(rootMessage(t))));
@@ -1298,13 +1331,13 @@ public final class MusicCommands {
                     for (SearchEntry track : tracks) {
                         Messages.sendSuccess(source,  renderEntry(track,
                                 trackActions(source, track.id(), Component.translatable("musicplayer.common.request_label"), Component.translatable("musicplayer.play.request_hover"), ChatFormatting.GREEN),
-                                Component.translatable("musicplayer.play.request_hover"), Component.translatable("musicplayer.common.click_artist_hover")), false);
+                                Component.translatable("musicplayer.play.request_hover"), Component.translatable("musicplayer.common.click_artist_hover")));
                     }
-                    Messages.sendSuccess(source,  spacer(), false);
+                    Messages.sendSuccess(source,  spacer());
                     sendNavigation(source, page, totalPages,
                             "/music view playlist " + playlistId + " page %d", true,
                             "/music view playlist " + playlistId + " page ");
-                    Messages.sendSuccess(source,  spacer(), false);
+                    Messages.sendSuccess(source,  spacer());
                 }));
     }
 
@@ -1329,22 +1362,22 @@ public final class MusicCommands {
         Messages.sendSuccess(source,  Component.translatable("musicplayer.view.user_prefix").withStyle(ChatFormatting.GOLD)
                 .append(clickableText(user.name(), "/music view user " + user.id(), Component.translatable("musicplayer.common.view_user_playlists_hover"), ChatFormatting.AQUA))
                 .append(Component.literal(" "))
-                .append(shareSuggest("user", user.id(), page.page())), false);
+                .append(shareSuggest("user", user.id(), page.page())));
         if (user.signature() != null && !user.signature().isBlank()) {
-            Messages.sendSuccess(source,  spacer(), false);
-            Messages.sendSuccess(source,  Component.literal(user.signature()).withStyle(ChatFormatting.GRAY), false);
+            Messages.sendSuccess(source,  spacer());
+            Messages.sendSuccess(source,  Component.literal(user.signature()).withStyle(ChatFormatting.GRAY));
         }
         if (visiblePlaylists.isEmpty()) {
             Messages.warning(source, Component.translatable("musicplayer.view.user_no_playlists"));
             return;
         }
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         for (SearchEntry playlist : slicePage(visiblePlaylists, page)) {
-            Messages.sendSuccess(source,  renderEntry(playlist, Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_playlist_hover"), "/music view playlist " + playlist.id(), ChatFormatting.GREEN), Component.translatable("musicplayer.common.view_playlist_hover"), Component.empty()), false);
+            Messages.sendSuccess(source,  renderEntry(playlist, Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_playlist_hover"), "/music view playlist " + playlist.id(), ChatFormatting.GREEN), Component.translatable("musicplayer.common.view_playlist_hover"), Component.empty()));
         }
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         sendNavigation(source, page.page(), page.totalPages(), "/music view user " + userId + " page %d", true, "/music view user " + userId + " page ");
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
     }
 
     private static void showArtist(CommandSourceStack source, String artistId, int requestedPage, ArtistInfo artist, Throwable throwable, String literal) {
@@ -1369,10 +1402,10 @@ public final class MusicCommands {
                     Messages.sendSuccess(source,  Component.translatable("musicplayer.view.artist_prefix").withStyle(ChatFormatting.GOLD)
                             .append(clickableText(artist.name(), "/music view " + literal + " " + artist.id(), Component.translatable("musicplayer.common.view_artist_hover"), ChatFormatting.AQUA))
                             .append(Component.literal(" "))
-                            .append(shareSuggest(literal, artist.id(), page)), false);
+                            .append(shareSuggest(literal, artist.id(), page)));
                     if (artist.description() != null && !artist.description().isBlank()) {
-                        Messages.sendSuccess(source,  spacer(), false);
-                        Messages.sendSuccess(source,  Component.literal(artist.description()).withStyle(ChatFormatting.GRAY), false);
+                        Messages.sendSuccess(source,  spacer());
+                        Messages.sendSuccess(source,  Component.literal(artist.description()).withStyle(ChatFormatting.GRAY));
                     }
                     if (t != null) {
                         Messages.warning(source, Component.translatable("musicplayer.view.songs_failed", Messages.textOrTranslatable(rootMessage(t))));
@@ -1382,15 +1415,15 @@ public final class MusicCommands {
                         Messages.warning(source, Component.translatable("musicplayer.view.artist_no_songs"));
                         return;
                     }
-                    Messages.sendSuccess(source,  spacer(), false);
+                    Messages.sendSuccess(source,  spacer());
                     for (SearchEntry track : tracks) {
                         Messages.sendSuccess(source,  renderEntry(track,
                                 trackActions(source, track.id(), Component.translatable("musicplayer.common.request_label"), Component.translatable("musicplayer.play.request_hover"), ChatFormatting.GREEN),
-                                Component.translatable("musicplayer.play.request_hover"), Component.empty()), false);
+                                Component.translatable("musicplayer.play.request_hover"), Component.empty()));
                     }
-                    Messages.sendSuccess(source,  spacer(), false);
+                    Messages.sendSuccess(source,  spacer());
                     sendNavigation(source, page, totalPages, "/music view " + literal + " " + artistId + " page %d", true, "/music view " + literal + " " + artistId + " page ");
-                    Messages.sendSuccess(source,  spacer(), false);
+                    Messages.sendSuccess(source,  spacer());
                 }));
     }
 
@@ -1404,40 +1437,40 @@ public final class MusicCommands {
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.view.song_title"), null), false);
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.view.song_title"), null));
+        Messages.sendSuccess(source,  spacer());
 
         Messages.sendSuccess(source,  Component.translatable("musicplayer.view.song_prefix").withStyle(ChatFormatting.GOLD)
                 .append(clickableText(track.title(), "/music play song " + track.id(), Component.translatable("musicplayer.common.tap_request_hover"), ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
                 .append(clickableText(track.artist(),
                         track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
-                        Component.translatable("musicplayer.common.click_artist_hover"), ChatFormatting.GRAY)), false);
+                        Component.translatable("musicplayer.common.click_artist_hover"), ChatFormatting.GRAY)));
 
         if (track.durationMillis() > 0L) {
             Messages.sendSuccess(source,  Component.translatable("musicplayer.view.duration_prefix").withStyle(ChatFormatting.GRAY)
-                    .append(Component.literal(Messages.formatDuration(track.durationMillis())).withStyle(ChatFormatting.WHITE)), false);
+                    .append(Component.literal(Messages.formatDuration(track.durationMillis())).withStyle(ChatFormatting.WHITE)));
         }
 
         if (track.coverUrl() != null && !track.coverUrl().isBlank()) {
             Messages.sendSuccess(source,  Component.translatable("musicplayer.view.cover_prefix").withStyle(ChatFormatting.GRAY)
-                    .append(Messages.clickableUrl(Component.translatable("musicplayer.common.click_view_label"), Component.translatable("musicplayer.view.cover_hover"), track.coverUrl(), ChatFormatting.BLUE)), false);
+                    .append(Messages.clickableUrl(Component.translatable("musicplayer.common.click_view_label"), Component.translatable("musicplayer.view.cover_hover"), track.coverUrl(), ChatFormatting.BLUE)));
         }
 
         Messages.sendSuccess(source,  Component.literal("ID: ").withStyle(ChatFormatting.GRAY)
                 .append(Component.literal(track.id()).withStyle(style -> style
                         .withClickEvent(new ClickEvent.CopyToClipboard(track.id()))
                         .withColor(ChatFormatting.WHITE)
-                        .withHoverEvent(new HoverEvent.ShowText(Component.translatable("musicplayer.common.copy_hover"))))), false);
+                        .withHoverEvent(new HoverEvent.ShowText(Component.translatable("musicplayer.common.copy_hover"))))));
 
         MutableComponent burnAction = buildBurnAction(source, track.id());
         if (burnAction != null) {
-            Messages.sendSuccess(source,  spacer(), false);
+            Messages.sendSuccess(source,  spacer());
             Messages.sendSuccess(source,  Component.translatable("musicplayer.common.actions_prefix").withStyle(ChatFormatting.GOLD)
-                    .append(burnAction), false);
+                    .append(burnAction));
         }
 
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
     }
 
     private static void sendRadioResults(CommandSourceStack source, String keyword, int page, String literal, List<SearchEntry> results, Throwable throwable) {
@@ -1450,17 +1483,17 @@ public final class MusicCommands {
             return;
         }
         sendHeader(source);
-        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.radios_title"), Component.translatable("musicplayer.search.radios_hint")), false);
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.search.radios_title"), Component.translatable("musicplayer.search.radios_hint")));
+        Messages.sendSuccess(source,  spacer());
         for (SearchEntry entry : results) {
             MutableComponent actions = Messages.clickableCommand(Component.translatable("musicplayer.radio.play_label"), Component.translatable("musicplayer.common.play_in_order_hover"), "/music play radio " + entry.id(), ChatFormatting.GREEN)
                     .append(Component.literal(" "))
                     .append(Messages.clickableCommand(Component.translatable("musicplayer.common.view_label"), Component.translatable("musicplayer.common.view_radio_hover"), "/music view radio " + entry.id(), ChatFormatting.GRAY))
                     .append(Component.literal(" "))
                     .append(shareSuggest("radio", entry.id(), 1));
-            Messages.sendSuccess(source,  renderEntry(entry, actions, Component.translatable("musicplayer.radio.play_hover"), Component.translatable("musicplayer.radio.play_hover")), false);
+            Messages.sendSuccess(source,  renderEntry(entry, actions, Component.translatable("musicplayer.radio.play_hover"), Component.translatable("musicplayer.radio.play_hover")));
         }
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         sendSearchNavigation(source, literal, keyword, page, results.size());
     }
 
@@ -1491,38 +1524,38 @@ public final class MusicCommands {
                     if (!radio.name().isBlank()) {
                         headerLine.append(Component.literal("  " + radio.name()).withStyle(ChatFormatting.GRAY));
                     }
-                    Messages.sendSuccess(source, headerLine, false);
-                    Messages.sendSuccess(source,  spacer(), false);
+                    Messages.sendSuccess(source, headerLine);
+                    Messages.sendSuccess(source,  spacer());
 
                     if (radio.playCount() > 0) {
                         Messages.sendSuccess(source,  Component.translatable("musicplayer.radio.play_count_prefix").withStyle(ChatFormatting.GRAY)
-                                .append(Component.literal(String.valueOf(radio.playCount())).withStyle(ChatFormatting.WHITE)), false);
+                                .append(Component.literal(String.valueOf(radio.playCount())).withStyle(ChatFormatting.WHITE)));
                     }
                     if (radio.radioFeeType() != 0) {
-                        Messages.sendSuccess(source,  Component.translatable("musicplayer.radio.paid_notice").withStyle(ChatFormatting.RED), false);
+                        Messages.sendSuccess(source,  Component.translatable("musicplayer.radio.paid_notice").withStyle(ChatFormatting.RED));
                     }
                     if (radio.description() != null && !radio.description().isBlank()) {
-                        Messages.sendSuccess(source,  spacer(), false);
-                        Messages.sendSuccess(source,  Component.literal(radio.description()).withStyle(ChatFormatting.GRAY), false);
+                        Messages.sendSuccess(source,  spacer());
+                        Messages.sendSuccess(source,  Component.literal(radio.description()).withStyle(ChatFormatting.GRAY));
                     }
 
                     if (t != null || pagePrograms == null || pagePrograms.isEmpty()) {
-                        Messages.sendSuccess(source,  spacer(), false);
-                        Messages.sendSuccess(source,  Component.translatable("musicplayer.radio.no_programs").withStyle(ChatFormatting.GRAY), false);
+                        Messages.sendSuccess(source,  spacer());
+                        Messages.sendSuccess(source,  Component.translatable("musicplayer.radio.no_programs").withStyle(ChatFormatting.GRAY));
                         return;
                     }
 
-                    Messages.sendSuccess(source,  spacer(), false);
-                    Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.radio.programs_title", page, totalPages), Component.translatable("musicplayer.radio.programs_hint")), false);
+                    Messages.sendSuccess(source,  spacer());
+                    Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.radio.programs_title", page, totalPages), Component.translatable("musicplayer.radio.programs_hint")));
                     for (ProgramInfo prog : pagePrograms) {
-                        Messages.sendSuccess(source,  renderProgramEntry(source, prog), false);
+                        Messages.sendSuccess(source,  renderProgramEntry(source, prog));
                     }
-                    Messages.sendSuccess(source,  spacer(), false);
+                    Messages.sendSuccess(source,  spacer());
                     if (totalPages > 1) {
                         String baseCmd = "/music view radio " + radioId;
                         sendNavigation(source, page, totalPages, baseCmd + " page %d", true, baseCmd + " page ");
                     }
-                    Messages.sendSuccess(source,  spacer(), false);
+                    Messages.sendSuccess(source,  spacer());
                 }));
     }
 
@@ -1537,30 +1570,30 @@ public final class MusicCommands {
                 program.radioId().isBlank() ? null : Messages.clickableCommand(Component.translatable("musicplayer.view.radio_label"), Component.translatable("musicplayer.view.owning_radio_hover"), "/music view radio " + program.radioId(), ChatFormatting.AQUA),
                 shareSuggest("program", program.id(), 1),
                 Messages.clickableCommand(Component.translatable("musicplayer.common.help_label"), Component.translatable("musicplayer.common.help_hover"), "/music help", ChatFormatting.DARK_GRAY));
-        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.view.program_title"), Component.literal(program.name())), false);
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  sectionHeader(Component.translatable("musicplayer.view.program_title"), Component.literal(program.name())));
+        Messages.sendSuccess(source,  spacer());
         Messages.sendSuccess(source,  Component.translatable("musicplayer.view.program_prefix").withStyle(ChatFormatting.GOLD)
-                .append(Component.literal(program.name()).withStyle(ChatFormatting.WHITE)), false);
+                .append(Component.literal(program.name()).withStyle(ChatFormatting.WHITE)));
         if (!program.radioName().isBlank()) {
             Messages.sendSuccess(source,  Component.translatable("musicplayer.view.radio_prefix").withStyle(ChatFormatting.GRAY)
-                    .append(clickableText(program.radioName(), "/music view radio " + program.radioId(), Component.translatable("musicplayer.common.view_radio_hover"), ChatFormatting.AQUA)), false);
+                    .append(clickableText(program.radioName(), "/music view radio " + program.radioId(), Component.translatable("musicplayer.common.view_radio_hover"), ChatFormatting.AQUA)));
         }
         if (program.durationMillis() > 0L) {
             Messages.sendSuccess(source,  Component.translatable("musicplayer.view.duration_prefix").withStyle(ChatFormatting.GRAY)
-                    .append(Component.literal(Messages.formatDuration(program.durationMillis())).withStyle(ChatFormatting.WHITE)), false);
+                    .append(Component.literal(Messages.formatDuration(program.durationMillis())).withStyle(ChatFormatting.WHITE)));
         }
         if (program.coverUrl() != null && !program.coverUrl().isBlank()) {
             Messages.sendSuccess(source,  Component.translatable("musicplayer.view.cover_prefix").withStyle(ChatFormatting.GRAY)
-                    .append(Messages.clickableUrl(Component.translatable("musicplayer.common.click_view_label"), Component.translatable("musicplayer.view.cover_hover"), program.coverUrl(), ChatFormatting.BLUE)), false);
+                    .append(Messages.clickableUrl(Component.translatable("musicplayer.common.click_view_label"), Component.translatable("musicplayer.view.cover_hover"), program.coverUrl(), ChatFormatting.BLUE)));
         }
         if (program.description() != null && !program.description().isBlank()) {
-            Messages.sendSuccess(source,  spacer(), false);
-            Messages.sendSuccess(source,  Component.literal(program.description()).withStyle(ChatFormatting.GRAY), false);
+            Messages.sendSuccess(source,  spacer());
+            Messages.sendSuccess(source,  Component.literal(program.description()).withStyle(ChatFormatting.GRAY));
         }
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
         Messages.sendSuccess(source,  Component.translatable("musicplayer.common.actions_prefix").withStyle(ChatFormatting.GOLD)
-                .append(Messages.clickableCommand(Component.translatable("musicplayer.common.play_label"), Component.translatable("musicplayer.view.play_program_hover"), "/music play program " + program.id(), ChatFormatting.GREEN)), false);
-        Messages.sendSuccess(source,  spacer(), false);
+                .append(Messages.clickableCommand(Component.translatable("musicplayer.common.play_label"), Component.translatable("musicplayer.view.play_program_hover"), "/music play program " + program.id(), ChatFormatting.GREEN)));
+        Messages.sendSuccess(source,  spacer());
     }
 
     private static MutableComponent renderProgramEntry(CommandSourceStack source, ProgramInfo program) {
@@ -1684,7 +1717,7 @@ public final class MusicCommands {
         boolean hasNext = resultSize >= pageSize();
         String base = "/music search " + type + " \"" + keyword + "\"";
         sendNavigation(source, page, page + (hasNext ? 1 : 0), base + " page %d", hasNext, base + " page ");
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
     }
 
     private static void sendNavigation(CommandSourceStack source, int page, int totalPages, String commandPattern, boolean hasKnownNext, String suggestCommand) {
@@ -1702,7 +1735,7 @@ public final class MusicCommands {
         }
         nav.append(Component.literal(" "));
         nav.append(Messages.suggestable(Component.translatable("musicplayer.common.jump_label"), Component.translatable("musicplayer.common.jump_hover"), suggestCommand, ChatFormatting.GRAY));
-        Messages.sendSuccess(source,  nav, false);
+        Messages.sendSuccess(source,  nav);
     }
 
     private static void burnHeldDisc(CommandSourceStack source, ServerPlayer player, TrackInfo track) {
@@ -1725,7 +1758,30 @@ public final class MusicCommands {
         Messages.sendSuccess(source,  Component.translatable("musicplayer.burn.done").withStyle(ChatFormatting.GREEN)
                 .append(Component.literal(track.title()).withStyle(ChatFormatting.AQUA))
                 .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
-                .append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY)), false);
+                .append(Component.literal(track.artist()).withStyle(ChatFormatting.GRAY)));
+    }
+
+    /** 播放状态回显：在线管理员看到带操作按钮的回显；plainForOthers 非空时其他玩家看到纯状态文本。 */
+    private static void broadcastState(CommandSourceStack source, MutableComponent adminEcho, Component plainForOthers) {
+        for (ServerPlayer player : source.getServer().getPlayerList().getPlayers()) {
+            if (player.createCommandSourceStack().permissions().hasPermission(Permissions.COMMANDS_ADMIN)) {
+                player.sendSystemMessage(adminEcho.copy());
+            } else if (plainForOthers != null) {
+                player.sendSystemMessage(plainForOthers.copy());
+            }
+        }
+    }
+
+    /** 极简状态回显：◆ 状态文本 + 操作按钮（点击后把命令填充到输入框）。 */
+    private static MutableComponent controlEcho(String textKey, String labelKey, String hoverKey, String command, ChatFormatting color) {
+        return Component.literal("◆ ").withStyle(ChatFormatting.GOLD)
+                .append(Component.translatable(textKey).withStyle(ChatFormatting.GOLD))
+                .append(Component.literal("  "))
+                .append(Messages.suggestable(
+                        Component.translatable(labelKey),
+                        Component.translatable(hoverKey),
+                        command,
+                        color));
     }
 
     @SafeVarargs
@@ -1743,7 +1799,7 @@ public final class MusicCommands {
             first = false;
         }
         if (!first) {
-            Messages.sendSuccess(source,  line, false);
+            Messages.sendSuccess(source,  line);
         }
     }
 
@@ -1758,10 +1814,10 @@ public final class MusicCommands {
     }
 
     private static void sendHeader(CommandSourceStack source) {
-        Messages.sendSuccess(source,  spacer(), false);
-        Messages.sendSuccess(source,  spacer(), false);
-        Messages.sendSuccess(source,  renderHeader(), false);
-        Messages.sendSuccess(source,  spacer(), false);
+        Messages.sendSuccess(source,  spacer());
+        Messages.sendSuccess(source,  spacer());
+        Messages.sendSuccess(source,  renderHeader());
+        Messages.sendSuccess(source,  spacer());
     }
 
     private static MutableComponent sectionHeader(Component title, Component subtitle) {
@@ -1808,14 +1864,7 @@ public final class MusicCommands {
     }
 
     private static String rootMessage(Throwable throwable) {
-        if (throwable == null) return "musicplayer.common.unknown_error";
-        Throwable current = throwable;
-        int depth = 0;
-        while (current.getCause() != null && depth < 100) {
-            current = current.getCause();
-            depth++;
-        }
-        return current.getMessage() == null ? current.toString() : current.getMessage();
+        return com.junhsiun.musicplayer.platform.url.UrlUtil.rootMessageKey(throwable);
     }
 
     @FunctionalInterface

@@ -42,7 +42,7 @@ public final class LyricService {
                         .addQueryParameter("id", songId);
                 Request request = new Request.Builder()
                         .url(builder.build())
-                        .header("User-Agent", "MinecraftMusicPlayer/2.0")
+                        .header("User-Agent", "MinecraftMusicPlayer/" + com.junhsiun.musicplayer.MusicPlayerMod.VERSION)
                         .get()
                         .build();
                 try (Response response = client.newCall(request).execute()) {
@@ -55,7 +55,7 @@ public final class LyricService {
                 MusicPlayerMod.LOGGER.warn("歌词(primary) 请求失败: {}", e.getMessage());
                 return null;
             }
-        });
+        }, NeteaseApiClient.executor());
     }
 
     private CompletableFuture<List<LyricLine>> fetchFromFallback(String songId) {
@@ -66,7 +66,7 @@ public final class LyricService {
                         .addQueryParameter("id", songId);
                 Request request = new Request.Builder()
                         .url(builder.build())
-                        .header("User-Agent", "MinecraftMusicPlayer/2.0")
+                        .header("User-Agent", "MinecraftMusicPlayer/" + com.junhsiun.musicplayer.MusicPlayerMod.VERSION)
                         .header("Accept", "application/json,text/plain,*/*")
                         .get()
                         .build();
@@ -88,7 +88,7 @@ public final class LyricService {
                 MusicPlayerMod.LOGGER.warn("歌词(fallback) 请求失败: {}", e.getMessage());
                 return null;
             }
-        });
+        }, NeteaseApiClient.executor());
     }
 
     public static List<LyricLine> parseLrc(String lrcText) {

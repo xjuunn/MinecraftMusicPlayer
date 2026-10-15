@@ -34,10 +34,6 @@ public final class ClientNetworkChecker {
     private ClientNetworkChecker() {
     }
 
-    public static Status getLastStatus() {
-        return lastStatus;
-    }
-
     public static CompletableFuture<Status> check() {
         CompletableFuture<Status> future = new CompletableFuture<>();
         String baseUrl = MusicPlayerConfigManager.get().neteaseBaseUrl;
@@ -51,7 +47,7 @@ public final class ClientNetworkChecker {
         try {
             request = new Request.Builder()
                     .url(baseUrl)
-                    .header("User-Agent", "MinecraftMusicPlayer/2.0")
+                    .header("User-Agent", "MinecraftMusicPlayer/" + com.junhsiun.musicplayer.MusicPlayerMod.VERSION)
                     .get()
                     .build();
         } catch (IllegalArgumentException exception) {

@@ -10,6 +10,7 @@ import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.platform.ArtistTopSongSource;
 import com.junhsiun.musicplayer.platform.HotPlaylistRandomSource;
 import com.junhsiun.musicplayer.platform.RandomSongSource;
+import com.junhsiun.musicplayer.util.FileAtomicWrite;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -64,8 +65,11 @@ public final class LootMusicDiscService {
     }
 
     public void start() {
+        sources.clear();
         sources.add(new HotPlaylistRandomSource(MusicPlayerMod.netease()));
         sources.add(new ArtistTopSongSource(MusicPlayerMod.netease()));
+        loaded = false;
+        processedContainers.clear();
         if (server != null) {
             loadCache();
         }
@@ -74,6 +78,8 @@ public final class LootMusicDiscService {
 
     public void setServer(MinecraftServer server) {
         this.server = server;
+        loaded = false;
+        processedContainers.clear();
         if (isStarted()) {
             loadCache();
         }
@@ -139,7 +145,15 @@ public final class LootMusicDiscService {
 
         consumeTracks(1).whenComplete((tracks, throwable) -> {
             MinecraftServer srv = player.level().getServer();
-            if (srv == null) return;
+            if (srv == null) {
+                // 服务器已卸载：直接退回道具，避免玩家损失
+                pendingPlayers.remove(player.getUUID());
+                ItemStack returned = baseDisc.copyWithCount(1);
+                if (!player.getInventory().add(returned)) {
+                    player.drop(returned, false, Prediction.SERVER_ONLY);
+                }
+                return;
+            }
             srv.execute(() -> {
                 pendingPlayers.remove(player.getUUID());
                 if (throwable != null || tracks == null || tracks.isEmpty()) {
@@ -327,20 +341,19 @@ public final class LootMusicDiscService {
         }
         try {
             processedContainers.clear();
-            Set<String> loaded = GSON.fromJson(Files.newBufferedReader(path), STRING_SET);
-            if (loaded != null) {
-                processedContainers.addAll(loaded);
+            Set<String> loadedSet = GSON.fromJson(Files.newBufferedReader(path), STRING_SET);
+            if (loadedSet != null) {
+                processedContainers.addAll(loadedSet);
             }
-        } catch (IOException exception) {
+        } catch (Exception exception) {
             MusicPlayerMod.LOGGER.warn("Failed to read loot music disc injection state.", exception);
         }
     }
 
-    private void save(MinecraftServer srv) {
+    private synchronized void save(MinecraftServer srv) {
         Path path = storePath(srv);
         try {
-            Files.createDirectories(path.getParent());
-            Files.writeString(path, GSON.toJson(processedContainers));
+            FileAtomicWrite.writeString(path, GSON.toJson(processedContainers));
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.warn("Failed to save loot music disc injection state.", exception);
         }
@@ -351,27 +364,26 @@ public final class LootMusicDiscService {
         Path path = cachePath(server);
         if (Files.notExists(path)) return;
         try {
-            List<TrackInfo> loaded = GSON.fromJson(Files.newBufferedReader(path), TRACK_LIST);
-            if (loaded != null) {
+            List<TrackInfo> loadedTracks = GSON.fromJson(Files.newBufferedReader(path), TRACK_LIST);
+            if (loadedTracks != null) {
                 trackPool.clear();
-                trackPool.addAll(loaded);
+                trackPool.addAll(loadedTracks);
             }
             while (trackPool.size() > POOL_CAPACITY) {
                 trackPool.poll();
             }
             MusicPlayerMod.LOGGER.info("Loaded {} cached random tracks", trackPool.size());
-        } catch (IOException exception) {
+        } catch (Exception exception) {
             MusicPlayerMod.LOGGER.warn("Failed to read random track cache.", exception);
         }
     }
 
-    private void saveCache() {
+    private synchronized void saveCache() {
         if (server == null) return;
         Path path = cachePath(server);
         try {
-            Files.createDirectories(path.getParent());
             List<TrackInfo> snapshot = new ArrayList<>(trackPool);
-            Files.writeString(path, GSON.toJson(snapshot));
+            FileAtomicWrite.writeString(path, GSON.toJson(snapshot));
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.warn("Failed to save random track cache.", exception);
         }
