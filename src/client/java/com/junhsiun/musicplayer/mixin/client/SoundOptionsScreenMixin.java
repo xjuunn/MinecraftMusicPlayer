@@ -6,9 +6,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.OptionInstance;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.components.OptionsList;
-import net.minecraft.client.gui.screens.options.SoundOptionsScreen;
-import net.minecraft.client.sounds.SoundManager;
-import net.minecraft.client.sounds.SoundPreviewHandler;
+import net.minecraft.client.gui.screens.SoundOptionsScreen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
@@ -20,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class SoundOptionsScreenMixin {
 
     @Redirect(
-            method = "addOptions",
+            method = "init",
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/client/gui/components/OptionsList;addSmall([Lnet/minecraft/client/OptionInstance;)V",
@@ -59,16 +57,10 @@ public abstract class SoundOptionsScreenMixin {
                 initial,
                 value -> {
                     MusicPlayerClientConfigManager.get().bgmVolume = musicplayer$clampVolume(value);
-                    MusicPlayerClientConfigManager.save();
+                    MusicPlayerClientConfigManager.markDirty();
                     Minecraft minecraft = Minecraft.getInstance();
-                    SoundManager soundManager = minecraft.getSoundManager();
-                    if (minecraft.options.getFinalSoundSourceVolume(SoundSource.MUSIC) > 0.0F) {
-                        minecraft.getMusicManager().showNowPlayingToastIfNeeded();
-                    }
-                    soundManager.refreshCategoryVolume(SoundSource.MUSIC);
-                    if (minecraft.level == null) {
-                        SoundPreviewHandler.preview(soundManager, SoundSource.MUSIC, value.floatValue());
-                    }
+                    float volume = minecraft.options.getSoundSourceVolume(SoundSource.MUSIC);
+                    minecraft.getSoundManager().updateSourceVolume(SoundSource.MUSIC, volume);
                 });
     }
 

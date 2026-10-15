@@ -33,6 +33,9 @@ public record JukeboxMusicPayload(String action, long jukeboxPos, List<String> u
 
     private static List<String> readUrls(FriendlyByteBuf buffer) {
         int size = buffer.readVarInt();
+        if (size < 0 || size > 16) {
+            throw new IllegalArgumentException("Invalid url list size: " + size);
+        }
         List<String> urls = new ArrayList<>(size);
         for (int index = 0; index < size; index++) {
             urls.add(buffer.readUtf());
@@ -40,8 +43,17 @@ public record JukeboxMusicPayload(String action, long jukeboxPos, List<String> u
         return urls;
     }
 
+    private static List<String> validUrls(List<String> urls) {
+        if (urls == null) {
+            return List.of();
+        }
+        return urls.stream()
+                .filter(url -> url != null && url.startsWith("http") && url.length() < 30000)
+                .toList();
+    }
+
     public static JukeboxMusicPayload play(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis, String trackId) {
-        return new JukeboxMusicPayload("play", jukeboxPos, List.copyOf(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, offsetMillis, trackId == null ? "" : trackId);
+        return new JukeboxMusicPayload("play", jukeboxPos, validUrls(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, offsetMillis, trackId == null ? "" : trackId);
     }
 
     public static JukeboxMusicPayload update(long jukeboxPos, String title, String subtitle, String coverUrl, String trackId) {
@@ -49,7 +61,7 @@ public record JukeboxMusicPayload(String action, long jukeboxPos, List<String> u
     }
 
     public static JukeboxMusicPayload refresh(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis, String trackId) {
-        return new JukeboxMusicPayload("refresh", jukeboxPos, List.copyOf(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, offsetMillis, trackId == null ? "" : trackId);
+        return new JukeboxMusicPayload("refresh", jukeboxPos, validUrls(urls), title == null ? "" : title, subtitle == null ? "" : subtitle, coverUrl == null ? "" : coverUrl, offsetMillis, trackId == null ? "" : trackId);
     }
 
     public static JukeboxMusicPayload stop(long jukeboxPos) {

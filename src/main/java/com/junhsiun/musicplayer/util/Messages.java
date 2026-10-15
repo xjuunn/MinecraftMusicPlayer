@@ -47,10 +47,6 @@ public final class Messages {
         source.sendSuccess(() -> component, false);
     }
 
-    public static void sendChatLines(CommandSourceStack source, Component component) {
-        sendChat(source, component);
-    }
-
     /**
      * 将字符串渲染为组件：若字符串形如翻译键（{@code musicplayer.xxx.yyy}）则按翻译解析，否则按普通文本解析。
      * 用于网络传输的失败原因、异常消息等既可能是键也可能是原始文本的场景。
@@ -63,34 +59,18 @@ public final class Messages {
     }
 
     public static void info(CommandSourceStack source, String text) {
-        info(source, text, false);
-    }
-
-    public static void info(CommandSourceStack source, String text, boolean broadcastToOps) {
-        info(source, Component.literal(text), broadcastToOps);
+        info(source, Component.literal(text));
     }
 
     public static void info(CommandSourceStack source, Component component) {
-        info(source, component, false);
-    }
-
-    public static void info(CommandSourceStack source, Component component, boolean broadcastToOps) {
         sendChat(source, component.copy().withStyle(ChatFormatting.GRAY));
     }
 
     public static void success(CommandSourceStack source, String text) {
-        success(source, text, false);
-    }
-
-    public static void success(CommandSourceStack source, String text, boolean broadcastToOps) {
-        success(source, Component.literal(text), broadcastToOps);
+        success(source, Component.literal(text));
     }
 
     public static void success(CommandSourceStack source, Component component) {
-        success(source, component, false);
-    }
-
-    public static void success(CommandSourceStack source, Component component, boolean broadcastToOps) {
         sendChat(source, component.copy().withStyle(ChatFormatting.GREEN));
     }
 
@@ -115,10 +95,6 @@ public final class Messages {
         sendChat(source, component.copy().withStyle(ChatFormatting.YELLOW));
     }
 
-    public static void sendLine(CommandSourceStack source, Component component) {
-        sendChat(source, component);
-    }
-
     public static void sendFailurePlayer(CommandSourceStack source, Component component) {
         if (source.getEntity() instanceof ServerPlayer player) {
             player.sendSystemMessage(component);
@@ -132,10 +108,6 @@ public final class Messages {
     }
 
     public static void sendSuccess(CommandSourceStack source, Component component) {
-        sendChat(source, component);
-    }
-
-    public static void sendSuccess(CommandSourceStack source, Component component, boolean broadcastToOps) {
         sendChat(source, component);
     }
 

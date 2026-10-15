@@ -327,33 +327,10 @@ public final class JukeboxPlaybackService {
         playerPositionTime.remove(playerId);
     }
 
-    public String getJukeboxTitleForPlayer(ServerPlayer player) {
-        return activeJukeboxes.values().stream()
-                .filter(aj -> aj.listeners().contains(player.getUUID()))
-                .findFirst()
-                .map(aj -> aj.discData().title())
-                .orElse("");
-    }
-
-    public String getJukeboxArtistForPlayer(ServerPlayer player) {
-        return activeJukeboxes.values().stream()
-                .filter(aj -> aj.listeners().contains(player.getUUID()))
-                .findFirst()
-                .map(aj -> aj.discData().artist())
-                .orElse("");
-    }
-
-    private boolean isJukeboxListener(UUID playerId, ActiveJukebox aj) {
-        return aj.listeners().contains(playerId);
-    }
-
     private static final class ActiveJukebox {
         private final long key;
         private final ResourceKey<Level> dimension;
         private final BlockPos pos;
-        private final String sourceTrackId;
-        private final String sourceTitle;
-        private final String sourceArtist;
         private final Set<UUID> listeners = new HashSet<>();
         private volatile DiscTrackData discData;
         private final long startedAtMillis;
@@ -363,9 +340,6 @@ public final class JukeboxPlaybackService {
             this.key = key;
             this.dimension = dimension;
             this.pos = pos;
-            this.sourceTrackId = discData.trackId() == null ? "" : discData.trackId();
-            this.sourceTitle = discData.title() == null ? "" : discData.title();
-            this.sourceArtist = discData.artist() == null ? "" : discData.artist();
             this.discData = discData;
             this.startedAtMillis = System.currentTimeMillis();
         }
@@ -380,18 +354,6 @@ public final class JukeboxPlaybackService {
 
         private BlockPos pos() {
             return pos;
-        }
-
-        private String sourceTrackId() {
-            return sourceTrackId;
-        }
-
-        private String sourceTitle() {
-            return sourceTitle;
-        }
-
-        private String sourceArtist() {
-            return sourceArtist;
         }
 
         private DiscTrackData discData() {
