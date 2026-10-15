@@ -61,7 +61,7 @@ Install the mod and Fabric API on both server and clients that need to hear musi
 | Command | Description |
 | --- | --- |
 | `/music queue` | View request queue |
-| `/music queue promote <ID>` | Move to next position |
+| `/music queue promote <ID>` | Move to the top of the queue |
 | `/music queue remove <ID>` | Remove from queue |
 
 ### Playlist & Podcast
@@ -117,7 +117,6 @@ Install the mod and Fabric API on both server and clients that need to hear musi
 | Command | Description |
 | --- | --- |
 | `/music skip` | Skip instantly |
-| `/music stop` | Stop all playback |
 | `/music pause` | Pause playback |
 | `/music resume` | Resume playback |
 | `/music queue clear` | Clear request queue |

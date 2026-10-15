@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.junhsiun.musicplayer.util.FileAtomicWrite;
 import com.junhsiun.musicplayer.util.Java8;
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -45,7 +46,7 @@ public final class MusicPlayerConfigManager {
             migrateLegacyDefaults();
             migrateLegacyConfigFile();
             save();
-        } catch (IOException exception) {
+        } catch (Exception exception) {
             MusicPlayerMod.LOGGER.error("加载配置失败，将使用默认配置。", exception);
             config = new MusicPlayerConfig();
         }
@@ -53,8 +54,7 @@ public final class MusicPlayerConfigManager {
 
     public static void save() {
         try {
-            Files.createDirectories(CONFIG_PATH.getParent());
-            Files.write(CONFIG_PATH, GSON.toJson(config).getBytes(StandardCharsets.UTF_8));
+            FileAtomicWrite.writeString(CONFIG_PATH, GSON.toJson(config));
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.error("保存配置失败。", exception);
         }
@@ -70,8 +70,9 @@ public final class MusicPlayerConfigManager {
     }
 
     private static void migrateLegacyDefaults() {
-        if (config.neteaseBaseUrl == null || Java8.isBlank(config.neteaseBaseUrl)
-                || "http://127.0.0.1:3000".equalsIgnoreCase(config.neteaseBaseUrl.trim())) {
+        config.neteaseBaseUrl = MusicPlayerConfig.normalizeBaseUrl(config.neteaseBaseUrl);
+        if (Java8.isBlank(config.neteaseBaseUrl)
+                || "http://127.0.0.1:3000".equalsIgnoreCase(config.neteaseBaseUrl)) {
             config.neteaseBaseUrl = MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL;
         }
         if (config.proxy == null) {
@@ -126,14 +127,14 @@ public final class MusicPlayerConfigManager {
                             || Java8.isBlank(config.neteaseBaseUrl)
                             || MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL.equals(config.neteaseBaseUrl)
                             || "http://127.0.0.1:3000".equalsIgnoreCase(config.neteaseBaseUrl))
-                            && value != null && Java8.isNotBlank(value)) {
-                        config.neteaseBaseUrl = value.trim();
+                            && value != null && !Java8.isBlank(value)) {
+                        config.neteaseBaseUrl = MusicPlayerConfig.normalizeBaseUrl(value);
                     }
                 }
             }
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.warn("读取旧版配置失败，将继续使用当前配置。", exception);
-        } catch (IllegalStateException | ClassCastException exception) {
+        } catch (IllegalStateException | ClassCastException | com.google.gson.JsonParseException exception) {
             MusicPlayerMod.LOGGER.warn("旧版配置文件格式无效，已跳过。", exception);
         }
     }

@@ -31,14 +31,6 @@ public final class HttpClientFactory {
     private HttpClientFactory() {
     }
 
-    /** 供配置重载时清空缓存客户端。 */
-    public static void invalidateApiClient() {
-        cachedApiClient = null;
-        cachedApiClientConfigKey = "";
-        cachedFullClient = null;
-        cachedFullClientConfigKey = "";
-    }
-
     public static OkHttpClient create() {
         MusicPlayerConfig config = MusicPlayerConfigManager.get();
         String configKey = config.connectTimeoutSeconds + "|" + config.readTimeoutSeconds + "|" + config.proxy
