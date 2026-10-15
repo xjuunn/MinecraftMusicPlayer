@@ -39,7 +39,7 @@ public final class ByfunsUrlProvider implements SongUrlProvider {
 
     @Override
     public CompletableFuture<List<String>> resolve(String songId) {
-        return CompletableFuture.supplyAsync(() -> fetch(songId));
+        return CompletableFuture.supplyAsync(() -> fetch(songId), com.junhsiun.musicplayer.platform.NeteaseApiClient.executor());
     }
 
     private List<String> fetch(String songId) {

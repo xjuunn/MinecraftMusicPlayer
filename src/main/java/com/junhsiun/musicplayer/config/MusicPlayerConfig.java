@@ -16,7 +16,8 @@ public class MusicPlayerConfig {
     public boolean autoAdvance = true;
     public boolean announceQueueChanges = true;
     public boolean showLoadingHints = true;
-    public boolean showLyrics = false;
+    /** 无玩家个人偏好时是否默认显示歌词。 */
+    public boolean showLyrics = true;
     public int connectTimeoutSeconds = 10;
     public int readTimeoutSeconds = 20;
     public int searchLimit = 8;
@@ -29,4 +30,25 @@ public class MusicPlayerConfig {
     public boolean enableLootMusicDiscs = true;
     public double lootMusicDiscChance = 0.3D;
     public int lootMusicDiscCount = 1;
+
+    /**
+     * 规范化 API 地址：去除首尾空白，并剥掉命令参数或配置文件中多余的成对引号。
+     * {@code greedyString()} 会保留用户输入的引号，直接拼接会导致 URL 解析失败。
+     */
+    public static String normalizeBaseUrl(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String value = raw.trim();
+        while (value.length() >= 2) {
+            char first = value.charAt(0);
+            char last = value.charAt(value.length() - 1);
+            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+                value = value.substring(1, value.length() - 1).trim();
+            } else {
+                break;
+            }
+        }
+        return value;
+    }
 }
