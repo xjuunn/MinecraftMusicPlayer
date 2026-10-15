@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.junhsiun.musicplayer.util.FileAtomicWrite;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -21,8 +22,13 @@ public final class MusicPlayerClientConfigManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("minecraft-music-player-client.json");
     private static final Path LEGACY_SHARED_CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("minecraft-music-player.json");
+    /** 写盘节流间隔（毫秒）：滑块拖动等高频变更合并到该间隔落盘一次。 */
+    private static final long SAVE_COOLDOWN_MILLIS = 500L;
 
     private static volatile MusicPlayerClientConfig config = new MusicPlayerClientConfig();
+    /** 是否存在未落盘的变更（仅渲染线程读写）。 */
+    private static volatile boolean savePending;
+    private static volatile long lastSaveMillis;
 
     private MusicPlayerClientConfigManager() {
     }
@@ -47,18 +53,42 @@ public final class MusicPlayerClientConfigManager {
                 config.bgmVolume = 0.7D;
             }
             save();
-        } catch (IOException exception) {
+        } catch (Exception exception) {
             MusicPlayerMod.LOGGER.error("加载客户端配置失败，将使用默认配置。", exception);
             config = new MusicPlayerClientConfig();
         }
     }
 
     public static void save() {
+        lastSaveMillis = System.currentTimeMillis();
         try {
-            Files.createDirectories(CONFIG_PATH.getParent());
-            Files.writeString(CONFIG_PATH, GSON.toJson(config));
+            FileAtomicWrite.writeString(CONFIG_PATH, GSON.toJson(config));
+            savePending = false;
         } catch (IOException exception) {
             MusicPlayerMod.LOGGER.error("保存客户端配置失败。", exception);
+        }
+    }
+
+    /** 高频变更（如音量滑块逐格回调）改用本方法标记，由 {@link #tick()} 合并写盘。 */
+    public static void markDirty() {
+        savePending = true;
+    }
+
+    /** 每客户端 tick 调用：将待写变更合并落盘，最长延迟 {@link #SAVE_COOLDOWN_MILLIS}。 */
+    public static void tick() {
+        if (!savePending) {
+            return;
+        }
+        if (System.currentTimeMillis() - lastSaveMillis < SAVE_COOLDOWN_MILLIS) {
+            return;
+        }
+        save();
+    }
+
+    /** 退出前调用，立即落盘最后一次未合并的变更（不等节流间隔）。 */
+    public static void flushDirty() {
+        if (savePending) {
+            save();
         }
     }
 
