@@ -5,6 +5,7 @@
   "client": [
     "MusicManagerAccessor",
     "MusicManagerMixin",
+    "OptionsAccessor",
     "OptionsMixin",
     "SoundOptionsScreenMixin"
   ],
