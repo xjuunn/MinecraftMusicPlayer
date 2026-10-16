@@ -1352,7 +1352,7 @@ public final class MusicCommands {
 
         Messages.sendSuccess(source,  new TextComponent("ID: ").withStyle(ChatFormatting.GRAY)
                 .append(new TextComponent(track.id()).withStyle(style -> style
-                        .setClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, track.id()))
+                          .setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, track.id()))
                         .setColor(ChatFormatting.WHITE)
                         .setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new TranslatableComponent("musicplayer.common.copy_hover"))))), false);
 
