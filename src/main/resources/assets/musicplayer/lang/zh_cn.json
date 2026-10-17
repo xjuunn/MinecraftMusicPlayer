@@ -9,6 +9,8 @@
   "musicplayer.error.radio_detail_empty": "电台详情为空。",
   "musicplayer.error.program_detail_empty": "节目详情为空。",
   "musicplayer.error.invalid_api_url": "无效的 API 地址。",
+  "musicplayer.error.api_response_invalid": "音乐接口返回异常响应，请稍后重试。",
+  "musicplayer.error.request_timeout": "音乐接口请求超时，请稍后重试。",
   "musicplayer.play_order.sequential": "正序",
   "musicplayer.play_order.reverse": "倒序",
   "musicplayer.play_order.shuffle": "随机",

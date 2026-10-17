@@ -18,6 +18,7 @@ import com.junhsiun.musicplayer.util.SongRequestPolicy;
 import com.junhsiun.musicplayer.util.Java8;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
+import net.minecraft.Util;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TranslatableComponent;
@@ -1427,7 +1428,10 @@ public final class MusicQueueService {
     }
 
     private void broadcast(MinecraftServer server, Component message) {
-        server.getPlayerList().broadcastMessage(message, net.minecraft.network.chat.ChatType.CHAT, java.util.UUID.randomUUID());
+        // 必须使用 SYSTEM + NIL_UUID：CHAT 类型配合随机 UUID 时，客户端会把发送者
+        // 当成「未知且已屏蔽的玩家」而直接丢弃消息（离线/开发环境下尤为明显），
+        // 表现为点歌、跳过、切歌等广播完全没有回显。
+        server.getPlayerList().broadcastMessage(message, net.minecraft.network.chat.ChatType.SYSTEM, Util.NIL_UUID);
     }
 
     // ── Render ───────────────────────────────────────────────────────
@@ -1479,10 +1483,18 @@ public final class MusicQueueService {
     private void enqueueRequest(Supplier<CompletableFuture<Void>> supplier) {
         synchronized (requestPipelineLock) {
             requestPipeline = requestPipeline.handle((ignored, throwable) -> null)
-                    .thenCompose(ignored -> supplier.get().exceptionally(throwable -> {
-                        MusicPlayerMod.LOGGER.warn("请求管道任务失败: {}", rootMessage(throwable));
-                        return null;
-                    }));
+                    .thenCompose(ignored -> {
+                        try {
+                            return supplier.get().exceptionally(throwable -> {
+                                MusicPlayerMod.LOGGER.warn("请求管道任务失败: {}", rootMessage(throwable));
+                                return null;
+                            });
+                        } catch (Exception exception) {
+                            // supplier 同步抛错时也要让管道继续，否则当前请求会静默消失且后续请求被卡住。
+                            MusicPlayerMod.LOGGER.warn("请求管道任务提交失败: {}", rootMessage(exception));
+                            return CompletableFuture.completedFuture(null);
+                        }
+                    });
         }
     }
 

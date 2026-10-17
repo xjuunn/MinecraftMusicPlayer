@@ -99,7 +99,9 @@ public final class LootMusicDiscService {
         if (server != null) {
             loadCache();
         }
-        refillPool();
+        if (MusicPlayerConfigManager.get().enableLootMusicDiscs) {
+            refillPool();
+        }
     }
 
     public void setServer(MinecraftServer server) {
@@ -262,11 +264,15 @@ public final class LootMusicDiscService {
     }
 
     private void refillPool() {
+        if (!MusicPlayerConfigManager.get().enableLootMusicDiscs) {
+            return;
+        }
         if (trackPool.size() >= REFILL_THRESHOLD || !poolRefilling.compareAndSet(false, true)) {
             return;
         }
         int deficit = POOL_CAPACITY - trackPool.size();
-        int batchSize = Math.max(REFILL_BATCH, deficit);
+        // 每次最多补一批，避免启动时一次性解析几十首歌的音源、挤占交互请求线程。
+        int batchSize = Math.min(deficit, REFILL_BATCH);
         CompletableFuture<List<TrackInfo>> combined = CompletableFuture.completedFuture(Java8.listOf());
         for (int i = 0; i < sources.size(); i++) {
             int index = sourceIndex.getAndIncrement() % sources.size();
