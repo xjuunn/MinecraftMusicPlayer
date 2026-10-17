@@ -9,6 +9,8 @@
   "musicplayer.error.radio_detail_empty": "Radio detail is empty.",
   "musicplayer.error.program_detail_empty": "Program detail is empty.",
   "musicplayer.error.invalid_api_url": "Invalid API URL.",
+  "musicplayer.error.api_response_invalid": "The music API returned an unexpected response. Please try again later.",
+  "musicplayer.error.request_timeout": "The music API request timed out. Please try again later.",
   "musicplayer.play_order.sequential": "Forward",
   "musicplayer.play_order.reverse": "Reverse",
   "musicplayer.play_order.shuffle": "Shuffle",

@@ -39,6 +39,10 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -49,6 +53,13 @@ public final class NeteaseApiClient {
     private static final int RANDOM_HOT_MAX_SONGS_PER_PLAYLIST = 200;
     /** 随机热门歌曲：整体超时（秒）。 */
     private static final long RANDOM_HOT_TOTAL_TIMEOUT_SECONDS = 30;
+    /**
+     * 单次接口请求的整体超时（秒），包含排队等待线程的时间。
+     *
+     * <p>线程池被后台批量任务占满时，任务可能长时间排队；没有这层兜底，
+     * 命令只会显示「正在加载」而永远不会返回结果或错误。
+     */
+    private static final long API_REQUEST_TIMEOUT_SECONDS = 30;
     /** 搜索类型：网易云 cloudsearch type 参数。 */
     private static final int SEARCH_TYPE_SONG = 1;
     private static final int SEARCH_TYPE_ARTIST = 100;
@@ -59,12 +70,21 @@ public final class NeteaseApiClient {
     private static volatile ExecutorService EXECUTOR = createExecutor();
 
     private static ExecutorService createExecutor() {
-        return Executors.newFixedThreadPool(4, runnable -> {
+        // 交互请求与后台预取共用该线程池。线程数过少时，后台批量解析会把
+        // 用户歌单、点歌等请求长时间挤在队列里，因此保留一定余量。
+        return Executors.newFixedThreadPool(8, runnable -> {
             Thread thread = new Thread(runnable, "musicplayer-http");
             thread.setDaemon(true);
             return thread;
         });
     }
+
+    /** 用于给异步请求加整体超时（排队 + 执行）。 */
+    private static final ScheduledExecutorService TIMEOUT_EXECUTOR = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "musicplayer-http-timeout");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     /**
      * 返回可用的 HTTP 线程池。退出世界时 {@code shutdownExecutor()} 会关闭静态线程池，
@@ -200,7 +220,7 @@ public final class NeteaseApiClient {
     }
 
     public CompletableFuture<UserPlaylistView> userPlaylists(String userId) {
-        return CompletableFuture.supplyAsync(() -> {
+        return withTimeout(CompletableFuture.supplyAsync(() -> {
             List<SearchEntry> entries = new ArrayList<>();
             String resolvedUserId = userId;
             String nickname = "";
@@ -213,8 +233,17 @@ public final class NeteaseApiClient {
                         new String[]{"uid", userId, "limit", Integer.toString(DETAIL_FETCH_BATCH_SIZE), "offset", Integer.toString(offset)},
                         "application/json,text/plain,*/*"
                 ));
+                if (root.has("code") && intVal(root, "code") != 200) {
+                    MusicPlayerMod.LOGGER.warn("用户歌单接口返回错误: uid={}, code={}, msg={}",
+                            userId, intVal(root, "code"), str(root, "msg"));
+                    throw new IllegalStateException("musicplayer.error.api_response_invalid");
+                }
                 JsonArray playlists = arr(root, "playlist");
-                if (playlists == null || playlists.size() == 0) {
+                if (playlists == null) {
+                    MusicPlayerMod.LOGGER.warn("用户歌单接口响应缺少 playlist 字段: uid={}", userId);
+                    throw new IllegalStateException("musicplayer.error.api_response_invalid");
+                }
+                if (playlists.size() == 0) {
                     break;
                 }
                 for (JsonElement elem : playlists) {
@@ -241,7 +270,7 @@ public final class NeteaseApiClient {
             }
 
             return new UserPlaylistView(resolvedUserId, nickname, signature, entries);
-        }, executor());
+        }, executor()));
     }
 
     public CompletableFuture<List<TrackInfo>> artistTopSongs(String artistId) {
@@ -297,6 +326,37 @@ public final class NeteaseApiClient {
                 .thenApply(root -> intVal(root, "total"));
     }
 
+    /**
+     * 获取作者热门歌曲的元数据（不解析播放直链）。
+     *
+     * <p>随机选曲时先在这里挑选少量歌曲，再只为选中的歌曲解析音源，
+     * 避免把整页热门歌曲（最多 50 首 × 4 个音源）全部塞进线程池。
+     */
+    public CompletableFuture<List<SearchEntry>> artistTopSongEntries(String artistId) {
+        return getJson("/artist/top/song", "id", artistId).thenApply(root -> {
+            JsonArray songs = arr(root, "songs");
+            if (songs == null || songs.size() == 0) {
+                return Java8.listOf();
+            }
+            List<SearchEntry> entries = new ArrayList<>();
+            for (JsonElement elem : songs) {
+                JsonObject song = elem.getAsJsonObject();
+                String songId = str(song, "id");
+                if (Java8.isBlank(songId)) {
+                    continue;
+                }
+                entries.add(new SearchEntry(
+                        songId,
+                        str(song, "name"),
+                        firstArtistName(song),
+                        playSongCommand(songId),
+                        ""
+                ));
+            }
+            return entries;
+        });
+    }
+
     public CompletableFuture<List<SearchEntry>> artistSongsPage(String artistId, int offset, int limit) {
         return getJson("/artist/songs", "id", artistId,
                 "limit", Integer.toString(limit),
@@ -318,7 +378,7 @@ public final class NeteaseApiClient {
 
     public CompletableFuture<List<TrackInfo>> randomHotTracks(int count) {
         int safeCount = Math.max(1, count);
-        return CompletableFuture.supplyAsync(() -> {
+        return withTimeout(CompletableFuture.supplyAsync(() -> {
             Random random = new Random();
             List<String> hotCategories = fetchHotPlaylistCategories();
             String selectedCategory = hotCategories.isEmpty()
@@ -383,7 +443,7 @@ public final class NeteaseApiClient {
                 throw new IllegalStateException("musicplayer.error.random_hot_resolve_failed");
             }
             return tracks;
-        }, executor());
+        }, executor()));
     }
 
     private CompletableFuture<List<SearchEntry>> search(String keyword, int type, int page) {
@@ -741,10 +801,32 @@ public final class NeteaseApiClient {
     }
 
     private CompletableFuture<JsonObject> getJsonFromAbsoluteUrl(String absoluteUrl, String... queryPairs) {
-        return CompletableFuture.supplyAsync(() -> {
+        return withTimeout(CompletableFuture.supplyAsync(() -> {
             Request request = baseRequest(absoluteUrl, queryPairs, "application/json,text/plain,*/*");
             return executeJson(request);
-        }, executor());
+        }, executor()));
+    }
+
+    /**
+     * 给异步请求增加整体超时（包含排队等待线程的时间）。
+     *
+     * <p>底层 HTTP 调用已有连接/读取超时，但如果任务一直排在拥挤的线程池队列中，
+     * 调用方将永远收不到完成回调。这里保证调用方最迟在超时后收到异常，从而能回显错误。
+     */
+    private static <T> CompletableFuture<T> withTimeout(CompletableFuture<T> future) {
+        CompletableFuture<T> result = new CompletableFuture<>();
+        ScheduledFuture<?> timeoutTask = TIMEOUT_EXECUTOR.schedule(
+                () -> result.completeExceptionally(new TimeoutException("musicplayer.error.request_timeout")),
+                API_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        future.whenComplete((value, throwable) -> {
+            timeoutTask.cancel(false);
+            if (throwable != null) {
+                result.completeExceptionally(throwable);
+            } else {
+                result.complete(value);
+            }
+        });
+        return result;
     }
 
     private static Request baseRequest(String absoluteUrl, String[] queryPairs, String accept) {
