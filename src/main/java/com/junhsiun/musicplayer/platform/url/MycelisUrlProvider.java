@@ -32,6 +32,11 @@ public final class MycelisUrlProvider implements SongUrlProvider {
         });
     }
 
+    /** 使用指定基础地址提供者（客户端实例注入，避免读取共享配置）。 */
+    public MycelisUrlProvider(Supplier<String> baseUrlSupplier) {
+        this(ApiSongUrlHttp.INSTANCE, baseUrlSupplier);
+    }
+
     /** 供测试注入假的 HTTP 实现与独立的基础地址。 */
     public MycelisUrlProvider(SongUrlHttp http, Supplier<String> baseUrlSupplier) {
         this.http = http;

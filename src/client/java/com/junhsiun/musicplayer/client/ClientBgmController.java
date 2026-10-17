@@ -2,9 +2,11 @@ package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfigManager;
+import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.util.Java8;
+import com.junhsiun.musicplayer.platform.NeteaseApiClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.LevelLoadingScreen;
 import net.minecraft.client.sounds.MusicManager;
@@ -52,6 +54,14 @@ public final class ClientBgmController {
     private boolean refillInFlight;
     private boolean bypassOnce;
     private volatile long fallbackUntil;
+    /**
+     * 客户端 BGM 使用的基础地址：主菜单 / 未连接存档时始终为默认地址；
+     * 进入已安装本模组的服务器后由 {@code BgmConfigPayload} 覆盖为服务端配置值。
+     * 不读取共享配置文件，避免存档内的 baseUrl 设置影响主菜单。
+     */
+    private volatile String baseUrl = MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL;
+    /** 客户端专用 API 实例：基础地址由本类解析，服务端共享实例不受影响。 */
+    private final NeteaseApiClient api = new NeteaseApiClient(this::resolveBaseUrl);
     /** 客户端主线程专用：连续播放失败计数。 */
     private int consecutiveFailures;
 
@@ -84,21 +94,38 @@ public final class ClientBgmController {
     }
 
     /**
-     * 接收服务端同步的歌单（空串 = 该存档关闭网络背景音乐，使用原版）。客户端主线程调用。
+     * 接收服务端同步的歌单与基础地址（歌单空串 = 该存档关闭网络背景音乐；地址空串 = 使用默认地址）。
+     * 客户端主线程调用。
      */
-    public void configureServer(String serverPlaylistId) {
+    public void configureServer(String serverPlaylistId, String serverBaseUrl) {
+        baseUrl = serverBaseUrl == null || Java8.isBlank(serverBaseUrl)
+                ? MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL
+                : serverBaseUrl.trim();
         applyPlaylist(serverPlaylistId == null ? "" : serverPlaylistId.trim());
     }
 
     /**
      * 使用客户端本地歌单（主菜单 / 未连接存档时）。客户端主线程调用。
+     * 基础地址始终复位为默认地址：主菜单不读取任何配置的 baseUrl。
      */
     public void configureLocal(String localPlaylistId) {
+        baseUrl = MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL;
         applyPlaylist(localPlaylistId == null ? "" : localPlaylistId.trim());
     }
 
     public void reset() {
+        baseUrl = MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL;
         applyPlaylist("");
+    }
+
+    /** 归一化后的当前基础地址（供网络检测使用），空白回退默认地址。 */
+    public String currentApiBaseUrl() {
+        return resolveBaseUrl();
+    }
+
+    private String resolveBaseUrl() {
+        String value = baseUrl;
+        return value == null || Java8.isBlank(value) ? MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL : value;
     }
 
     /**
@@ -409,7 +436,7 @@ public final class ClientBgmController {
                 return CompletableFuture.completedFuture(null);
             }
         }
-        return MusicPlayerMod.netease().playlistDetail(pid).thenCompose(detail -> {
+        return api.playlistDetail(pid).thenCompose(detail -> {
             int total = Math.max(0, detail.trackCount());
             int capped = Math.min(total, MAX_TRACK_IDS);
             if (capped == 0) {
@@ -418,7 +445,7 @@ public final class ClientBgmController {
             }
             List<CompletableFuture<List<SearchEntry>>> futures = new ArrayList<>();
             for (int offset = 0; offset < capped; offset += PLAYLIST_PAGE_SIZE) {
-                futures.add(MusicPlayerMod.netease().playlistTracksPage(pid, offset, PLAYLIST_PAGE_SIZE));
+                futures.add(api.playlistTracksPage(pid, offset, PLAYLIST_PAGE_SIZE));
             }
             CompletableFuture<Void> all = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
             return all.thenAccept(ignored -> {
@@ -474,7 +501,7 @@ public final class ClientBgmController {
         List<CompletableFuture<TrackInfo>> futures = new ArrayList<>();
         for (String id : chosen) {
             try {
-                futures.add(MusicPlayerMod.netease().resolveSong(id)
+                futures.add(api.resolveSong(id)
                         .handle((track, error) -> error == null ? track : null));
             } catch (RuntimeException exception) {
                 MusicPlayerMod.LOGGER.debug("网络背景音乐解析歌曲失败: {}", id, exception);
