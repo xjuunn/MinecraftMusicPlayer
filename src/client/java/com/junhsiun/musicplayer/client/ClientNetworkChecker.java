@@ -1,6 +1,5 @@
 package com.junhsiun.musicplayer.client;
 
-import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -16,7 +15,8 @@ import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * 客户端网络检测入口：探测配置的音乐服务地址是否可达。
+ * 客户端网络检测入口：探测当前生效的音乐服务地址是否可达。
+ * 地址由 {@link ClientBgmController} 解析（主菜单默认地址 / 服务端同步值）。
  * 由网络背景音乐流程在播放失败时触发，结果用于决定是否降级回原版音乐。
  */
 public final class ClientNetworkChecker {
@@ -36,7 +36,7 @@ public final class ClientNetworkChecker {
 
     public static CompletableFuture<Status> check() {
         CompletableFuture<Status> future = new CompletableFuture<>();
-        String baseUrl = MusicPlayerConfigManager.get().neteaseBaseUrl;
+        String baseUrl = ClientBgmController.getInstance().currentApiBaseUrl();
         // 基于缓存的 API 客户端派生（共享连接池/分发线程），仅覆盖短超时
         OkHttpClient client = HttpClientFactory.createApiClient().newBuilder()
                 .connectTimeout(Duration.ofSeconds(3))
