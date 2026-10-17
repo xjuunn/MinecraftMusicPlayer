@@ -64,7 +64,8 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
         });
         ClientPlayNetworking.registerGlobalReceiver(BgmConfigPayload.ID, (client, player, buf, sender) -> {
             BgmConfigPayload payload = BgmConfigPayload.decode(buf);
-            client.execute(() -> ClientBgmController.getInstance().configureServer(payload.playlistId()));
+            client.execute(() -> ClientBgmController.getInstance()
+                    .configureServer(payload.playlistId(), payload.baseUrl()));
         });
         WorldRenderEvents.AFTER_ENTITIES.register(JukeboxCoverRenderer::render);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
