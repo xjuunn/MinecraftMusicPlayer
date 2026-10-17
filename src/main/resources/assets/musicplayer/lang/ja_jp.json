@@ -9,6 +9,8 @@
   "musicplayer.error.radio_detail_empty": "ラジオの詳細が空です。",
   "musicplayer.error.program_detail_empty": "番組の詳細が空です。",
   "musicplayer.error.invalid_api_url": "無効なAPIアドレスです。",
+  "musicplayer.error.api_response_invalid": "音楽APIが異常な応答を返しました。しばらくしてから再試行してください。",
+  "musicplayer.error.request_timeout": "音楽APIのリクエストがタイムアウトしました。しばらくしてから再試行してください。",
   "musicplayer.play_order.sequential": "順順",
   "musicplayer.play_order.reverse": "逆順",
   "musicplayer.play_order.shuffle": "シャッフル",
