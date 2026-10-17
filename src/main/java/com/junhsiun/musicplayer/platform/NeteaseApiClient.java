@@ -39,6 +39,7 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public final class NeteaseApiClient {
@@ -85,13 +86,26 @@ public final class NeteaseApiClient {
 
     /** 单曲音源解析器：Byfuns/Qijieya 优先，Mycelis 保底。 */
     private final SongUrlResolver urlResolver;
+    /** 基础地址提供者；为 null 时回退到共享配置（服务端行为）。 */
+    private final Supplier<String> baseUrlSupplier;
 
     public NeteaseApiClient() {
+        this(null);
+    }
+
+    /**
+     * @param baseUrlSupplier 基础地址提供者，可为 null 表示始终读取共享配置。
+     *                        客户端 BGM 使用独立实例注入该提供者，避免服务端配置影响主菜单。
+     */
+    public NeteaseApiClient(Supplier<String> baseUrlSupplier) {
+        this.baseUrlSupplier = baseUrlSupplier;
         urlResolver = new SongUrlResolver();
         urlResolver.register(new ByfunsUrlProvider());
         urlResolver.register(new QijieyaUrlProvider());
         urlResolver.register(new VkeysUrlProvider());
-        urlResolver.register(new MycelisUrlProvider());
+        urlResolver.register(baseUrlSupplier == null
+                ? new MycelisUrlProvider()
+                : new MycelisUrlProvider(this::baseUrl));
     }
 
     public static void shutdownExecutor() {
@@ -765,8 +779,12 @@ public final class NeteaseApiClient {
         }
     }
 
-    private static String baseUrl() {
-        String raw = MusicPlayerConfigManager.get().neteaseBaseUrl;
+    private String baseUrl() {
+        String raw = baseUrlSupplier != null ? baseUrlSupplier.get() : MusicPlayerConfigManager.get().neteaseBaseUrl;
+        if (raw == null || Java8.isBlank(raw)) {
+            raw = MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL;
+        }
+        raw = raw.trim();
         return raw.endsWith("/") ? raw.substring(0, raw.length() - 1) : raw;
     }
 

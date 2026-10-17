@@ -127,7 +127,10 @@ public final class MusicPlayerMod implements ModInitializer {
             return;
         }
         String playlistId = MusicPlayerConfigManager.get().bgmPlaylistId;
-        BgmConfigPayload.send(player, new BgmConfigPayload(playlistId == null ? "" : playlistId.trim()));
+        String baseUrl = MusicPlayerConfigManager.get().neteaseBaseUrl;
+        BgmConfigPayload.send(player, new BgmConfigPayload(
+                playlistId == null ? "" : playlistId.trim(),
+                baseUrl == null ? "" : baseUrl.trim()));
     }
 
     public static void syncBgmConfig(MinecraftServer server) {
