@@ -8,7 +8,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 单曲音源解析器（按优先级汇总各第三方提供者）。
@@ -19,7 +18,7 @@ import java.util.concurrent.TimeUnit;
  */
 public final class SongUrlResolver {
     private static final Logger LOGGER = LoggerFactory.getLogger(SongUrlResolver.class);
-    private static final int PROVIDER_TIMEOUT_SECONDS = 3;
+    static final int PROVIDER_TIMEOUT_SECONDS = 3;
 
     private final List<SongUrlProvider> providers = new ArrayList<>();
     private final int timeoutSeconds;
@@ -49,15 +48,11 @@ public final class SongUrlResolver {
         }
         List<CompletableFuture<List<String>>> futures = new ArrayList<>(providers.size());
         for (SongUrlProvider provider : providers) {
-            futures.add(withTimeout(provider.resolve(songId)));
+            futures.add(provider.resolve(songId, timeoutSeconds).exceptionally(ex -> List.of()));
         }
         return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .exceptionally(ex -> null)
                 .thenApply(nil -> collect(futures));
-    }
-
-    private CompletableFuture<List<String>> withTimeout(CompletableFuture<List<String>> future) {
-        return future.orTimeout(timeoutSeconds, TimeUnit.SECONDS).exceptionally(ex -> List.of());
     }
 
     private List<String> collect(List<CompletableFuture<List<String>>> futures) {

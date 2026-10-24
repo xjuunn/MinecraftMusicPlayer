@@ -38,11 +38,20 @@ public final class VkeysUrlProvider implements SongUrlProvider {
 
     @Override
     public CompletableFuture<List<String>> resolve(String songId) {
-        return CompletableFuture.supplyAsync(() -> fetch(songId), com.junhsiun.musicplayer.platform.NeteaseApiClient.executor());
+        return resolve(songId, SongUrlResolver.PROVIDER_TIMEOUT_SECONDS);
+    }
+
+    @Override
+    public CompletableFuture<List<String>> resolve(String songId, int timeoutSeconds) {
+        return com.junhsiun.musicplayer.platform.NeteaseApiClient.submitProbe(() -> fetch(songId), timeoutSeconds);
     }
 
     private List<String> fetch(String songId) {
+        long deadline = UrlUtil.providerDeadline();
         for (String quality : QUALITIES) {
+            if (UrlUtil.isProviderBudgetExhausted(deadline)) {
+                break;
+            }
             try {
                 JsonObject root = http.getJson(BASE_URL, "id", songId, "quality", quality);
                 JsonObject data = root != null && root.has("data") && root.get("data").isJsonObject()
