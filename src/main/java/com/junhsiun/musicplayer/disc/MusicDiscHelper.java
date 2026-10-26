@@ -8,6 +8,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -24,6 +25,7 @@ public final class MusicDiscHelper {
     private static final String ROOT_KEY = "musicplayer_disc";
     private static final String PENDING_KEY = "musicplayer_pending_disc";
     private static final String PENDING_TOKEN_KEY = "musicplayer_pending_token";
+    private static final String MASTER_KEY = "musicplayer_disc_master";
     private static final String TRACK_ID_KEY = "track_id";
     private static final String TITLE_KEY = "title";
     private static final String ARTIST_KEY = "artist";
@@ -79,6 +81,18 @@ public final class MusicDiscHelper {
         return wrapper.getBooleanOr(PENDING_KEY, false);
     }
 
+    /** 唱片母版：可刻录但本身不可播放，也不能放入唱片机。 */
+    public static boolean isDiscMaster(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        if (customData == null || customData.isEmpty()) {
+            return false;
+        }
+        return customData.copyTag().getBooleanOr(MASTER_KEY, false);
+    }
+
     public static String getPendingToken(ItemStack stack) {
         if (!isPendingDisc(stack)) {
             return "";
@@ -108,6 +122,23 @@ public final class MusicDiscHelper {
         )));
         pendingDisc.remove(DataComponents.JUKEBOX_PLAYABLE);
         return pendingDisc;
+    }
+
+    /** 右键唱片母版时的提示：提示搜索后可点击刻录按钮，命令仅在悬停时显示。 */
+    public static void sendMasterPrompt(ServerPlayer player) {
+        player.sendSystemMessage(Component.translatable("musicplayer.disc.master_search_hint").withStyle(ChatFormatting.GRAY)
+                .append(Component.literal("  "))
+                .append(Messages.suggestable(
+                        Component.translatable("musicplayer.disc.master_burn_command"),
+                        Component.translatable("musicplayer.disc.master_burn_command_hover"),
+                        "/music burn song ",
+                        ChatFormatting.LIGHT_PURPLE))
+                .append(Component.literal("  "))
+                .append(Messages.suggestable(
+                        Component.translatable("musicplayer.disc.master_search_command"),
+                        Component.translatable("musicplayer.disc.master_search_command_hover"),
+                        "/music search song ",
+                        ChatFormatting.AQUA)));
     }
 
     public static ItemStack burn(ItemStack baseDisc, TrackInfo track) {

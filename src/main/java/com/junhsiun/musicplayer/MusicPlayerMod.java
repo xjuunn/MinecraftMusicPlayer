@@ -60,6 +60,13 @@ public final class MusicPlayerMod implements ModInitializer {
             if (hitResult == null) return InteractionResult.PASS;
             ItemStack heldStack = player.getItemInHand(hand);
 
+            if (MusicDiscHelper.isDiscMaster(heldStack)) {
+                if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                    MusicDiscHelper.sendMasterPrompt(serverPlayer);
+                }
+                return InteractionResult.SUCCESS;
+            }
+
             if (MusicDiscHelper.isPendingDisc(heldStack)) {
                 if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                     LOOT_MUSIC_DISC_SERVICE.useRandomDisc(serverPlayer, hand);
@@ -88,6 +95,10 @@ public final class MusicPlayerMod implements ModInitializer {
         UseItemCallback.EVENT.register((player, world, hand) -> {
             if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
                 return InteractionResult.PASS;
+            }
+            if (MusicDiscHelper.isDiscMaster(player.getItemInHand(hand))) {
+                MusicDiscHelper.sendMasterPrompt(serverPlayer);
+                return InteractionResult.SUCCESS;
             }
             if (MusicDiscHelper.isPendingDisc(player.getItemInHand(hand))) {
                 LOOT_MUSIC_DISC_SERVICE.useRandomDisc(serverPlayer, hand);
