@@ -4,7 +4,7 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.renderer.texture.TextureResources;
 import net.minecraft.resources.Identifier;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -143,8 +143,7 @@ public final class CoverArtTextureCache {
                 image.close();
                 return;
             }
-            DynamicTexture texture = new DynamicTexture(() -> "musicplayer_cover", image);
-            texture.upload();
+            TextureResources texture = TextureResources.from2dImage(() -> "musicplayer_cover", image);
             client.getTextureManager().register(textureId, texture);
             entries.put(coverUrl, CacheEntry.ready(textureId));
             MusicPlayerMod.LOGGER.debug("Registered cover art texture: {} -> {}", coverUrl, textureId);

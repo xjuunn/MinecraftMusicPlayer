@@ -5,7 +5,7 @@
 ## 分支与工作流
 
 - 每个适配版本使用独立分支，分支名即 Minecraft 版本号（如 `1.19.2`、`1.20.1`、`26.2`、`26.3`）。
-- `master` 为最新版本主分支（当前 `26.3`）。
+- `master` 为最新版本主分支（当前 `26.4-snapshot-5`）。
 - 适配新版本时，从**最接近的目标版本分支**切出新分支（例如适配 1.19.2 基于 `1.20.1`，适配 1.20.1 基于 `1.21.11`），而不是直接基于 master。
 - 适配操作全部在新分支上完成。
 - **默认禁止切换或修改其他分支。** 后续功能更新如需同步到各版本分支，使用 `cherry-pick` 将主分支提交挑选到目标分支，但必须由用户明确要求后才执行。
@@ -74,6 +74,7 @@
 
 | API | 新版本 | 旧版本 |
 |---|---|---|
+| 动态纹理 | 26.4+ 移除 `DynamicTexture`，改用 `TextureResources.from2dImage(Supplier<String>, NativeImage)` 后 `TextureManager.register(id, resources)`，不再调用 `upload()` | `new DynamicTexture(supplier, image)` + `texture.upload()` |
 | `com.mojang.math.Axis` | `Axis.YP.rotationDegrees(...)`（1.19.3+） | 1.19.2 用 `com.mojang.math.Vector3f.YP` 等 |
 | `ConfirmLinkScreen.confirmLinkNow(url, parent, warn)` | 存在 | 用构造器 `new ConfirmLinkScreen(accepted -> { if (accepted) openUri(...); setScreen(parent); }, url, false)`；**回调必须在 accepted 为 true 时真正打开 URL 并恢复父屏幕** |
 | `Util.getPlatform().openUri` | 顶层 `net.minecraft.Util` | 同左 |
@@ -86,6 +87,13 @@
 
 - 低版本可能缺少高版本依赖的事件/mixin 目标（如 `LevelEventHandler` 播唱片 LevelEvent 1010）。服务器侧若改用 `setRecordWithoutPlaying`/`setRecord`（不触发原版唱片事件与声音），对应 LevelEvent mixin 可整体删除，并同步精简 `mixins.json`。
 - 每删一个 mixin，确认没有其他代码路径依赖它。
+
+### 快照版本（snapshot）
+
+适配快照版本时注意两点：
+
+1. `minecraft_version` 填快照全名（如 `26.4-snapshot-5`），用于 Loom 拉取映射；但 `fabric.mod.json` 的 `minecraft` 依赖不能直接写 `~26.4-snapshot-5`。Fabric Loader 会把游戏版本规范化为 `26.4-alpha.5` 形式，`~26.4-snapshot-5` 解析后不匹配，服务器启动会报 `HARD_DEP_INCOMPATIBLE`。因此 `gradle.properties` 另设 `minecraft_dependency=~26.4-`，由 `build.gradle` 的 `processResources` 展开注入。
+2. Loom 版本要求会随快照提高（如 1.19.x 需要 Gradle 9.8+），升级时同步改 `gradle/wrapper/gradle-wrapper.properties` 的 `distributionUrl`。
 
 ## 数据包 / 资源格式差异
 
@@ -117,7 +125,7 @@
 
 | 分支 | Minecraft | Java | Fabric API（示例） |
 |---|---|---|---|
-| `master` | 26.3 | 25 | 随分支更新 |
+| `master` | 26.4-snapshot-5 | 25 | 随分支更新 |
 | `26.2` | 26.2 | 25 | — |
 | `26.1` | 26.1 | 25 | — |
 | `1.21.11` | 1.21.11 | 21+ | — |

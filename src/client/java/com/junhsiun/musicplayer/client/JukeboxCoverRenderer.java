@@ -11,7 +11,7 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.renderer.texture.TextureResources;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.Vec3;
@@ -167,8 +167,7 @@ public final class JukeboxCoverRenderer {
                 image.setPixel(x, y, (alpha << 24));
             }
         }
-        DynamicTexture texture = new DynamicTexture(() -> "musicplayer_black_disc", image);
-        texture.upload();
+        TextureResources texture = TextureResources.from2dImage(() -> "musicplayer_black_disc", image);
         minecraft.getTextureManager().register(BLACK_DISC_TEXTURE, texture);
         blackTextureRegistered = true;
     }

@@ -28,9 +28,9 @@ The server handles commands, queues, configuration, and synchronization. The cli
 
 ## Requirements
 
-- Minecraft `26.3`
-- Fabric Loader `0.19.3` or newer
-- Fabric API `0.161.0+26.3` or compatible
+- Minecraft `26.4-snapshot-5`
+- Fabric Loader `0.20.1` or newer
+- Fabric API `0.165.0+26.4` or compatible
 - Java `25`
 - A reachable NetEase music API, default `https://mycelis.dpdns.org/`
 
