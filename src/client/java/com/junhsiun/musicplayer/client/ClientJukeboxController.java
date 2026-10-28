@@ -118,6 +118,10 @@ public final class ClientJukeboxController {
             PlaybackHandle handle = playbackHandles.get(jukeboxPos);
             if (handle == null) continue;
             if (handle.finishedAtMillis > 0L) {
+                if (!handle.endReported && !handle.trackId.isBlank()) {
+                    handle.endReported = true;
+                    ClientPlayNetworking.send(MusicPlaybackReportPayload.jukeboxEnded(handle.trackId));
+                }
                 continue;
             }
             silenceVanillaJukeboxSound(jukeboxPos, "tick suppression");
@@ -199,6 +203,7 @@ public final class ClientJukeboxController {
         PlaybackHandle handle = playbackHandles.computeIfAbsent(jukeboxPos, ignored -> new PlaybackHandle());
         stopPlaybackOnly(handle);
         handle.finishedAtMillis = 0L;
+        handle.endReported = false;
         handle.urls = urls == null ? List.of() : List.copyOf(urls);
         handle.title = title == null ? "" : title;
         handle.subtitle = subtitle == null ? "" : subtitle;
@@ -388,6 +393,7 @@ public final class ClientJukeboxController {
         private volatile String trackId = "";
         private volatile long startedAtMillis;
         private volatile long finishedAtMillis;
+        private volatile boolean endReported;
     }
 
     public record JukeboxVisualState(BlockPos pos, String coverUrl, long startedAtMillis, boolean finished, long finishedAtMillis) {

@@ -3,6 +3,7 @@ package com.junhsiun.musicplayer.service;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper.DiscTrackData;
+import com.junhsiun.musicplayer.mixin.JukeboxBlockEntityInvoker;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -78,6 +79,47 @@ public final class JukeboxPlaybackService {
         MusicPlayerMod.LOGGER.info("Inserted custom music disc into jukebox at {}: trackId={}", pos, discData.trackId());
         startPlayback(serverLevel, pos, discData);
         return InteractionResult.SUCCESS;
+    }
+
+    /** 由自动化（上方容器播放列表、漏斗等）写入唱片机后同步自定义唱片播放。 */
+    public void handleJukeboxItemChanged(ServerLevel level, BlockPos pos, ItemStack itemStack) {
+        DiscTrackData discData = MusicDiscHelper.read(itemStack).orElse(null);
+        if (discData == null || discData.urls().isEmpty()) {
+            stopCustomPlayback(level, pos);
+            return;
+        }
+        MusicPlayerMod.LOGGER.info("Loaded custom music disc into jukebox at {}: trackId={}", pos, discData.trackId());
+        startPlayback(level, pos, discData);
+    }
+
+    public void stopCustomPlayback(ServerLevel level, BlockPos pos) {
+        ActiveJukebox existing = activeJukeboxes.remove(pos.asLong());
+        if (existing != null) {
+            stopPlayback(level.getServer(), existing);
+        }
+    }
+
+    /** 客户端报告自定义唱片播放结束，按原版播放列表规则切到下一张。 */
+    public void handlePlaybackEnded(ServerPlayer player, String trackId) {
+        if (trackId == null || trackId.isBlank() || !(player.level() instanceof ServerLevel level)) {
+            return;
+        }
+        ActiveJukebox active = activeJukeboxes.values().stream()
+                .filter(aj -> aj.dimension().equals(level.dimension()))
+                .filter(aj -> aj.listeners().contains(player.getUUID()))
+                .filter(aj -> trackId.equals(aj.discData().trackId()))
+                .findFirst()
+                .orElse(null);
+        if (active == null || !JukeboxBlockEntity.isInPlaylistMode(level, active.pos())) {
+            return;
+        }
+        BlockEntity blockEntity = level.getBlockEntity(active.pos());
+        if (!(blockEntity instanceof JukeboxBlockEntity jukebox)
+                || !MusicDiscHelper.isMusicPlayerDisc(jukebox.getTheItem())) {
+            return;
+        }
+        MusicPlayerMod.LOGGER.info("Custom jukebox track finished at {}: trackId={}", active.pos(), trackId);
+        ((JukeboxBlockEntityInvoker) jukebox).musicplayer$tryToAdvancePlaylist(true);
     }
 
     public void tick(MinecraftServer server) {
