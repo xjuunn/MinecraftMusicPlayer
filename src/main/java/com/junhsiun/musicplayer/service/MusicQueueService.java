@@ -485,10 +485,17 @@ public final class MusicQueueService {
     }
 
     public void handlePlaybackReport(MinecraftServer server, ServerPlayer player, MusicPlaybackReportPayload payload) {
-        if (payload == null || optedOutPlayers.contains(player.getUUID())) {
+        if (payload == null) {
             return;
         }
         if (payload.trackId() == null || payload.trackId().isBlank()) {
+            return;
+        }
+        if ("jukebox_ended".equals(payload.action())) {
+            MusicPlayerMod.jukeboxService().handlePlaybackEnded(player, payload.trackId());
+            return;
+        }
+        if (optedOutPlayers.contains(player.getUUID())) {
             return;
         }
 

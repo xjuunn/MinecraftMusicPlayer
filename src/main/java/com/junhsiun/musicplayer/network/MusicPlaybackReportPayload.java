@@ -37,4 +37,8 @@ public record MusicPlaybackReportPayload(String action, String trackId, String m
     public static MusicPlaybackReportPayload position(long positionMillis, String trackId) {
         return new MusicPlaybackReportPayload("position", trackId == null ? "" : trackId, Long.toString(positionMillis));
     }
+
+    public static MusicPlaybackReportPayload jukeboxEnded(String trackId) {
+        return new MusicPlaybackReportPayload("jukebox_ended", trackId == null ? "" : trackId, "");
+    }
 }
