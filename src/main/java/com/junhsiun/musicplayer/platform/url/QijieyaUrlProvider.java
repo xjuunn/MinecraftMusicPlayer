@@ -34,7 +34,12 @@ public final class QijieyaUrlProvider implements SongUrlProvider {
 
     @Override
     public CompletableFuture<List<String>> resolve(String songId) {
-        return CompletableFuture.supplyAsync(() -> {
+        return resolve(songId, SongUrlResolver.PROVIDER_TIMEOUT_SECONDS);
+    }
+
+    @Override
+    public CompletableFuture<List<String>> resolve(String songId, int timeoutSeconds) {
+        return com.junhsiun.musicplayer.platform.NeteaseApiClient.submitProbe(() -> {
             String url = BASE_URL + "?type=url&id=" + songId;
             try {
                 if (http.getContentType(url).startsWith("audio/")) {
@@ -44,6 +49,6 @@ public final class QijieyaUrlProvider implements SongUrlProvider {
                 LOGGER.trace("Qijieya 音源失败 id={}: {}", songId, UrlUtil.rootMessage(e));
             }
             return List.of();
-        }, com.junhsiun.musicplayer.platform.NeteaseApiClient.executor());
+        }, timeoutSeconds);
     }
 }
