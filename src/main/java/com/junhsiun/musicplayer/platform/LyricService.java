@@ -55,7 +55,7 @@ public final class LyricService {
                 MusicPlayerMod.LOGGER.warn("歌词(primary) 请求失败: {}", e.getMessage());
                 return null;
             }
-        }, NeteaseApiClient.executor());
+        }, NeteaseApiClient.probeExecutor());
     }
 
     private CompletableFuture<List<LyricLine>> fetchFromFallback(String songId) {
@@ -88,7 +88,7 @@ public final class LyricService {
                 MusicPlayerMod.LOGGER.warn("歌词(fallback) 请求失败: {}", e.getMessage());
                 return null;
             }
-        }, NeteaseApiClient.executor());
+        }, NeteaseApiClient.probeExecutor());
     }
 
     public static List<LyricLine> parseLrc(String lrcText) {

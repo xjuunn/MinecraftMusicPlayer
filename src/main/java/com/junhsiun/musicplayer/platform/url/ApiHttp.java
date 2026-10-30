@@ -78,7 +78,7 @@ public final class ApiHttp {
     }
 
     private static Response execute(Request request) throws IOException {
-        OkHttpClient client = HttpClientFactory.createApiClient();
+        OkHttpClient client = HttpClientFactory.createProbeClient();
         Response response = client.newCall(request).execute();
         if (!response.isSuccessful()) {
             response.close();
