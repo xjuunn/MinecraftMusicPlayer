@@ -573,7 +573,9 @@ public final class NeteaseApiClient {
                         JsonObject node = elem.getAsJsonObject();
                         String rid = str(node, "id");
                         String name = str(node, "name");
-                        String rcmd = str(node, "rcmdText");
+                        // 接口使用小写 rcmdtext，旧实现读取 rcmdText 会始终取不到简介
+                        String rcmd = str(node, "rcmdtext");
+                        if (rcmd.isBlank()) rcmd = str(node, "rcmdText");
                         if (rcmd.isBlank()) rcmd = str(node, "desc");
                         entries.add(new SearchEntry(
                                 rid,
@@ -594,12 +596,15 @@ public final class NeteaseApiClient {
             if (data == null) return entries;
             for (JsonElement elem : data) {
                 JsonObject node = elem.getAsJsonObject();
-                int cateId = intVal(node, "id");
-                String name = str(node, "name");
+                // 接口字段为 categoryId/categoryName，读取 id/name 会得到空分类
+                String categoryId = str(node, "categoryId");
+                if (categoryId.isBlank()) categoryId = str(node, "id");
+                String name = str(node, "categoryName");
+                if (name.isBlank()) name = str(node, "name");
                 JsonArray radios = arr(node, "radios");
                 int radioCount = radios != null ? radios.size() : 0;
                 entries.add(new SearchEntry(
-                        String.valueOf(cateId),
+                        categoryId,
                         name,
                         Component.translatable("musicplayer.entry.radio_count", radioCount),
                         "",
