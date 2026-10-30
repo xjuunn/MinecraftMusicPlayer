@@ -9,11 +9,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * 单曲音源解析器（按优先级汇总各第三方提供者）。
@@ -24,7 +19,7 @@ import java.util.concurrent.TimeoutException;
  */
 public final class SongUrlResolver {
     private static final Logger LOGGER = LogManager.getLogger(SongUrlResolver.class);
-    private static final int PROVIDER_TIMEOUT_SECONDS = 3;
+    static final int PROVIDER_TIMEOUT_SECONDS = 3;
 
     private final List<SongUrlProvider> providers = new ArrayList<>();
     private final int timeoutSeconds;
@@ -54,36 +49,11 @@ public final class SongUrlResolver {
         }
         List<CompletableFuture<List<String>>> futures = new ArrayList<>(providers.size());
         for (SongUrlProvider provider : providers) {
-            futures.add(withTimeout(provider.resolve(songId)));
+            futures.add(provider.resolve(songId, timeoutSeconds).exceptionally(ex -> Java8.listOf()));
         }
         return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .exceptionally(ex -> null)
                 .thenApply(nil -> collect(futures));
-    }
-
-    private static final ScheduledExecutorService TIMEOUT_EXECUTOR = Executors.newSingleThreadScheduledExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "song-url-timeout");
-        thread.setDaemon(true);
-        return thread;
-    });
-
-    private CompletableFuture<List<String>> withTimeout(CompletableFuture<List<String>> future) {
-        final CompletableFuture<List<String>> result = new CompletableFuture<>();
-        ScheduledFuture<?> timeoutTask = TIMEOUT_EXECUTOR.schedule(new Runnable() {
-            @Override
-            public void run() {
-                result.completeExceptionally(new TimeoutException("音源解析超时"));
-            }
-        }, timeoutSeconds, TimeUnit.SECONDS);
-        future.whenComplete((urls, ex) -> {
-            timeoutTask.cancel(false);
-            if (ex != null) {
-                result.completeExceptionally(ex);
-            } else {
-                result.complete(urls);
-            }
-        });
-        return result;
     }
 
     private List<String> collect(List<CompletableFuture<List<String>>> futures) {
