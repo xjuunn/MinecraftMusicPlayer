@@ -13,6 +13,7 @@ import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.model.UserPlaylistView;
 import com.junhsiun.musicplayer.network.OpenUrlPayload;
+import com.junhsiun.musicplayer.platform.api.MusicApiMode;
 import com.junhsiun.musicplayer.util.Messages;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -970,7 +971,17 @@ public final class MusicCommands {
                 }))
                 .then(Commands.literal("status").executes(context -> {
                     MusicPlayerConfig config = MusicPlayerConfigManager.get();
-                    Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_base_url", config.neteaseBaseUrl));
+                    MusicApiMode mode = MusicApiMode.fromConfig(config.apiMode);
+                    switch (mode) {
+                        case DIRECT -> Messages.info(context.getSource(),
+                                new TranslatableComponent("musicplayer.config.status_base_url_direct"));
+                        case AUTO -> Messages.info(context.getSource(),
+                                new TranslatableComponent("musicplayer.config.status_base_url_auto", config.neteaseBaseUrl));
+                        default -> Messages.info(context.getSource(),
+                                new TranslatableComponent("musicplayer.config.status_base_url", config.neteaseBaseUrl));
+                    }
+                    Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_api_mode",
+                            new TranslatableComponent(mode.statusKey())));
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_requests", yesNo(config.allowSongRequest), yesNo(config.allowPlaylistRequest)));
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_auto", yesNo(config.autoAdvance), yesNo(config.showLoadingHints)));
                     Messages.info(context.getSource(), new TranslatableComponent("musicplayer.config.status_lyrics", yesNo(config.showLyrics)));
@@ -1010,6 +1021,24 @@ public final class MusicCommands {
                             return 1;
                         })))
                         .then(boolSetting("allowCustomServer", value -> MusicPlayerConfigManager.get().allowCustomServer = value))
+                        .then(Commands.literal("apiMode").then(Commands.argument("value", StringArgumentType.word())
+                                .suggests((context, builder) -> net.minecraft.commands.SharedSuggestionProvider.suggest(
+                                        new String[]{"auto", "direct", "proxy"}, builder))
+                                .executes(context -> {
+                                    String value = MusicApiMode.normalize(StringArgumentType.getString(context, "value"));
+                                    if (value == null) {
+                                        Messages.warning(context.getSource(), new TranslatableComponent("musicplayer.config.api_mode_invalid"));
+                                        return 0;
+                                    }
+                                    MusicPlayerConfigManager.get().apiMode = value;
+                                    MusicPlayerConfigManager.save();
+                                    // 切换取数模式后旧缓存可能来自另一条链路，清空音源缓存并重置熔断状态
+                                    MusicPlayerMod.queueService().clearTrackCache();
+                                    MusicPlayerMod.musicApiRouter().resetHealth();
+                                    Messages.success(context.getSource(), new TranslatableComponent("musicplayer.config.api_mode_updated",
+                                            new TranslatableComponent(MusicApiMode.fromConfig(value).statusKey())));
+                                    return 1;
+                                })))
                         .then(boolSetting("allowSongRequest", value -> MusicPlayerConfigManager.get().allowSongRequest = value))
                         .then(boolSetting("allowPlaylistRequest", value -> MusicPlayerConfigManager.get().allowPlaylistRequest = value))
                         .then(boolSetting("autoAdvance", value -> MusicPlayerConfigManager.get().autoAdvance = value))
@@ -1078,6 +1107,11 @@ public final class MusicCommands {
                         }))
                         .then(resetSetting("baseUrl", (config, defaults) -> config.neteaseBaseUrl = defaults.neteaseBaseUrl,
                                 context -> MusicPlayerMod.queueService().clearTrackCache()))
+                        .then(resetSetting("apiMode", (config, defaults) -> config.apiMode = defaults.apiMode,
+                                context -> {
+                                    MusicPlayerMod.queueService().clearTrackCache();
+                                    MusicPlayerMod.musicApiRouter().resetHealth();
+                                }))
                         .then(resetSetting("allowCustomServer", (config, defaults) -> config.allowCustomServer = defaults.allowCustomServer))
                         .then(resetSetting("allowSongRequest", (config, defaults) -> config.allowSongRequest = defaults.allowSongRequest))
                         .then(resetSetting("allowPlaylistRequest", (config, defaults) -> config.allowPlaylistRequest = defaults.allowPlaylistRequest))

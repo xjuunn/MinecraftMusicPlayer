@@ -3,8 +3,17 @@ package com.junhsiun.musicplayer.config;
 public class MusicPlayerConfig {
     public static final String DEFAULT_NETEASE_BASE_URL = "https://mycelis.dpdns.org/";
     public static final String DEFAULT_BGM_PLAYLIST_ID = "18481322122";
+    /** 默认取数模式：直连优先、失败回退后端。 */
+    public static final String DEFAULT_API_MODE = "auto";
 
     public String neteaseBaseUrl = DEFAULT_NETEASE_BASE_URL;
+    /**
+     * 取数模式（可选值 {@code auto} / {@code direct} / {@code proxy}）。
+     *
+     * <p>{@code auto} 直连优先、失败回退后端；{@code direct} 仅直连；{@code proxy} 仅走
+     * {@link #neteaseBaseUrl} 后端。直连模式下本字段仅作为直连失败时的保底地址。
+     */
+    public String apiMode = DEFAULT_API_MODE;
     /** 网络背景音乐歌单 ID，空字符串表示关闭。（仅服务端管理；音量与开关在客户端独立配置中） */
     public String bgmPlaylistId = DEFAULT_BGM_PLAYLIST_ID;
     public String proxy = "";
