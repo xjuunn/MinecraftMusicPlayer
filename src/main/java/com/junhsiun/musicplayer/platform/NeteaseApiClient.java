@@ -35,9 +35,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -56,10 +61,32 @@ public final class NeteaseApiClient {
     private static final int SEARCH_TYPE_RADIO = 1009;
     private static final String USER_AGENT = "MinecraftMusicPlayer/" + com.junhsiun.musicplayer.MusicPlayerMod.VERSION;
     private static volatile ExecutorService EXECUTOR = createExecutor();
+    private static volatile ExecutorService PROBE_EXECUTOR = createProbeExecutor();
+    /** 音源探测超时计时器；只做定时回调，不执行业务逻辑，单个守护线程即可。 */
+    private static final ScheduledExecutorService PROBE_TIMER = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "musicplayer-probe-timer");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private static ExecutorService createExecutor() {
         return Executors.newFixedThreadPool(4, runnable -> {
             Thread thread = new Thread(runnable, "musicplayer-http");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    /**
+     * 音源探测与歌词等次要网络任务专用线程池。
+     *
+     * <p>单次点歌会并行探测多个第三方音源；这些站点在弱网或不可达时通常要等到超时才返回。
+     * 与 {@link #executor()} 分离后，即使探测任务堆积，搜索、歌单、歌曲详情等主流程也不会被拖慢。
+     * 16 线程可同时容纳多首歌曲的探测请求，减少排队等待。
+     */
+    private static ExecutorService createProbeExecutor() {
+        return Executors.newFixedThreadPool(16, runnable -> {
+            Thread thread = new Thread(runnable, "musicplayer-probe");
             thread.setDaemon(true);
             return thread;
         });
@@ -81,6 +108,55 @@ public final class NeteaseApiClient {
             }
         }
         return executor;
+    }
+
+    /** 返回音源探测/歌词专用线程池，懒重建规则与 {@link #executor()} 一致。 */
+    public static ExecutorService probeExecutor() {
+        ExecutorService executor = PROBE_EXECUTOR;
+        if (executor == null || executor.isShutdown()) {
+            synchronized (NeteaseApiClient.class) {
+                executor = PROBE_EXECUTOR;
+                if (executor == null || executor.isShutdown()) {
+                    executor = createProbeExecutor();
+                    PROBE_EXECUTOR = executor;
+                }
+            }
+        }
+        return executor;
+    }
+
+    /**
+     * 在探测线程池中执行音源解析任务，并从任务真正开始执行时起计时超时。
+     *
+     * <p>{@link CompletableFuture#orTimeout} 从提交时开始计时，快速连点歌曲时，
+     * 队列中尚未运行的任务会先被判定超时，导致后续点歌随机返回空直链。
+     * 这里把超时计时放进工作线程，排队等待时间不计入超时。
+     *
+     * @param task           实际执行的阻塞任务
+     * @param timeoutSeconds 执行超时（秒），从任务开始执行时计算
+     */
+    public static <T> CompletableFuture<T> submitProbe(Callable<T> task, int timeoutSeconds) {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        try {
+            probeExecutor().execute(() -> {
+                ScheduledFuture<?> watchdog = null;
+                try {
+                    watchdog = PROBE_TIMER.schedule(
+                            () -> future.completeExceptionally(new TimeoutException("probe timed out")),
+                            timeoutSeconds, TimeUnit.SECONDS);
+                    future.complete(task.call());
+                } catch (Throwable throwable) {
+                    future.completeExceptionally(throwable);
+                } finally {
+                    if (watchdog != null) {
+                        watchdog.cancel(false);
+                    }
+                }
+            });
+        } catch (Throwable throwable) {
+            future.completeExceptionally(throwable);
+        }
+        return future;
     }
 
     /** 单曲音源解析器：Byfuns/Qijieya 优先，Mycelis 保底。 */
@@ -108,7 +184,14 @@ public final class NeteaseApiClient {
     }
 
     public static void shutdownExecutor() {
-        EXECUTOR.shutdown();
+        ExecutorService apiExecutor = EXECUTOR;
+        if (apiExecutor != null) {
+            apiExecutor.shutdown();
+        }
+        ExecutorService probeExecutor = PROBE_EXECUTOR;
+        if (probeExecutor != null) {
+            probeExecutor.shutdown();
+        }
     }
 
     public CompletableFuture<TrackInfo> resolveSong(String id) {
