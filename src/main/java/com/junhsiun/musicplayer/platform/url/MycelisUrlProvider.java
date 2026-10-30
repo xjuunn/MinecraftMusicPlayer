@@ -50,12 +50,21 @@ public final class MycelisUrlProvider implements SongUrlProvider {
 
     @Override
     public CompletableFuture<List<String>> resolve(String songId) {
-        return CompletableFuture.supplyAsync(() -> fetch(songId), com.junhsiun.musicplayer.platform.NeteaseApiClient.executor());
+        return resolve(songId, SongUrlResolver.PROVIDER_TIMEOUT_SECONDS);
+    }
+
+    @Override
+    public CompletableFuture<List<String>> resolve(String songId, int timeoutSeconds) {
+        return com.junhsiun.musicplayer.platform.NeteaseApiClient.submitProbe(() -> fetch(songId), timeoutSeconds);
     }
 
     private List<String> fetch(String songId) {
         String base = baseUrlSupplier.get();
+        long deadline = UrlUtil.providerDeadline();
         for (String level : LEVELS) {
+            if (UrlUtil.isProviderBudgetExhausted(deadline)) {
+                break;
+            }
             try {
                 JsonObject root = http.getJson(base + "/song/url/v1", "id", songId, "level", level);
                 String url = firstUrl(root);
