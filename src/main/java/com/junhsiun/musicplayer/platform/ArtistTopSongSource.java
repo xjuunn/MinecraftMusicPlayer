@@ -2,6 +2,7 @@ package com.junhsiun.musicplayer.platform;
 
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
+import com.junhsiun.musicplayer.platform.api.MusicApi;
 import com.junhsiun.musicplayer.util.Java8;
 
 import java.util.ArrayList;
@@ -16,9 +17,9 @@ public final class ArtistTopSongSource implements RandomSongSource {
     /** 参与选曲的作者数量上限，避免一次预取查询过多作者。 */
     private static final int MAX_ARTIST_CANDIDATES = 5;
 
-    private final NeteaseApiClient client;
+    private final MusicApi client;
 
-    public ArtistTopSongSource(NeteaseApiClient client) {
+    public ArtistTopSongSource(MusicApi client) {
         this.client = client;
     }
 
