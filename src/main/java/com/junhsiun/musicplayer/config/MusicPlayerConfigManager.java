@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.junhsiun.musicplayer.platform.api.MusicApiMode;
 import com.junhsiun.musicplayer.util.FileAtomicWrite;
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -71,6 +72,11 @@ public final class MusicPlayerConfigManager {
         if (config.neteaseBaseUrl.isBlank()
                 || "http://127.0.0.1:3000".equalsIgnoreCase(config.neteaseBaseUrl)) {
             config.neteaseBaseUrl = MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL;
+        }
+        if (MusicApiMode.normalize(config.apiMode) == null) {
+            config.apiMode = MusicPlayerConfig.DEFAULT_API_MODE;
+        } else {
+            config.apiMode = MusicApiMode.normalize(config.apiMode);
         }
         if (config.proxy == null) {
             config.proxy = "";
