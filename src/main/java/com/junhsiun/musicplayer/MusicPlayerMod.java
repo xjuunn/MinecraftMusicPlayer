@@ -9,6 +9,11 @@ import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.network.OpenUrlPayload;
 import com.junhsiun.musicplayer.platform.NeteaseApiClient;
+import com.junhsiun.musicplayer.platform.api.DirectMusicApi;
+import com.junhsiun.musicplayer.platform.api.MusicApi;
+import com.junhsiun.musicplayer.platform.api.MusicApiMode;
+import com.junhsiun.musicplayer.platform.api.MusicApiRouter;
+import com.junhsiun.musicplayer.platform.api.ProxyMusicApi;
 import com.junhsiun.musicplayer.service.JukeboxPlaybackService;
 import com.junhsiun.musicplayer.service.LootMusicDiscService;
 import com.junhsiun.musicplayer.service.MusicQueueService;
@@ -42,6 +47,26 @@ public final class MusicPlayerMod implements ModInitializer {
     private static final JukeboxPlaybackService JUKEBOX_PLAYBACK_SERVICE = new JukeboxPlaybackService();
     private static final LootMusicDiscService LOOT_MUSIC_DISC_SERVICE = new LootMusicDiscService();
     private static final NeteaseApiClient NETEASE_API_CLIENT = new NeteaseApiClient();
+    /** 直连实现延迟创建：只有真正用到直连时才初始化音源探测链。 */
+    private static volatile MusicApi DIRECT_MUSIC_API;
+    private static final MusicApiRouter MUSIC_API = new MusicApiRouter(
+            MusicPlayerMod::directMusicApi,
+            new ProxyMusicApi(NETEASE_API_CLIENT),
+            MusicApiMode::current);
+
+    private static MusicApi directMusicApi() {
+        MusicApi direct = DIRECT_MUSIC_API;
+        if (direct == null) {
+            synchronized (MusicPlayerMod.class) {
+                direct = DIRECT_MUSIC_API;
+                if (direct == null) {
+                    direct = new DirectMusicApi();
+                    DIRECT_MUSIC_API = direct;
+                }
+            }
+        }
+        return direct;
+    }
 
     @Override
     public void onInitialize() {
@@ -150,8 +175,13 @@ public final class MusicPlayerMod implements ModInitializer {
         return MUSIC_QUEUE_SERVICE;
     }
 
-    public static NeteaseApiClient netease() {
-        return NETEASE_API_CLIENT;
+    public static MusicApi netease() {
+        return MUSIC_API;
+    }
+
+    /** 路由器本体，供配置命令读写模式与健康状态。 */
+    public static MusicApiRouter musicApiRouter() {
+        return MUSIC_API;
     }
 
     public static JukeboxPlaybackService jukeboxService() {
