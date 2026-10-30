@@ -2,6 +2,7 @@ package com.junhsiun.musicplayer.platform;
 
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
+import com.junhsiun.musicplayer.platform.api.MusicApi;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -13,9 +14,9 @@ public final class ArtistTopSongSource implements RandomSongSource {
     private static final int ARTIST_FETCH_LIMIT = 100;
     private static final int ARTIST_FETCH_OFFSET = 0;
 
-    private final NeteaseApiClient client;
+    private final MusicApi client;
 
-    public ArtistTopSongSource(NeteaseApiClient client) {
+    public ArtistTopSongSource(MusicApi client) {
         this.client = client;
     }
 
