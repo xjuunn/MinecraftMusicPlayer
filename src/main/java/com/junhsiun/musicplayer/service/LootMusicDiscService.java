@@ -2,6 +2,10 @@ package com.junhsiun.musicplayer.service;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
@@ -44,7 +48,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 public final class LootMusicDiscService {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    /**
+     * TrackInfo 是 record（字段均为 final），而部分 Minecraft 版本自带的 Gson
+     * （如 1.18.2 的 2.8.9）不支持 record，会改用反射回填 final 字段并抛出
+     * AssertionError。这里显式注册适配器，按字段手动构造，避免依赖反射。
+     */
+    private static final Gson GSON = new GsonBuilder()
+            .setPrettyPrinting()
+            .registerTypeAdapter(TrackInfo.class, new TrackInfoAdapter())
+            .create();
     private static final java.lang.reflect.Type STRING_SET = new TypeToken<Set<String>>(){}.getType();
     private static final java.lang.reflect.Type TRACK_LIST = new TypeToken<List<TrackInfo>>(){}.getType();
     private static final int POOL_CAPACITY = 20;
@@ -366,14 +378,21 @@ public final class LootMusicDiscService {
             List<TrackInfo> loadedTracks = GSON.fromJson(Files.newBufferedReader(path), TRACK_LIST);
             if (loadedTracks != null) {
                 trackPool.clear();
-                trackPool.addAll(loadedTracks);
+                for (TrackInfo track : loadedTracks) {
+                    if (track != null) {
+                        trackPool.add(track);
+                    }
+                }
             }
             while (trackPool.size() > POOL_CAPACITY) {
                 trackPool.poll();
             }
             MusicPlayerMod.LOGGER.info("Loaded {} cached random tracks", trackPool.size());
-        } catch (Exception exception) {
-            MusicPlayerMod.LOGGER.warn("Failed to read random track cache.", exception);
+        } catch (Throwable throwable) {
+            // 缓存只是加速数据，读失败直接丢弃重建即可；Gson 反射失败抛的是
+            // AssertionError（Error 而非 Exception），故这里必须覆盖到 Throwable。
+            MusicPlayerMod.LOGGER.warn("Failed to read random track cache.", throwable);
+            trackPool.clear();
         }
     }
 
@@ -406,5 +425,51 @@ public final class LootMusicDiscService {
 
     private static String key(Entity entity) {
         return entity.level.dimension().toString() + ":entity:" + entity.getUUID();
+    }
+
+    /** 按字段手动构造 TrackInfo，绕开 Gson 对 record 的反射写入。 */
+    private static final class TrackInfoAdapter implements JsonDeserializer<TrackInfo> {
+        @Override
+        public TrackInfo deserialize(JsonElement json, java.lang.reflect.Type type,
+                                     JsonDeserializationContext context) {
+            if (json == null || !json.isJsonObject()) {
+                return null;
+            }
+            JsonObject object = json.getAsJsonObject();
+            List<String> urls = new ArrayList<>();
+            JsonElement urlElement = object.get("sourceUrls");
+            if (urlElement != null && urlElement.isJsonArray()) {
+                for (JsonElement element : urlElement.getAsJsonArray()) {
+                    if (element != null && !element.isJsonNull()) {
+                        urls.add(element.getAsString());
+                    }
+                }
+            }
+            return new TrackInfo(
+                    text(object, "id"),
+                    text(object, "title"),
+                    text(object, "artist"),
+                    text(object, "artistId"),
+                    text(object, "coverUrl"),
+                    urls,
+                    number(object, "durationMillis"));
+        }
+
+        private static String text(JsonObject object, String key) {
+            JsonElement element = object.get(key);
+            return element == null || element.isJsonNull() ? "" : element.getAsString();
+        }
+
+        private static long number(JsonObject object, String key) {
+            JsonElement element = object.get(key);
+            if (element == null || element.isJsonNull()) {
+                return 0L;
+            }
+            try {
+                return element.getAsLong();
+            } catch (RuntimeException ignored) {
+                return 0L;
+            }
+        }
     }
 }
