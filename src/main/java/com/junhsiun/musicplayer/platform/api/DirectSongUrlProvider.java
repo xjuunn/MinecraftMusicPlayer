@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 public final class DirectSongUrlProvider implements SongUrlProvider {
     /** 999000 表示「尽可能高」，实际返回 128k/192k/320k 中最优可用档位。 */
     private static final String MAX_BITRATE = "999000";
+    private static final int DEFAULT_TIMEOUT_SECONDS = 3;
 
     @Override
     public String name() {
@@ -28,7 +29,13 @@ public final class DirectSongUrlProvider implements SongUrlProvider {
 
     @Override
     public CompletableFuture<List<String>> resolve(String songId) {
-        return CompletableFuture.supplyAsync(() -> fetch(songId), NeteaseApiClient.executor());
+        return resolve(songId, DEFAULT_TIMEOUT_SECONDS);
+    }
+
+    @Override
+    public CompletableFuture<List<String>> resolve(String songId, int timeoutSeconds) {
+        // 走探测专用线程池：批量解析时不再占用搜索/歌单共用的业务线程池
+        return NeteaseApiClient.submitProbe(() -> fetch(songId), timeoutSeconds);
     }
 
     private List<String> fetch(String songId) {
