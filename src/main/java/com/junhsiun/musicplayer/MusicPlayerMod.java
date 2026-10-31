@@ -86,6 +86,10 @@ public final class MusicPlayerMod implements ModInitializer {
             ItemStack heldStack = player.getItemInHand(hand);
 
             if (MusicDiscHelper.isDiscMaster(heldStack)) {
+                // 客户端放行，交给客户端监听器打开界面；服务端保留原来的提示逻辑
+                if (world.isClientSide()) {
+                    return InteractionResult.PASS;
+                }
                 if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                     MusicDiscHelper.sendMasterPrompt(serverPlayer);
                 }
