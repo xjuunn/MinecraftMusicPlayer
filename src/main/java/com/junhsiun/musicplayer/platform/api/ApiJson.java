@@ -64,7 +64,7 @@ public final class ApiJson {
 
     /** 读取数组第一个元素的 ID，缺失时返回空串。 */
     public static String firstId(JsonArray array) {
-        if (array == null || array.isEmpty() || !array.get(0).isJsonObject()) return "";
+        if (array == null || array.size() == 0 || !array.get(0).isJsonObject()) return "";
         return str(array.get(0).getAsJsonObject(), "id");
     }
 
@@ -100,7 +100,7 @@ public final class ApiJson {
 
     private static String firstOf(JsonObject parent, String arrayKey, String fieldKey) {
         JsonArray array = arr(parent, arrayKey);
-        if (array == null || array.isEmpty() || !array.get(0).isJsonObject()) return "";
+        if (array == null || array.size() == 0 || !array.get(0).isJsonObject()) return "";
         return str(array.get(0).getAsJsonObject(), fieldKey);
     }
 }

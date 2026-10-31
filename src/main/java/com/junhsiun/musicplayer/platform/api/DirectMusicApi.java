@@ -120,7 +120,7 @@ public final class DirectMusicApi implements MusicApi {
             throw new MusicApiException("musicplayer.error.song_detail_failed", exception);
         }
         JsonArray songs = ApiJson.arr(root, "songs");
-        if (songs == null || songs.isEmpty() || !songs.get(0).isJsonObject()) {
+if (songs == null || songs.size() == 0 || !songs.get(0).isJsonObject()) {
             return new TrackInfo(id, "", "", "", "", List.of(), 0L);
         }
         JsonObject song = songs.get(0).getAsJsonObject();
@@ -396,7 +396,7 @@ public final class DirectMusicApi implements MusicApi {
                         "offset", Integer.toString(offset),
                         "includeVideo", "true");
                 JsonArray playlists = ApiJson.arr(root, "playlist");
-                if (playlists == null || playlists.isEmpty()) {
+                if (playlists == null || playlists.size() == 0) {
                     break;
                 }
                 for (JsonElement element : playlists) {

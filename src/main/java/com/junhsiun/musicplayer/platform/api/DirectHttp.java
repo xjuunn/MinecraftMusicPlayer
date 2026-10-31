@@ -74,7 +74,9 @@ final class DirectHttp {
                 throw new MusicApiException("HTTP " + response.code());
             }
             String body = Objects.requireNonNull(response.body()).string();
-            JsonObject root = JsonParser.parseString(body).getAsJsonObject();
+            // 1.14.4 运行时自带 Gson 2.8.0，静态方法 parseString 直到 2.8.6 才提供，
+            // 这里沿用新版仍保留的实例方法，保证新旧 Gson 都能运行。
+            JsonObject root = new JsonParser().parse(body).getAsJsonObject();
             int code = ApiJson.intVal(root, "code");
             if (code != 0 && code != 200) {
                 // 406 通常是网易云的频率限制，其他代码为参数或区域限制
