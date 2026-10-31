@@ -5,6 +5,10 @@
   "client": [
     "LevelRendererAccessor",
     "LevelRendererMixin",
+    "ClientLevelAccessor",
+    "GameRendererMixin",
+    "LevelEventHandlerAccessor",
+    "LevelEventHandlerMixin",
     "MusicManagerAccessor",
     "MusicManagerMixin",
     "OptionsMixin",
