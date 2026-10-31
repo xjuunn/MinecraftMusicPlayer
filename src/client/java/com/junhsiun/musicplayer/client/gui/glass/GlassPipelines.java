@@ -1,0 +1,145 @@
+package com.junhsiun.musicplayer.client.gui.glass;
+
+import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import net.minecraft.client.renderer.BindGroupLayouts;
+import net.minecraft.resources.Identifier;
+
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * 液态玻璃用到的 GPU 管线。
+ *
+ * <p>26.x 的渲染全部走 {@code RenderPipeline}：顶点/片元着色器按 {@code assets/<命名空间>/shaders/core/}
+ * 下的文件加载，编译期的常量通过 shader define 注入。管线第一次被真正绘制时由
+ * {@code PipelineCache} 惰性编译，所以这里可以放心地在运行时按需构造并缓存。</p>
+ *
+ * <p>本类返回的管线分三种：</p>
+ * <ul>
+ *   <li>{@link #panel(GlassStyle)}：玻璃本体（折射 + 色散 + 高光 + 染色）；</li>
+ *   <li>{@link #shadow(GlassStyle)}：面板投影，和本体共用一份着色器，用 define 切分支；</li>
+ *   <li>{@link #blur(boolean)}：把画面逐级降采样并做可分离高斯模糊。</li>
+ * </ul>
+ */
+public final class GlassPipelines {
+
+    private static final String NAMESPACE = MusicPlayerMod.MOD_ID;
+    private static final Identifier GLASS_VERTEX_SHADER =
+            Identifier.fromNamespaceAndPath(NAMESPACE, "core/glass");
+    private static final Identifier GLASS_FRAGMENT_SHADER =
+            Identifier.fromNamespaceAndPath(NAMESPACE, "core/glass");
+    private static final Identifier BLUR_VERTEX_SHADER =
+            Identifier.fromNamespaceAndPath(NAMESPACE, "core/glass_blur");
+    private static final Identifier BLUR_FRAGMENT_SHADER =
+            Identifier.fromNamespaceAndPath(NAMESPACE, "core/glass_blur");
+
+    private static final Map<String, RenderPipeline> PANEL_PIPELINES = new HashMap<>();
+    private static final Map<String, RenderPipeline> SHADOW_PIPELINES = new HashMap<>();
+    private static final Map<String, RenderPipeline> BLUR_PIPELINES = new HashMap<>();
+
+    private GlassPipelines() {
+    }
+
+    /**
+     * 玻璃本体管线。
+     *
+     * <p>注意折射、斜面、色散、中心色散<b>不在这里</b>：它们逐 draw 由顶点色传入
+     * （见 {@link GlassDebug#encode(GlassStyle)}），所以不需要为它们各编译一份管线。</p>
+     */
+    public static synchronized RenderPipeline panel(GlassStyle style) {
+        return PANEL_PIPELINES.computeIfAbsent(style.pipelineKey(), key -> {
+            RenderPipeline.Builder builder = baseGuiPipeline("panel", key)
+                    .withFragmentShader(GLASS_FRAGMENT_SHADER)
+                    .withShaderDefine("GLASS_RADIUS", style.radius())
+                    .withShaderDefine("GLASS_TINT_R", style.tintR())
+                    .withShaderDefine("GLASS_TINT_G", style.tintG())
+                    .withShaderDefine("GLASS_TINT_B", style.tintB())
+                    .withShaderDefine("GLASS_TINT_A", style.tintA())
+                    .withShaderDefine("GLASS_MAX_LUMA", style.maxLuma())
+                    .withShaderDefine("GLASS_SATURATION", style.saturation())
+                    .withShaderDefine("GLASS_FROST", style.frost())
+                    .withShaderDefine("GLASS_HIGHLIGHT", style.highlight())
+                    .withShaderDefine("GLASS_OPACITY", style.opacity());
+            return builder
+                    .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+                    .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+                    .withBindGroupLayout(BindGroupLayouts.SAMPLER0_SAMPLER1)
+                    .build();
+        });
+    }
+
+    /** 面板投影管线。 */
+    public static synchronized RenderPipeline shadow(GlassStyle style) {
+        GlassShadow shadow = style.shadow();
+        String key = style.pipelineKey() + "/shadow";
+        return SHADOW_PIPELINES.computeIfAbsent(key, ignored -> baseGuiPipeline("shadow", key)
+                .withFragmentShader(GLASS_FRAGMENT_SHADER)
+                .withShaderDefine("GLASS_SHADOW")
+                .withShaderDefine("GLASS_RADIUS", style.radius())
+                .withShaderDefine("GLASS_SHADOW_SIZE", shadow.size())
+                .withShaderDefine("GLASS_SHADOW_ALPHA", shadow.alpha())
+                .withShaderDefine("GLASS_SHADOW_OFFSET_X", shadow.offsetX())
+                .withShaderDefine("GLASS_SHADOW_OFFSET_Y", shadow.effectiveOffsetY())
+                // 投影四边形向外扩张的像素数。着色器要用它把四边形尺寸还原成面板尺寸，
+                // 否则 SDF 会描述扩张后的框，投影变成一圈离开面板的圆角暗环。
+                .withShaderDefine("GLASS_SHADOW_PADDING", shadow.padding())
+                .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+                .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+                .build());
+    }
+
+    /**
+     * 可分离高斯的单向管线。
+     *
+     * @param spread   扩散量（源贴图的 texel 数），0 表示纯降采样
+     * @param vertical {@code true} 纵向、{@code false} 横向
+     */
+    public static synchronized RenderPipeline blur(float spread, boolean vertical) {
+        String key = spread + "/" + vertical;
+        return BLUR_PIPELINES.computeIfAbsent(key, ignored -> {
+            boolean verticalBlur = vertical;
+            RenderPipeline.Builder builder = RenderPipeline.builder()
+                    .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE,
+                            "pipeline/glass_blur_" + Float.floatToIntBits(spread) + (verticalBlur ? "_v" : "_h")))
+                    .withVertexShader(BLUR_VERTEX_SHADER)
+                    .withFragmentShader(BLUR_FRAGMENT_SHADER)
+                    .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
+                    .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
+                    .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+                    .withColorTargetState(new ColorTargetState(Optional.empty(), GpuFormat.RGBA8_UNORM,
+                            ColorTargetState.WRITE_ALL))
+                    // 离屏颜色目标没有深度附件，管线必须声明"不需要深度"
+                    .withDepthStencilState(Optional.<DepthStencilState>empty())
+                    .withCull(false)
+                    .withShaderDefine("GLASS_BLUR_SPREAD", spread);
+            if (verticalBlur) {
+                builder.withShaderDefine("GLASS_BLUR_VERTICAL");
+            }
+            return builder.build();
+        });
+    }
+
+    private static RenderPipeline.Builder baseGuiPipeline(String kind, String key) {
+        String hash = Integer.toHexString(key.hashCode());
+        return RenderPipeline.builder()
+                .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE,
+                        "pipeline/glass_" + kind + "_" + hash.toLowerCase(Locale.ROOT)))
+                .withVertexShader(GLASS_VERTEX_SHADER)
+                .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
+                // 界面元素永远是 4 个顶点一个 quad（BlitRenderState.buildVertices），
+                // 声明成 TRIANGLES 只会画出 0,1,2 这一个三角形，必须和 vanilla 一样用 QUADS
+                .withPrimitiveTopology(PrimitiveTopology.QUADS)
+                .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                .withDepthStencilState(Optional.<DepthStencilState>empty())
+                .withCull(false);
+    }
+}
