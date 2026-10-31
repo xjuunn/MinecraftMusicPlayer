@@ -6,23 +6,33 @@ import com.junhsiun.musicplayer.client.ClientJukeboxController;
 import com.junhsiun.musicplayer.client.ClientMusicController;
 import com.junhsiun.musicplayer.client.JukeboxCoverRenderer;
 import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfigManager;
+import com.junhsiun.musicplayer.client.gui.DiscMasterScreen;
+import com.junhsiun.musicplayer.client.gui.glass.GlassBackdrop;
+import com.junhsiun.musicplayer.client.gui.glass.GlassPanel;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.network.BgmConfigPayload;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.OpenUrlPayload;
+import com.mojang.blaze3d.Blaze3D;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConfirmLinkScreen;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.Util;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -33,41 +43,39 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
     public void onInitializeClient() {
         // 客户端本地配置（BGM 音量/开关）独立于服务端共享配置
         MusicPlayerClientConfigManager.load();
-        ClientPlayNetworking.registerGlobalReceiver(MusicControlPayload.ID, (client, player, buf, sender) -> {
-            MusicControlPayload payload = MusicControlPayload.decode(buf);
-            client.execute(() -> ClientMusicController.getInstance().handle(payload));
-        });
-        ClientPlayNetworking.registerGlobalReceiver(JukeboxMusicPayload.ID, (client, player, buf, sender) -> {
-            JukeboxMusicPayload payload = JukeboxMusicPayload.decode(buf);
-            client.execute(() -> ClientJukeboxController.getInstance().handle(payload));
-        });
-        ClientPlayNetworking.registerGlobalReceiver(OpenUrlPayload.ID, (client, player, buf, sender) -> {
-            OpenUrlPayload payload = OpenUrlPayload.decode(buf);
-            client.execute(() -> {
-                String url = payload.url();
-                if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
-                    return;
-                }
-                if (!client.options.chatLinks().get()) {
-                    return;
-                }
-                try {
-                    if (client.options.chatLinksPrompt().get()) {
-                        ConfirmLinkScreen.confirmLinkNow(url, client.screen, false);
-                    } else {
-                        Util.getPlatform().openUri(URI.create(url));
+        ClientPlayNetworking.registerGlobalReceiver(MusicControlPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> ClientMusicController.getInstance().handle(payload))
+        );
+        ClientPlayNetworking.registerGlobalReceiver(JukeboxMusicPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> ClientJukeboxController.getInstance().handle(payload))
+        );
+        ClientPlayNetworking.registerGlobalReceiver(OpenUrlPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> {
+                    String url = payload.url();
+                    if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
+                        return;
                     }
-                } catch (Exception exception) {
-                    MusicPlayerMod.LOGGER.warn("打开链接失败: {}", url, exception);
-                }
-            });
-        });
-        ClientPlayNetworking.registerGlobalReceiver(BgmConfigPayload.ID, (client, player, buf, sender) -> {
-            BgmConfigPayload payload = BgmConfigPayload.decode(buf);
-            client.execute(() -> ClientBgmController.getInstance()
-                    .configureServer(payload.playlistId(), payload.baseUrl()));
-        });
-        WorldRenderEvents.AFTER_ENTITIES.register(JukeboxCoverRenderer::render);
+                    Minecraft client = context.client();
+                    if (!client.options.chatLinks().get()) {
+                        return;
+                    }
+                    try {
+                        URI uri = URI.create(url);
+                        if (client.options.chatLinksPrompt().get()) {
+                            ConfirmLinkScreen.confirmLinkNow(client.gui.screen(), uri, false);
+                        } else {
+                            Blaze3D.openUri(uri);
+                        }
+                    } catch (Exception exception) {
+                        MusicPlayerMod.LOGGER.warn("打开链接失败: {}", url, exception);
+                    }
+                })
+        );
+        ClientPlayNetworking.registerGlobalReceiver(BgmConfigPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> ClientBgmController.getInstance()
+                        .configureServer(payload.playlistId(), payload.baseUrl()))
+        );
+        LevelRenderEvents.COLLECT_SUBMITS.register(JukeboxCoverRenderer::render);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             MusicPlayerClientConfigManager.tick();
             ClientJukeboxController.getInstance().tick(client);
@@ -88,6 +96,12 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             return InteractionResult.PASS;
         });
 
+        // 手持唱片母版右键（对着空气 / 方块 / 实体）→ 打开液态玻璃界面
+        UseItemCallback.EVENT.register((player, world, hand) -> tryOpenDiscMaster(player, world, hand));
+        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> tryOpenDiscMaster(player, world, hand));
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) ->
+                tryOpenDiscMaster(player, world, hand));
+
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) ->
                 ClientBgmController.getInstance().onEnteredWorld());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -103,9 +117,33 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             ClientBgmController.getInstance().reset();
             ClientJukeboxController.getInstance().stopAll("Client stopping.");
             CoverArtTextureCache.getInstance().shutdown();
+            GlassBackdrop.getInstance().reset();
         });
 
         // 主菜单（未连接存档）也使用客户端本地歌单替换原版背景音乐
         ClientBgmController.getInstance().configureLocal(MusicPlayerConfigManager.get().bgmPlaylistId);
+    }
+
+    /**
+     * 手持唱片母版右键时打开界面。只在客户端本地玩家身上触发，服务端逻辑不受影响。
+     */
+    private static InteractionResult tryOpenDiscMaster(Player player, Level world, InteractionHand hand) {
+        if (!world.isClientSide() || !(player instanceof LocalPlayer)) {
+            return InteractionResult.PASS;
+        }
+        if (!MusicDiscHelper.isDiscMaster(player.getItemInHand(hand))) {
+            return InteractionResult.PASS;
+        }
+        // 管线编译和离屏贴图创建都要几百微秒到几毫秒。放在这里（输入回调，位于渲染循环
+        // 之外）做完，界面出现的那一帧就是正常的完整帧；若拖到界面首帧的提取/绘制阶段，
+        // 会打断正在进行的帧，驱动先送出一帧黑屏再显示界面。
+        DiscMasterScreen screen = new DiscMasterScreen();
+        GlassPanel.prewarm(screen.window().style());
+        // 不能用 setScreenAndShow：它会在设置界面后同步强制渲染一帧，且这一帧
+        // 跳过世界提取（extract(deltaTracker, false)），主渲染目标只剩清屏黑色，
+        // 背景抓取采样到黑屏，整屏就会闪一帧黑。Gui.setScreen 做同样的界面切换
+        // （init、鼠标、输入处理）但不强制渲染，世界照常绘制到下一帧。
+        Minecraft.getInstance().gui.setScreen(screen);
+        return InteractionResult.SUCCESS;
     }
 }

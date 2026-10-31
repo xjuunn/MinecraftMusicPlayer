@@ -25,11 +25,11 @@ import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -72,6 +72,11 @@ public final class MusicPlayerMod implements ModInitializer {
     @Override
     public void onInitialize() {
         MusicPlayerConfigManager.load();
+        PayloadTypeRegistry.clientboundPlay().register(MusicControlPayload.TYPE, MusicControlPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(JukeboxMusicPayload.TYPE, JukeboxMusicPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(OpenUrlPayload.TYPE, OpenUrlPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(BgmConfigPayload.TYPE, BgmConfigPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
 
         CommandRegistrationCallback.EVENT.register(MusicCommands::register);
         ServerTickEvents.END_SERVER_TICK.register(JUKEBOX_PLAYBACK_SERVICE::tick);
@@ -79,6 +84,17 @@ public final class MusicPlayerMod implements ModInitializer {
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             if (hitResult == null) return InteractionResult.PASS;
             ItemStack heldStack = player.getItemInHand(hand);
+
+            if (MusicDiscHelper.isDiscMaster(heldStack)) {
+                // 客户端放行，交给客户端监听器打开界面；服务端保留原来的提示逻辑
+                if (world.isClientSide()) {
+                    return InteractionResult.PASS;
+                }
+                if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                    MusicDiscHelper.sendMasterPrompt(serverPlayer);
+                }
+                return InteractionResult.SUCCESS;
+            }
 
             if (MusicDiscHelper.isPendingDisc(heldStack)) {
                 if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
@@ -107,13 +123,17 @@ public final class MusicPlayerMod implements ModInitializer {
         });
         UseItemCallback.EVENT.register((player, world, hand) -> {
             if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
-                return InteractionResultHolder.pass(player.getItemInHand(hand));
+                return InteractionResult.PASS;
+            }
+            if (MusicDiscHelper.isDiscMaster(player.getItemInHand(hand))) {
+                MusicDiscHelper.sendMasterPrompt(serverPlayer);
+                return InteractionResult.SUCCESS;
             }
             if (MusicDiscHelper.isPendingDisc(player.getItemInHand(hand))) {
                 LOOT_MUSIC_DISC_SERVICE.useRandomDisc(serverPlayer, hand);
-                return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), world.isClientSide());
+                return InteractionResult.SUCCESS;
             }
-            return InteractionResultHolder.pass(player.getItemInHand(hand));
+            return InteractionResult.PASS;
         });
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
             if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
@@ -121,10 +141,10 @@ public final class MusicPlayerMod implements ModInitializer {
             }
             return LOOT_MUSIC_DISC_SERVICE.tryInjectOnOpen(serverPlayer, entity);
         });
-        ServerPlayNetworking.registerGlobalReceiver(MusicPlaybackReportPayload.ID, (server, player, handler, buf, sender) -> {
-            MusicPlaybackReportPayload payload = MusicPlaybackReportPayload.decode(buf);
-            server.execute(() -> MUSIC_QUEUE_SERVICE.handlePlaybackReport(server, player, payload));
-        });
+        ServerPlayNetworking.registerGlobalReceiver(MusicPlaybackReportPayload.TYPE, (payload, context) ->
+                context.server().execute(() ->
+                        MUSIC_QUEUE_SERVICE.handlePlaybackReport(context.server(), context.player(), payload))
+        );
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             MUSIC_QUEUE_SERVICE.handleJoin(handler.player);
             sendBgmConfig(handler.player);
@@ -143,14 +163,14 @@ public final class MusicPlayerMod implements ModInitializer {
     }
 
     public static void sendBgmConfig(ServerPlayer player) {
-        if (!ServerPlayNetworking.canSend(player, BgmConfigPayload.ID)) {
+        if (!ServerPlayNetworking.canSend(player, BgmConfigPayload.TYPE)) {
             return;
         }
         String playlistId = MusicPlayerConfigManager.get().bgmPlaylistId;
         String baseUrl = MusicPlayerConfigManager.get().neteaseBaseUrl;
-        BgmConfigPayload.send(player,
+        ServerPlayNetworking.send(player, new BgmConfigPayload(
                 playlistId == null ? "" : playlistId.trim(),
-                baseUrl == null ? "" : baseUrl.trim());
+                baseUrl == null ? "" : baseUrl.trim()));
     }
 
     public static void syncBgmConfig(MinecraftServer server) {
