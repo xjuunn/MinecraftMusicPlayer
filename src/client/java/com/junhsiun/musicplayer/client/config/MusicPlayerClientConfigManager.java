@@ -103,7 +103,9 @@ public final class MusicPlayerClientConfigManager {
             return;
         }
         try (Reader reader = Files.newBufferedReader(LEGACY_SHARED_CONFIG_PATH)) {
-            JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
+            // 1.14.4 运行时自带 Gson 2.8.0，静态方法 parseReader 直到 2.8.6 才提供，
+            // 这里沿用新版仍保留的实例方法，保证新旧 Gson 都能运行。
+            JsonObject root = new JsonParser().parse(reader).getAsJsonObject();
             JsonElement volume = root.get("bgmVolume");
             if (volume != null && volume.isJsonPrimitive()) {
                 target.bgmVolume = volume.getAsDouble();
