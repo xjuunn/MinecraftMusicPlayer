@@ -109,8 +109,98 @@ column.layout(content);
 ```
 
 `Column` 支持 `align(START/CENTER/END)`、`add(宽, 高, …)` 与 `fill(高, …)`（铺满）；
-`Row` 支持 `grow(高, …)` 占满剩余宽度，适合「标签 + 控件」并排。每个槽位是
-`GlassLayout.Slot(x, y, width, height)`，另带 `right()/bottom()/centerX()`。
+`Row` 支持 `grow(高, …)` 占满剩余宽度，`align(START/CENTER/END)` 纵向对齐，适合
+「标签 + 控件」并排。每个槽位是 `GlassLayout.Slot(x, y, width, height)`，另带
+`right()/bottom()/centerX()/centerY()` 与 `toBounds()`。
+
+---
+
+## 二层玻璃卡片
+
+窗口内的第二层玻璃容器是 `GlassCard`（`client/gui/glass/widget/GlassCard`）。
+它既是绘制单元、又是布局容器：负责画玻璃底、可选标题，并把扣掉内边距后的区域
+交给内容回调继续布局。
+
+### 左右两栏
+
+```java
+GlassCard left = GlassCard.create()
+        .title("播放列表")
+        .padding(12)
+        .content(area -> { /* 用 GlassLayout 在 area 里摆控件 */ });
+GlassCard right = GlassCard.create().title("详情").padding(12);
+
+AtomicReference<GlassLayout.Slot> leftSlot = new AtomicReference<>();
+AtomicReference<GlassLayout.Slot> rightSlot = new AtomicReference<>();
+new GlassLayout.Row()
+        .gap(12)
+        .add(160, content.height(), leftSlot::set)     // 左栏固定 160
+        .grow(content.height(), rightSlot::set)        // 右栏吃掉剩余宽度
+        .layout(content);
+
+left.bounds(leftSlot.get());
+right.bounds(rightSlot.get());
+addRenderableWidget(left);       // 卡片先注册 → 玻璃底在下
+addRenderableWidget(right);
+left.layoutContent();            // 内容控件后注册 → 叠在玻璃之上
+right.layoutContent();
+```
+
+### 为什么是「定位 → 注册 → 排内容」三步
+
+`GlassWindowScreen` 在 `addRenderableWidget` 那一刻就把控件当时的坐标记成**动画基准**。
+若先注册再定位，基准会停在 `(0,0)`，窗口开场的平移 / 缩放会把卡片拽到左上角。
+所以拆成 `bounds(...)`（只定位）和 `layoutContent()`（只排内容）两个方法。
+`layout(slot)` 是两者合一的便捷写法，只在卡片已注册时才可直接用。
+
+### 材质
+
+`GlassTheme.CARD` 是专用材质，**不能直接复用窗口材质**：玻璃叠玻璃会把折射重复施加
+两次，中心区域糊成一团。卡片把折射与中心收缩收到窗口的四成左右、色散减半。
+
+卡片通过 `GlassPanel.drawTuned` 绘制，用的是 `childLook`（带窗口叠加浓度），
+所以它折射的是"世界背景 + 窗口那层浅色叠加"，看起来嵌在窗口里而不是浮在外面。
+
+### 圆角必须与容器同心
+
+卡片贴着窗口边缘时，两者的圆角若不同心，角落处会露出两条错开的弧线，看起来就是
+"窗口角和卡片角圆角不一致"。同心条件是：
+
+```
+卡片圆角 = 窗口圆角 − 卡片到窗口的边距
+```
+
+因为外层圆心在窗口角的 `(半径, 半径)`，内层圆心在卡片的 `(半径, 半径)`；
+只有上式成立，两个圆心才落在同一点。
+
+不要硬编码这个值。用 `container(...)` 把容器矩形和半径交给卡片，它会按
+**实际几何**四边取最小距离反推：
+
+```java
+// 容器矩形由内容区外扩 PADDING 反推回窗口整体
+WindowBounds windowBounds = new WindowBounds(
+        content.x0() - PADDING, content.y0() - PADDING,
+        content.x1() + PADDING, content.y1() + PADDING);
+float windowRadius = GlassTheme.windowStyle().radius();
+
+left.container(windowBounds, windowRadius);
+right.container(windowBounds, windowRadius);
+```
+
+这样以后改 `PADDING` 或窗口圆角都不会错位。取**最小**距离而不是固定边距，
+是因为卡片可能被放进任意布局，四边到容器的距离未必相同；取最小可保证无论
+卡片贴哪一边都不超出容器圆角。
+
+玻璃与叠加层共用同一个解析后的半径（`style.withRadius(radius)` 派生材质），
+否则两者轮廓对不上，会多出一圈色块。
+
+### 底色
+
+`tint` 默认 `0.12`，**刻意不跟随全局透明度配置**：该配置默认是 0，若卡片也乘同一个
+系数就会完全没有底色，只剩折射，与窗口表面分不开。传 `tint(0)` 可让它完全透明。
+
+卡片的圆角与叠加层共用同一套夹取规则（`min(半径, 半宽, 半高)`），与着色器一致，
+不会多出一圈形状对不上的色块。
 
 ---
 
