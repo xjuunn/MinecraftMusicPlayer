@@ -962,7 +962,7 @@ public final class MusicCommands {
         return Commands.literal("config")
                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                 .then(Commands.literal("reload").executes(context -> {
-                    MusicPlayerConfigManager.load();
+                    MusicPlayerConfigManager.reload();
                     MusicPlayerMod.queueService().clearTrackCache();
                     // 配置文件中的 bgmPlaylistId 可能已变更，同步给在线客户端
                     MusicPlayerMod.syncBgmConfig(context.getSource().getServer());

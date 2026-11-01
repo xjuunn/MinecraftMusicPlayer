@@ -8,7 +8,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -122,23 +121,6 @@ public final class MusicDiscHelper {
         )));
         pendingDisc.remove(DataComponents.JUKEBOX_PLAYABLE);
         return pendingDisc;
-    }
-
-    /** 右键唱片母版时的提示：提示搜索后可点击刻录按钮，命令仅在悬停时显示。 */
-    public static void sendMasterPrompt(ServerPlayer player) {
-        player.sendSystemMessage(Component.translatable("musicplayer.disc.master_search_hint").withStyle(ChatFormatting.GRAY)
-                .append(Component.literal("  "))
-                .append(Messages.suggestable(
-                        Component.translatable("musicplayer.disc.master_burn_command"),
-                        Component.translatable("musicplayer.disc.master_burn_command_hover"),
-                        "/music burn song ",
-                        ChatFormatting.LIGHT_PURPLE))
-                .append(Component.literal("  "))
-                .append(Messages.suggestable(
-                        Component.translatable("musicplayer.disc.master_search_command"),
-                        Component.translatable("musicplayer.disc.master_search_command_hover"),
-                        "/music search song ",
-                        ChatFormatting.AQUA)));
     }
 
     public static ItemStack burn(ItemStack baseDisc, TrackInfo track) {
