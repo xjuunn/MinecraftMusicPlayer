@@ -34,6 +34,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.item.ItemStack;
 
 import java.net.URI;
 
@@ -86,6 +87,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             MusicPlayerClientConfigManager.tick();
             ClientJukeboxController.getInstance().tick(client);
             ClientMusicController.getInstance().tick();
+            prefetchHeldCover(client);
         });
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             if (!world.isClientSide() || hitResult == null) {
@@ -133,6 +135,41 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
 
         // 主菜单（未连接存档）也使用客户端本地歌单替换原版背景音乐
         ClientBgmController.getInstance().configureLocal(MusicPlayerConfigManager.get().bgmPlaylistId);
+    }
+
+    /**
+     * 上一个已预取过的封面地址，避免每 tick 都去解析手持物品的 NBT。
+     */
+    private static String lastPrefetchedCover = "";
+
+    /**
+     * 手持已刻录的唱片时提前把封面拉下来。
+     *
+     * <p>封面下载是在收到播放载荷之后才发起的，而唱片机一放上去就开始转，
+     * 弱网下就会先看到几秒的黑色盘面。从刻录完成到插进唱片机之间，唱片一定在手上，
+     * 在这里预取能把这段等待提前吃掉，插进去的时候纹理通常已经就绪。</p>
+     */
+    private static void prefetchHeldCover(Minecraft client) {
+        Player player = client.player;
+        if (player == null) {
+            return;
+        }
+        prefetchCover(player.getMainHandItem());
+        prefetchCover(player.getOffhandItem());
+    }
+
+    private static void prefetchCover(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return;
+        }
+        String coverUrl = MusicDiscHelper.read(stack)
+                .map(MusicDiscHelper.DiscTrackData::coverUrl)
+                .orElse("");
+        if (coverUrl.isBlank() || coverUrl.equals(lastPrefetchedCover)) {
+            return;
+        }
+        lastPrefetchedCover = coverUrl;
+        CoverArtTextureCache.getInstance().request(coverUrl);
     }
 
     /**

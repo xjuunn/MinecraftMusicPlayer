@@ -152,11 +152,37 @@ public final class JukeboxPlaybackService {
 
     private void startPlayback(ServerLevel level, BlockPos pos, DiscTrackData discData) {
         ActiveJukebox active = startPlaybackResolved(level, pos, discData);
-        if (discData.trackId() != null && !discData.trackId().isBlank()) {
-            MusicPlayerMod.netease().resolveSong(discData.trackId()).whenComplete((track, throwable) ->
-                    level.getServer().execute(() -> refreshPlaybackData(level, pos, active, discData, track, throwable))
+        if (discData.trackId() == null || discData.trackId().isBlank()) {
+            return;
+        }
+        if (discData.coverUrl().isBlank()) {
+            // 历史唱片（封面字段为空）先单独补一次封面：整曲解析要等直链探测，
+            // 慢的时候好几秒，而封面只是详情接口里的一个字段，能早得多到。
+            MusicPlayerMod.netease().songCover(discData.trackId()).whenComplete((cover, throwable) ->
+                    level.getServer().execute(() -> applyEarlyCover(level, pos, active, cover, throwable))
             );
         }
+        MusicPlayerMod.netease().resolveSong(discData.trackId()).whenComplete((track, throwable) ->
+                level.getServer().execute(() -> refreshPlaybackData(level, pos, active, discData, track, throwable))
+        );
+    }
+
+    /** 封面单独到达时先推一次刷新，让客户端尽早开始下载。 */
+    private void applyEarlyCover(ServerLevel level, BlockPos pos, ActiveJukebox expectedActive, String cover, Throwable throwable) {
+        if (throwable != null || cover == null || cover.isBlank()) {
+            return;
+        }
+        ActiveJukebox current = activeJukeboxes.get(pos.asLong());
+        if (current == null || current != expectedActive) {
+            return;
+        }
+        DiscTrackData previous = current.discData();
+        if (cover.equals(previous.coverUrl())) {
+            return;
+        }
+        current.setDiscData(new DiscTrackData(previous.trackId(), previous.title(), previous.artist(),
+                previous.artistId(), cover, previous.urls(), previous.durationMillis()));
+        pushRefresh(level, current, false);
     }
 
     private ActiveJukebox startPlaybackResolved(ServerLevel level, BlockPos pos, DiscTrackData discData) {
