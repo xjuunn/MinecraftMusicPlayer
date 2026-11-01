@@ -4,6 +4,8 @@ import com.junhsiun.musicplayer.command.MusicCommands;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.network.BgmConfigPayload;
+import com.junhsiun.musicplayer.network.DiscMasterBurnPayload;
+import com.junhsiun.musicplayer.network.DiscMasterBurnResultPayload;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
@@ -14,6 +16,7 @@ import com.junhsiun.musicplayer.platform.api.MusicApi;
 import com.junhsiun.musicplayer.platform.api.MusicApiMode;
 import com.junhsiun.musicplayer.platform.api.MusicApiRouter;
 import com.junhsiun.musicplayer.platform.api.ProxyMusicApi;
+import com.junhsiun.musicplayer.service.DiscMasterService;
 import com.junhsiun.musicplayer.service.JukeboxPlaybackService;
 import com.junhsiun.musicplayer.service.LootMusicDiscService;
 import com.junhsiun.musicplayer.service.MusicQueueService;
@@ -76,7 +79,9 @@ public final class MusicPlayerMod implements ModInitializer {
         PayloadTypeRegistry.clientboundPlay().register(JukeboxMusicPayload.TYPE, JukeboxMusicPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(OpenUrlPayload.TYPE, OpenUrlPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(BgmConfigPayload.TYPE, BgmConfigPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(DiscMasterBurnResultPayload.TYPE, DiscMasterBurnResultPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(DiscMasterBurnPayload.TYPE, DiscMasterBurnPayload.CODEC);
 
         CommandRegistrationCallback.EVENT.register(MusicCommands::register);
         ServerTickEvents.END_SERVER_TICK.register(JUKEBOX_PLAYBACK_SERVICE::tick);
@@ -144,6 +149,10 @@ public final class MusicPlayerMod implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(MusicPlaybackReportPayload.TYPE, (payload, context) ->
                 context.server().execute(() ->
                         MUSIC_QUEUE_SERVICE.handlePlaybackReport(context.server(), context.player(), payload))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(DiscMasterBurnPayload.TYPE, (payload, context) ->
+                context.server().execute(() ->
+                        DiscMasterService.burn(context.server(), context.player(), payload.songId()))
         );
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             MUSIC_QUEUE_SERVICE.handleJoin(handler.player);
