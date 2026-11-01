@@ -13,6 +13,7 @@ import com.mojang.renderpearl.api.textures.GpuSampler;
 import com.mojang.renderpearl.api.textures.GpuTexture;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.Util;
 import org.lwjgl.BufferUtils;
 
 import java.nio.ByteBuffer;
@@ -40,6 +41,8 @@ public final class GlassBackdrop {
     private static final int SOFT_DIVISOR = 2;
     /** 磨砂层缩放倍数（1/4）。 */
     private static final int FROST_DIVISOR = 4;
+    /** 重度模糊层缩放倍数（1/8）。 */
+    private static final int HEAVY_DIVISOR = 8;
     /** 清透层高斯扩散（texel）。 */
     private static final float SOFT_SPREAD = 1.0F;
     /**
@@ -50,10 +53,14 @@ public final class GlassBackdrop {
      * 这里收敛到 1/4 分辨率 + 1.2 + 2 次（约 15.7px），保留磨砂感的同时不丢结构。</p>
      */
     private static final float FROST_SPREAD = 1.2F;
+    /** 重度模糊层扩散（texel），配合 1/8 分辨率得到大半径柔化。 */
+    private static final float HEAVY_SPREAD = 1.4F;
     /** 清透层迭代次数。 */
     private static final int SOFT_ITERATIONS = 1;
     /** 磨砂层迭代次数，取值理由见 {@link #FROST_SPREAD}。 */
     private static final int FROST_ITERATIONS = 2;
+    /** 重度模糊层迭代次数。 */
+    private static final int HEAVY_ITERATIONS = 3;
 
     private static final GlassBackdrop INSTANCE = new GlassBackdrop();
 
@@ -61,6 +68,10 @@ public final class GlassBackdrop {
     private Target softB;
     private Target frostA;
     private Target frostB;
+    private Target heavyA;
+    private Target heavyB;
+    /** 原始分辨率拷贝，模糊度为 0 时使用。 */
+    private Target sharp;
 
     private GpuBuffer quadBuffer;
     private int sceneWidth;
@@ -85,12 +96,22 @@ public final class GlassBackdrop {
         return frostA == null ? null : frostA.view;
     }
 
+    /** 重度模糊层（1/8）贴图，模糊度拉满时才真正起作用。 */
+    public GpuTextureView heavyView() {
+        return heavyA == null ? null : heavyA.view;
+    }
+
+    /** 原始分辨率拷贝，模糊度为 0 时使用。 */
+    public GpuTextureView sharpView() {
+        return sharp == null ? null : sharp.view;
+    }
+
     public GpuSampler sampler() {
         return RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
     }
 
     public boolean isReady() {
-        return ready && !failed && frostA != null;
+        return ready && !failed && frostA != null && heavyA != null && sharp != null;
     }
 
     /** 是否已经永久失败（不再重试）。失败时调用方应退回简易面板，而不是一直空等。 */
@@ -128,6 +149,8 @@ public final class GlassBackdrop {
             GpuSampler linear = sampler();
             CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
 
+            // 原图逐像素拷贝（1:1），模糊度为 0 时用它，保证"完全没有模糊"
+            downsample(encoder, sharp, main.getColorTextureView(), linear);
             // 降采样到 1/2，双线性即 2×2 平均
             downsample(encoder, softA, main.getColorTextureView(), linear);
             // 清透层：1 次可分离模糊，结果留在 softA
@@ -135,6 +158,9 @@ public final class GlassBackdrop {
             // 继续降采样到 1/4，再模糊，结果留在 frostA
             downsample(encoder, frostA, softA.view, linear);
             blur(encoder, frostA, frostB, FROST_SPREAD, FROST_ITERATIONS, linear);
+            // 再降到 1/8 并重度模糊，供模糊度滑块的高端使用
+            downsample(encoder, heavyA, frostA.view, linear);
+            blur(encoder, heavyA, heavyB, HEAVY_SPREAD, HEAVY_ITERATIONS, linear);
 
             encoder.submit();
             ready = true;
@@ -168,13 +194,16 @@ public final class GlassBackdrop {
         softB = null;
         frostA = null;
         frostB = null;
+        heavyA = null;
+        heavyB = null;
+        sharp = null;
     }
 
     private void ensureResources(int width, int height) {
         if (quadBuffer == null) {
             quadBuffer = createQuadBuffer(RenderSystem.getDevice());
         }
-        if (frostA != null && sceneWidth == width && sceneHeight == height) {
+        if (heavyA != null && sceneWidth == width && sceneHeight == height) {
             return;
         }
         closeTargets();
@@ -182,6 +211,9 @@ public final class GlassBackdrop {
         softB = new Target(width / SOFT_DIVISOR, height / SOFT_DIVISOR, "soft b");
         frostA = new Target(width / FROST_DIVISOR, height / FROST_DIVISOR, "frost a");
         frostB = new Target(width / FROST_DIVISOR, height / FROST_DIVISOR, "frost b");
+        heavyA = new Target(width / HEAVY_DIVISOR, height / HEAVY_DIVISOR, "heavy a");
+        heavyB = new Target(width / HEAVY_DIVISOR, height / HEAVY_DIVISOR, "heavy b");
+        sharp = new Target(width, height, "sharp");
         sceneWidth = width;
         sceneHeight = height;
         // 新建的贴图是未初始化的，内容不可信，必须等本轮真正抓好再允许绘制。
@@ -220,7 +252,7 @@ public final class GlassBackdrop {
     }
 
     private Target[] targets() {
-        return new Target[]{softA, softB, frostA, frostB};
+        return new Target[]{softA, softB, frostA, frostB, heavyA, heavyB, sharp};
     }
 
     private static GpuBuffer createQuadBuffer(GpuDevice device) {
