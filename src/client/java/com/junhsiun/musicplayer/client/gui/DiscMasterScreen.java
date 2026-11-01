@@ -20,6 +20,7 @@ import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.network.DiscMasterBurnPayload;
 import com.junhsiun.musicplayer.network.DiscMasterBurnResultPayload;
+import com.junhsiun.musicplayer.platform.api.MusicApi;
 import com.junhsiun.musicplayer.platform.url.UrlUtil;
 import com.junhsiun.musicplayer.util.Messages;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -50,11 +51,26 @@ import java.util.List;
  */
 public final class DiscMasterScreen extends GlassWindowScreen {
 
-    /** 窗口内容区尺寸。 */
-    private static final int WIDTH = 520;
-    private static final int HEIGHT = 320;
-    /** 窗口边缘到内容区的内边距。 */
-    private static final int PADDING = 8;
+    /**
+     * 窗口内容区尺寸。
+     *
+     * <p>宽度按"歌名最多 30 个字"反推：行内文字可用像素是
+     * {@code (宽度 − 卡片内边距×2 − 文字左边距 − 操作按钮 − 间隙) / 0.75}，
+     * 取 300 时约 288 字体像素，正好容下 30 个汉字；更长的歌名由
+     * {@code GlassListView} 截断并补省略号，不需要为了极端长的名字把窗口撑宽。</p>
+     */
+    private static final int WIDTH = 300;
+    private static final int HEIGHT = 280;
+    /**
+     * 窗口边缘到内容区的内边距。
+     *
+     * <p>不能太小：窗口圆角半径是 {@link GlassTheme.Sizes#WINDOW_RADIUS}（30），
+     * 玻璃圆弧在距边缘 {@code d} 处的纵向高度是 {@code R − √(R² − (R−d)²)}。
+     * 取 8 时该高度约 9.6px，而搜索按钮高 22px、上沿只在 8px 处，右上角会越过弧线
+     * 戳到圆角外面，看起来就是"按钮贴着圆角"。取 14 后弧线高度降到约 4.6px，
+     * 按钮四边都有明显余量。</p>
+     */
+    private static final int PADDING = 14;
 
     private static final int SEARCH_HEIGHT = 22;
     private static final int FOOTER_HEIGHT = 16;
@@ -72,6 +88,10 @@ public final class DiscMasterScreen extends GlassWindowScreen {
     private String typed = "";
     /** 当前页码，从 1 开始。 */
     private int page = 1;
+    /** 关键词的总命中数；-1 表示数据来源没给，此时底部不显示"共 N 首"。 */
+    private int total = -1;
+    /** 打开后是否还需要在下一 tick 再确认一次输入框焦点。 */
+    private boolean refocusOnTick;
     /** 搜索序号：异步返回时用它丢弃过期结果。 */
     private int searchToken;
     /** 是否已发出刻录请求、正在等服务端回包。 */
@@ -114,6 +134,17 @@ public final class DiscMasterScreen extends GlassWindowScreen {
         column.fill(listHeight, this::buildResultCard);
         column.fill(FOOTER_HEIGHT, this::buildFooter);
         column.layout(content);
+
+        // 打开界面直接把焦点交给输入框。
+        //
+        // 原版 Screen.init(Minecraft,int,int) 结尾会调一次无参 setInitialFocus()，
+        // 但它只在"最后一次输入是键盘"时才用 Tab 顺序选焦点；右键打开窗口时最后一次
+        // 输入是鼠标，那一步什么都不做，于是要再点一下输入框才能打字。
+        // 这个窗口唯一的用途就是搜索，没有理由不让它一打开就能输入。
+        if (searchField != null) {
+            setInitialFocus(searchField);
+            refocusOnTick = true;
+        }
     }
 
     // ── 搜索行 ──────────────────────────────────────────────────────────
@@ -183,27 +214,48 @@ public final class DiscMasterScreen extends GlassWindowScreen {
         page = Math.max(1, targetPage);
         int token = ++searchToken;
         setStatus(Component.translatable("musicplayer.discmaster.loading"));
-        DiscMasterSearchService.getInstance().searchSongs(keyword, page).whenComplete((entries, throwable) ->
-                Minecraft.getInstance().execute(() -> applyResults(token, entries, throwable)));
+        DiscMasterSearchService.getInstance().searchSongPage(keyword, page).whenComplete((result, throwable) ->
+                Minecraft.getInstance().execute(() -> applyResults(token, result, throwable)));
     }
 
-    private void applyResults(int token, List<SearchEntry> entries, Throwable throwable) {
+    private void applyResults(int token, MusicApi.SearchPage result, Throwable throwable) {
         // 连点搜索时只认最后一次：旧请求的回包可能后到
         if (token != searchToken) {
             return;
         }
         if (throwable != null) {
             results = List.of();
+            total = -1;
             setStatus(Component.translatable("musicplayer.discmaster.failed",
                     Messages.textOrTranslatable(UrlUtil.rootMessageKey(throwable))));
         } else {
-            results = entries == null ? List.of() : entries;
-            setStatus(results.isEmpty()
-                    ? Component.translatable("musicplayer.discmaster.no_result")
-                    : Component.translatable("musicplayer.discmaster.count", results.size(), page));
+            results = result == null ? List.of() : result.entries();
+            // 总数只有数据来源给出时才有意义；拿不到就记 -1，界面不显示"共 N 首"
+            total = result == null ? -1 : result.total();
+            setStatus(statusComponent());
         }
         refreshRows();
         refreshPageButtons();
+    }
+
+    /**
+     * 底部状态行。
+     *
+     * <p>"共 N 首"必须是<b>总命中数</b>，不是本页条数——本页条数最多等于每页条数，
+     * 显示出来会让人以为搜索结果只有这么几首。数据来源给不出总数时干脆不显示这一段，
+     * 只保留页码（第 1 页连页码也没意义，就留空）。</p>
+     */
+    private Component statusComponent() {
+        if (results.isEmpty()) {
+            return Component.translatable("musicplayer.discmaster.no_result");
+        }
+        if (total > 0) {
+            return Component.translatable("musicplayer.discmaster.count", total, page);
+        }
+        if (page > 1) {
+            return Component.translatable("musicplayer.discmaster.page", page);
+        }
+        return Component.empty();
     }
 
     /** 把当前结果同步到列表；正在刻录时按钮不可点。 */
@@ -230,7 +282,11 @@ public final class DiscMasterScreen extends GlassWindowScreen {
             prevButton.active = page > 1;
         }
         if (nextButton != null) {
-            nextButton.active = results.size() >= DiscMasterSearchService.pageSize();
+            // 有总数就按总数判断，避免"最后一页刚好满"时还能再翻一页空结果；
+            // 没有总数只能退回"本页是否满页"的经验判断
+            nextButton.active = total > 0
+                    ? (long) page * DiscMasterSearchService.pageSize() < total
+                    : results.size() >= DiscMasterSearchService.pageSize();
         }
     }
 
@@ -276,6 +332,15 @@ public final class DiscMasterScreen extends GlassWindowScreen {
     @Override
     public void tick() {
         super.tick();
+        if (refocusOnTick) {
+            refocusOnTick = false;
+            // 原版 Screen.init(Minecraft,int,int) 在 init() 收尾还会调一次无参
+            // setInitialFocus()：当最后一次输入是键盘时，它按 Tab 顺序把焦点挪到
+            // 下一个控件（搜索按钮）。等一 tick 再确认一次，两种打开方式都落在输入框上。
+            if (searchField != null) {
+                setFocused(searchField);
+            }
+        }
         if (closing()) {
             return;
         }

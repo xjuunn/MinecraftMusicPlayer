@@ -21,6 +21,24 @@ import java.util.concurrent.CompletableFuture;
  * <p>实现约定：所有方法均为异步，失败时以异常完成；调用方线程（服务端主线程）不得被阻塞。
  */
 public interface MusicApi {
+
+    /**
+     * 一页搜索结果。
+     *
+     * @param entries 本页条目
+     * @param total   该关键词的总命中数；{@code <= 0} 表示数据来源没有提供，调用方不应据此显示总数
+     */
+    record SearchPage(List<SearchEntry> entries, int total) {
+        public SearchPage {
+            entries = entries == null ? List.of() : List.copyOf(entries);
+        }
+
+        /** 数据来源是否给出了总数。 */
+        public boolean hasTotal() {
+            return total > 0;
+        }
+    }
+
     // ── 单曲 ────────────────────────────────────────────────────────
 
     /** 解析单曲详情并附带可播放直链（直链可能为空列表）。 */
@@ -29,11 +47,32 @@ public interface MusicApi {
     /** 解析播客节目所属单曲，语义与 {@link #resolveSong(String)} 相同。 */
     CompletableFuture<TrackInfo> resolveRadioSong(String id);
 
+    /**
+     * 只取封面地址，不解析可播放直链。
+     *
+     * <p>直链解析要探测多个音源，慢的时候要好几秒；而封面是唱片一插进唱片机就要用的东西。
+     * 单独给封面一条短路径，避免它被直链解析拖住。默认实现退化成整曲解析。</p>
+     */
+    default CompletableFuture<String> songCover(String id) {
+        return resolveSong(id).thenApply(TrackInfo::coverUrl);
+    }
+
     // ── 搜索 ────────────────────────────────────────────────────────
 
     CompletableFuture<List<SearchEntry>> searchSongs(String keyword);
 
     CompletableFuture<List<SearchEntry>> searchSongs(String keyword, int page);
+
+    /**
+     * 分页搜索歌曲，并带回总命中数。
+     *
+     * <p>默认实现退化为"只有本页条目、总数未知"（{@code total = -1}）。不是所有数据来源都能
+     * 给出总数，调用方必须用 {@link SearchPage#hasTotal()} 判断能否显示"共 N 首"，
+     * 拿不到就不要显示，而不是用本页条数冒充。</p>
+     */
+    default CompletableFuture<SearchPage> searchSongPage(String keyword, int page) {
+        return searchSongs(keyword, page).thenApply(entries -> new SearchPage(entries, -1));
+    }
 
     CompletableFuture<List<SearchEntry>> searchArtists(String keyword);
 
