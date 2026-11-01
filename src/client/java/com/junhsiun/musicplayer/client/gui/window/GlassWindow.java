@@ -96,8 +96,13 @@ public final class GlassWindow {
         return windowBounds.inset(contentPaddingX, contentPaddingY);
     }
 
-    /** 开场动画在某一时刻的变换。 */
-    public WindowTransform transform(long elapsedMillis) {
-        return opening.sampleAt(elapsedMillis);
+    /**
+     * 开场动画在某一时刻的变换。
+     *
+     * @param elapsedMillis 已播放毫秒数
+     * @param travel        完全移出屏幕下边缘所需的垂直位移，由调用方按实际几何算出
+     */
+    public WindowTransform transform(long elapsedMillis, float travel) {
+        return opening.sampleAt(elapsedMillis, travel);
     }
 }

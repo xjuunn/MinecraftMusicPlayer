@@ -117,6 +117,22 @@ public record GlassStyle(
             4.0F, 1.00F, 5.0F,
             0.38F);
 
+    /**
+     * 复制本材质、只替换圆角半径。
+     *
+     * <p>用于让内嵌面板的圆角与容器圆角<b>同心</b>。两层圆角要重合，必须满足
+     * {@code 内层半径 = 外层半径 − 内层到外层的边距}：两者的圆心才会落在同一点。
+     * 内层半径若小于该值，两条弧线会在角落错开，看起来就是"圆角不一致"。</p>
+     *
+     * <p>这里只改 {@code radius}，其余参数（染色、光学、高光）保持不变，
+     * 因此拿来画"窗口里的一层"时视觉上仍是同一种玻璃。</p>
+     */
+    public GlassStyle withRadius(float value) {
+        return new GlassStyle(value, tintR, tintG, tintB, tintA, maxLuma, saturation,
+                refraction, dispersion, centerDispersion, highlight, shadow, fallback,
+                opacity, aDistance, contraRatio, shrink, edgeLight);
+    }
+
     public GlassStyle {
         radius = Math.max(0.0F, radius);
         maxLuma = Math.max(0.0F, maxLuma);

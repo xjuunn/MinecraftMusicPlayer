@@ -86,11 +86,13 @@ public final class MusicPlayerMod implements ModInitializer {
             ItemStack heldStack = player.getItemInHand(hand);
 
             if (MusicDiscHelper.isDiscMaster(heldStack)) {
-                // 客户端放行，交给客户端监听器打开界面；服务端只吞掉这次交互，不发任何提示
-                if (world.isClientSide()) {
-                    return InteractionResult.PASS;
-                }
-                return InteractionResult.SUCCESS;
+                // 手持唱片母版：不要在这里返回 SUCCESS。UseBlockCallback 返回 SUCCESS
+                // 会取消这次方块交互，服务端就不会去开箱子 / 用工作台 / 发射器等，
+                // 表现为"手持母版时所有可右键方块都失灵"。
+                //
+                // 界面由客户端 UseItemCallback 打开，本回调对方块交互一律放行。
+                // 母版本身没有方块交互行为，放行不会产生副作用。
+                return InteractionResult.PASS;
             }
 
             if (MusicDiscHelper.isPendingDisc(heldStack)) {
@@ -123,6 +125,8 @@ public final class MusicPlayerMod implements ModInitializer {
                 return InteractionResult.PASS;
             }
             if (MusicDiscHelper.isDiscMaster(player.getItemInHand(hand))) {
+                // 右键空气时吞掉这次使用，避免母版被当成普通物品走后续流程；
+                // 界面在客户端打开，这里不需要做任何事。
                 return InteractionResult.SUCCESS;
             }
             if (MusicDiscHelper.isPendingDisc(player.getItemInHand(hand))) {
