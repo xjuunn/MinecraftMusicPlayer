@@ -205,6 +205,12 @@ public final class ClientJukeboxController {
         handle.coverUrl = coverUrl == null ? "" : coverUrl;
         handle.startedAtMillis = System.currentTimeMillis();
         CoverArtTextureCache.getInstance().request(handle.coverUrl);
+        if (handle.coverUrl.isBlank()) {
+            // 空封面会让唱片只剩黑色盘面。记一行日志，方便区分"没下发网址"和"下载失败"
+            // （下载失败由 CoverArtTextureCache 自己打 WARN）
+            MusicPlayerMod.LOGGER.info("Jukebox {} is playing without a cover url: {} - {}",
+                    jukeboxPos, handle.title, handle.subtitle);
+        }
         silenceVanillaJukeboxSound(jukeboxPos, "custom play payload");
         showNowPlaying(handle.title, handle.subtitle);
         stopVanillaBackgroundMusic();
@@ -231,7 +237,10 @@ public final class ClientJukeboxController {
         if (subtitle != null && !subtitle.isBlank()) {
             handle.subtitle = subtitle;
         }
-        if (coverUrl != null && !coverUrl.isBlank() && handle.coverUrl.isBlank()) {
+        // 封面只要<b>变了</b>就更新。早先写成"仅在当前封面为空时才采纳"，
+        // 于是唱片机播放列表自动切歌时（服务端推 refresh 而不是 play），
+        // 唱片会一直显示上一首的封面，或者在没有封面时一直空着。
+        if (coverUrl != null && !coverUrl.isBlank() && !coverUrl.equals(handle.coverUrl)) {
             handle.coverUrl = coverUrl;
             CoverArtTextureCache.getInstance().request(coverUrl);
         }

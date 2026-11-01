@@ -1,9 +1,11 @@
 package com.junhsiun.musicplayer.client.gui.glass.widget;
 
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
@@ -27,10 +29,41 @@ public class GlassSearchField extends EditBox {
 
     /** 胶囊底与其内容的水平内边距。 */
     private static final int INSET = 8;
+    /**
+     * 放大镜图标的边长（正方形，对应 SVG 的 1em 视口）。
+     *
+     * <p>取 12 是为了让像素画的方块落在整像素上：图标的每个方块是 2 个 viewBox 单位，
+     * {@code 2 / 24 × 12 = 1} 个 GUI 像素，放大到设备分辨率后是干净的 2×2 / 4×4 方块；
+     * 取 10 的话方块是 0.83 像素，会出现有的方块 1 像素、有的 2 像素的参差。</p>
+     */
+    private static final int ICON_SIZE = 12;
     /** 放大镜与文字之间的间距。 */
     private static final int GAP = 6;
     /** 文字起点相对胶囊左边缘的偏移量。 */
-    private static final int TEXT_OFFSET = INSET + 8 + GAP - 4;
+    private static final int TEXT_OFFSET = INSET + ICON_SIZE + GAP;
+
+    /** SVG 视口边长。 */
+    private static final float VIEW_BOX = 24.0F;
+    /**
+     * 放大镜的矩形表，取自 SVG 路径 {@code {x0, y0, x1, y1}}，单位为 viewBox。
+     *
+     * <p>这是像素画风图标：全部由 2×2 的实心方块拼成，没有描边也没有曲线，
+     * 所以不需要抗锯齿——按矩形原样画出来就是它该有的样子。
+     * 顺序：镜片顶边、四个角、左右两条边、底边，再加斜柄的三级台阶。</p>
+     */
+    private static final int[][] ICON_RECTS = {
+            {6, 2, 14, 4},     // 顶边
+            {4, 4, 6, 6},      // 左上角
+            {14, 4, 16, 6},    // 右上角
+            {2, 6, 4, 14},     // 左边
+            {16, 6, 18, 14},   // 右边
+            {4, 14, 6, 16},    // 左下角
+            {14, 14, 16, 16},  // 右下角
+            {6, 16, 14, 18},   // 底边
+            {16, 16, 18, 18},  // 斜柄（三级台阶，接在右下角外侧）
+            {18, 18, 20, 20},
+            {20, 20, 22, 22}
+    };
 
     private final GlassWidgets.Spring hover = new GlassWidgets.Spring();
 
@@ -58,6 +91,32 @@ public class GlassSearchField extends EditBox {
                 && mouseY >= getY() && mouseY < getY() + height;
     }
 
+    /**
+     * 有焦点时把按键拦下来，不让它变成界面快捷键。
+     *
+     * <p>输入框有焦点时玩家是在<b>打字</b>：字母 E 必须当成一个字符，而不是"背包键"。
+     * 之前 {@code GlassWindowScreen} 把背包键接成了关闭窗口，于是输入框里敲个 e
+     * 整个界面就没了。这里把 {@link EditBox} 没消费的按键一律吃掉。</p>
+     *
+     * <p>放行两类：Esc 根本到不了这里——{@code Screen.keyPressed} 在委托给控件之前
+     * 就处理了关闭；Tab 是焦点导航（切到「搜索」按钮），需要留给基类。</p>
+     *
+     * <p>F1/F3/F11 这类全局键由 {@code KeyboardHandler} 处理，不经过界面，不受影响。</p>
+     */
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (super.keyPressed(event)) {
+            return true;
+        }
+        if (!isFocused()) {
+            return false;
+        }
+        if (event.key() == InputConstants.KEY_TAB || event.keycode() == InputConstants.KEYCODE_TAB) {
+            return false;
+        }
+        return true;
+    }
+
     @Override
     public void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
         boolean usable = isActive();
@@ -78,7 +137,7 @@ public class GlassSearchField extends EditBox {
         // 叠一层很淡的暗底：搜索框要在窗口表面上有明确边界，否则和卡片底色糊在一起
         GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, 0x000000, 0x000000, radius, 0.10F, 1.0F);
 
-        drawMagnifier(graphics, x0 + INSET, (y0 + y1) / 2,
+        drawMagnifier(graphics, x0 + INSET, (y0 + y1) / 2 - ICON_SIZE / 2,
                 getValue().isEmpty() && !isFocused() ? GlassTheme.TEXT_SECONDARY : GlassTheme.TEXT);
 
         // 文字垂直居中：EditBox 关掉边框后文字画在 getY()，把画笔整体下移即可
@@ -88,18 +147,28 @@ public class GlassSearchField extends EditBox {
         graphics.pose().popMatrix();
     }
 
-    /** 放大镜：4 段粗线画圆环 + 一条斜柄，省掉一张贴图。 */
-    private static void drawMagnifier(GuiGraphicsExtractor graphics, int centerX, int centerY, int color) {
-        int radius = 3;
-        int left = centerX - radius;
-        int top = centerY - radius - 1;
-        int right = left + radius * 2;
-        int bottom = top + radius * 2;
-        graphics.fill(left, top, right, top + 1, color);
-        graphics.fill(left, bottom - 1, right, bottom, color);
-        graphics.fill(left, top, left + 1, bottom, color);
-        graphics.fill(right - 1, top, right, bottom, color);
-        graphics.fill(right - 1, bottom - 1, right + 2, bottom, color);
-        graphics.fill(right + 1, bottom, right + 3, bottom + 1, color);
+    /**
+     * 放大镜图标。
+     *
+     * <p>按给定的像素画 SVG 绘制：{@code viewBox 0 0 24 24}，形状是 {@link #ICON_RECTS}
+     * 里那 11 个 2×2 的实心方块（圆角方形镜片 + 45° 阶梯斜柄）。坐标都是 viewBox 整数，
+     * 所以直接用一个缩放位姿把 viewBox 映射到 {@link #ICON_SIZE} 见方，再按矩形填充——
+     * 顶点按设备分辨率光栅化，小尺寸下依然是硬边，正是像素画该有的效果。</p>
+     */
+    private static void drawMagnifier(GuiGraphicsExtractor graphics, int left, int top, int color) {
+        int alpha = (color >>> 24) & 0xFF;
+        int rgb = color & 0xFFFFFF;
+        if (alpha <= 0) {
+            return;
+        }
+        int argb = alpha << 24 | rgb;
+        float scale = ICON_SIZE / VIEW_BOX;
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(left, top);
+        graphics.pose().scale(scale, scale);
+        for (int[] rect : ICON_RECTS) {
+            graphics.fill(rect[0], rect[1], rect[2], rect[3], argb);
+        }
+        graphics.pose().popMatrix();
     }
 }

@@ -63,6 +63,7 @@
   "musicplayer.discmaster.loading": "正在搜索...",
   "musicplayer.discmaster.failed": "搜索失败: %s",
   "musicplayer.discmaster.count": "共 %s 首 · 第 %s 页",
+  "musicplayer.discmaster.page": "第 %s 页",
   "musicplayer.discmaster.burn": "刻录",
   "musicplayer.discmaster.burn_wait": "刻录中",
   "musicplayer.discmaster.burning": "正在刻录唱片母版，请稍候...",

@@ -14,6 +14,7 @@ import com.junhsiun.musicplayer.model.RadioInfo;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.model.UserPlaylistView;
+import com.junhsiun.musicplayer.platform.api.MusicApi;
 import com.junhsiun.musicplayer.platform.url.ByfunsUrlProvider;
 import com.junhsiun.musicplayer.platform.url.MycelisUrlProvider;
 import com.junhsiun.musicplayer.platform.url.QijieyaUrlProvider;
@@ -198,6 +199,11 @@ public final class NeteaseApiClient {
 
     public CompletableFuture<TrackInfo> resolveRadioSong(String id) {
         return resolveTrackDetail(id);
+    }
+
+    /** 只取封面地址，不解析直链（直链解析可能很慢，封面等不起）。 */
+    public CompletableFuture<String> songCover(String id) {
+        return songDetail(id).thenApply(TrackInfo::coverUrl);
     }
 
     private CompletableFuture<TrackInfo> resolveTrackDetail(String id) {
@@ -467,7 +473,15 @@ public final class NeteaseApiClient {
         }, executor());
     }
 
+    public CompletableFuture<MusicApi.SearchPage> searchSongPage(String keyword, int page) {
+        return searchPage(keyword, SEARCH_TYPE_SONG, page);
+    }
+
     private CompletableFuture<List<SearchEntry>> search(String keyword, int type, int page) {
+        return searchPage(keyword, type, page).thenApply(MusicApi.SearchPage::entries);
+    }
+
+    private CompletableFuture<MusicApi.SearchPage> searchPage(String keyword, int type, int page) {
         MusicPlayerConfig config = MusicPlayerConfigManager.get();
         int safePage = Math.max(1, page);
         int offset = (safePage - 1) * config.searchLimit;
@@ -489,7 +503,7 @@ public final class NeteaseApiClient {
                 default -> new JsonArray();
             };
             if (list == null) {
-                return entries;
+                return new MusicApi.SearchPage(entries, totalOf(result, type));
             }
 
             for (JsonElement elem : list) {
@@ -544,8 +558,18 @@ public final class NeteaseApiClient {
                     ));
                 }
             }
-            return entries;
+            return new MusicApi.SearchPage(entries, totalOf(result, type));
         });
+    }
+
+    /**
+     * 总命中数。
+     *
+     * <p>只有歌曲搜索读 {@code result.songCount}；其它类型的计数字段各不相同，
+     * 不在这里猜，一律返回 -1 让上层隐藏总数。</p>
+     */
+    private static int totalOf(JsonObject result, int type) {
+        return type == SEARCH_TYPE_SONG ? (int) lng(result, "songCount") : -1;
     }
 
     private CompletableFuture<TrackInfo> songDetail(String id) {
