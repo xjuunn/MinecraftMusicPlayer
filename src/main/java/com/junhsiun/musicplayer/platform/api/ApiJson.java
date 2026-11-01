@@ -98,8 +98,20 @@ public final class ApiJson {
         return duration > 0L ? duration : lng(song, "duration");
     }
 
-    private static String firstOf(JsonObject parent, String arrayKey, String fieldKey) {
-        JsonArray array = arr(parent, arrayKey);
+    /**
+     * 读取"可能是对象、也可能是数组"的字段里的某个子字段。
+     *
+     * <p>网易云对同一概念有两种写法：歌手是数组（{@code ar}/{@code artists}），
+     * 而专辑是<b>对象</b>（{@code al}/{@code album}）。早先这里只按数组读，
+     * 于是 {@code al} 这种对象一律读不到，专辑封面和专辑名恒为空——
+     * 封面在刻录时就是空串，之后无论怎么下载都不可能显示。</p>
+     */
+    private static String firstOf(JsonObject parent, String key, String fieldKey) {
+        JsonObject node = obj(parent, key);
+        if (node != null) {
+            return str(node, fieldKey);
+        }
+        JsonArray array = arr(parent, key);
         if (array == null || array.isEmpty() || !array.get(0).isJsonObject()) return "";
         return str(array.get(0).getAsJsonObject(), fieldKey);
     }

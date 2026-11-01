@@ -15,10 +15,12 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -31,6 +33,18 @@ public final class CoverArtTextureCache {
     private static final int MAX_IMAGE_DIMENSION = 4096;
     /** 处理后纹理最大边长：唱片封面在世界中显示尺寸很小，上传也发生在渲染线程，必须封顶。 */
     private static final int MAX_PROCESSED_DIMENSION = 512;
+    /**
+     * 向图床要的边长。
+     *
+     * <p>唱片在世界里只有 0.68 格宽，256 已经够用；而原始封面常常是 1000+ 像素、
+     * 几百 KB（实测有 616 KB 的），弱网下这就是"先黑几秒"的主要来源。
+     * 网易图床支持 {@code ?param=WxH} 服务端缩放，同一张图 256 只要几十 KB。</p>
+     */
+    private static final int REQUEST_DIMENSION = 256;
+    /** 失败后的重试冷却（毫秒）。 */
+    private static final long RETRY_COOLDOWN_MILLIS = 5000L;
+    /** 下载卡住的判定时间（毫秒）：超过它仍是 pending 就允许重新下载。 */
+    private static final long PENDING_TIMEOUT_MILLIS = 15000L;
     private static final CoverArtTextureCache INSTANCE = new CoverArtTextureCache();
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
@@ -39,6 +53,8 @@ public final class CoverArtTextureCache {
         return thread;
     });
     private final Map<String, CacheEntry> entries = new LinkedHashMap<>(16, 0.75F, true);
+    /** 请求世代号：用于识别"在途下载已被新一轮重试取代"的情况。 */
+    private long nextToken;
 
     private CoverArtTextureCache() {
     }
@@ -47,6 +63,14 @@ public final class CoverArtTextureCache {
         return INSTANCE;
     }
 
+    /**
+     * 请求下载并注册一张封面。
+     *
+     * <p>已经处于 pending 或 ready 的条目直接返回。失败条目与卡死的 pending 条目
+     * 在冷却后<b>允许重新下载</b>：渲染器每帧都会调本方法，如果失败一次就永久放弃，
+     * 玩家会看到唱片一直缺封面，只能重进存档才能恢复——这正是"封面时有时无"的来源。
+     * 重试有冷却，避免离线时每帧都发起一次必然失败的请求。</p>
+     */
     public synchronized void request(String coverUrl) {
         if (coverUrl == null || coverUrl.isBlank()) {
             return;
@@ -56,12 +80,18 @@ public final class CoverArtTextureCache {
         }
         CacheEntry existing = entries.get(coverUrl);
         if (existing != null) {
-            return;
+            if (existing.loading() && !existing.isStale()) {
+                return;
+            }
+            if (!existing.loading() && !existing.canRetry()) {
+                return;
+            }
         }
         MusicPlayerMod.LOGGER.debug("Requesting cover art: {}", coverUrl);
-        entries.put(coverUrl, CacheEntry.pending());
+        long token = nextToken++;
+        entries.put(coverUrl, CacheEntry.pending(token));
         try {
-            executor.execute(() -> downloadAndRegister(coverUrl));
+            executor.execute(() -> downloadAndRegister(coverUrl, token));
         } catch (java.util.concurrent.RejectedExecutionException e) {
             entries.remove(coverUrl);
         }
@@ -87,11 +117,12 @@ public final class CoverArtTextureCache {
         executor.shutdown();
     }
 
-    private void downloadAndRegister(String coverUrl) {
+    private void downloadAndRegister(String coverUrl, long token) {
+        long startedNanos = System.nanoTime();
         try {
             OkHttpClient client = HttpClientFactory.create();
             Request request = new Request.Builder()
-                    .url(coverUrl)
+                    .url(downloadUrl(coverUrl))
                     .header("User-Agent", "MinecraftMusicPlayer/" + com.junhsiun.musicplayer.MusicPlayerMod.VERSION)
                     .get()
                     .build();
@@ -121,24 +152,27 @@ public final class CoverArtTextureCache {
                 }
                 NativeImage processedImage = toCircularTexture(image);
                 Identifier textureId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "cover/" + hashUrl(coverUrl));
-                Minecraft.getInstance().execute(() -> registerTexture(coverUrl, textureId, processedImage));
+                Minecraft.getInstance().execute(() -> registerTexture(coverUrl, token, textureId, processedImage, startedNanos));
             }
         } catch (Exception exception) {
             synchronized (this) {
-                if (entries.containsKey(coverUrl)) {
-                    entries.put(coverUrl, CacheEntry.failure());
+                // 只有当条目还是本次请求时才能标记失败：期间可能已经被 clear() 清掉，
+                // 或者被新一轮重试取代
+                CacheEntry current = entries.get(coverUrl);
+                if (current != null && current.token() == token) {
+                    entries.put(coverUrl, CacheEntry.failure(token));
                 }
             }
             MusicPlayerMod.LOGGER.warn("Failed to download cover art: {}", coverUrl, exception);
         }
     }
 
-    private synchronized void registerTexture(String coverUrl, Identifier textureId, NativeImage image) {
+    private synchronized void registerTexture(String coverUrl, long token, Identifier textureId, NativeImage image, long startedNanos) {
         Minecraft client = Minecraft.getInstance();
         try {
-            // clear() 期间在途下载完成：直接释放纹理，避免泄漏
+            // clear() 期间、或被新一轮重试取代的在途下载：直接释放纹理，避免泄漏
             CacheEntry current = entries.get(coverUrl);
-            if (current == null || !current.loading()) {
+            if (current == null || !current.loading() || current.token() != token) {
                 client.getTextureManager().release(textureId);
                 image.close();
                 return;
@@ -146,7 +180,12 @@ public final class CoverArtTextureCache {
             TextureResources texture = TextureResources.from2dImage(() -> "musicplayer_cover", image);
             client.getTextureManager().register(textureId, texture);
             entries.put(coverUrl, CacheEntry.ready(textureId));
-            MusicPlayerMod.LOGGER.debug("Registered cover art texture: {} -> {}", coverUrl, textureId);
+            // 用 INFO 而不是 DEBUG：这一行是"封面到底有没有下载成功"的唯一证据。
+            // 默认日志级别下 DEBUG 不会打印，出问题时就看不出是没下载、还是下载了但没画出来。
+            // 每个 URL 每个会话只会打印一次（命中缓存后 request 直接返回）。
+            // 带上耗时，方便判断"黑几秒"到底是网络还是别的地方。
+            MusicPlayerMod.LOGGER.info("Cover art ready in {} ms: {} -> {}",
+                    (System.nanoTime() - startedNanos) / 1_000_000L, coverUrl, textureId);
 
             while (entries.size() > MAX_CACHE_SIZE) {
                 String eldestKey = entries.keySet().iterator().next();
@@ -156,7 +195,7 @@ public final class CoverArtTextureCache {
                 }
             }
         } catch (Exception exception) {
-            entries.put(coverUrl, CacheEntry.failure());
+            entries.put(coverUrl, CacheEntry.failure(token));
             image.close();
             MusicPlayerMod.LOGGER.warn("Failed to register cover art texture: {}", coverUrl, exception);
         }
@@ -220,6 +259,36 @@ public final class CoverArtTextureCache {
         return result;
     }
 
+    /**
+     * 实际下载用的地址。
+     *
+     * <p>网易云图床支持 {@code ?param=WxH} 服务端缩放：原始封面常常上千像素、几百 KB，
+     * 而唱片在游戏里只有 0.68 格宽，要一张 256 的只要几十 KB，弱网下差距就是"几秒"
+     * 和"零点几秒"。只对网易图床加这个参数，其它来源（自建代理、本地地址）原样请求，
+     * 免得给不认识这个参数的服务器拼上奇怪的查询串。</p>
+     *
+     * <p>缓存键与纹理 ID 仍然按<b>原始</b>地址算，同一张封面只会有一份纹理。</p>
+     */
+    private static String downloadUrl(String coverUrl) {
+        if (coverUrl.indexOf('?') >= 0) {
+            return coverUrl;
+        }
+        String host;
+        try {
+            host = URI.create(coverUrl).getHost();
+        } catch (IllegalArgumentException exception) {
+            return coverUrl;
+        }
+        if (host == null) {
+            return coverUrl;
+        }
+        String normalized = host.toLowerCase(Locale.ROOT);
+        if (!normalized.equals("music.126.net") && !normalized.endsWith(".music.126.net")) {
+            return coverUrl;
+        }
+        return coverUrl + "?param=" + REQUEST_DIMENSION + "y" + REQUEST_DIMENSION;
+    }
+
     private static String hashUrl(String url) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -241,17 +310,27 @@ public final class CoverArtTextureCache {
         return Math.min(1.0F, value);
     }
 
-    private record CacheEntry(Identifier textureId, boolean loading, boolean failed) {
-        public static CacheEntry pending() {
-            return new CacheEntry(null, true, false);
+    private record CacheEntry(Identifier textureId, boolean loading, boolean failed, long token, long stampMillis) {
+        public static CacheEntry pending(long token) {
+            return new CacheEntry(null, true, false, token, System.currentTimeMillis());
         }
 
         public static CacheEntry ready(Identifier textureId) {
-            return new CacheEntry(textureId, false, false);
+            return new CacheEntry(textureId, false, false, 0L, System.currentTimeMillis());
         }
 
-        public static CacheEntry failure() {
-            return new CacheEntry(null, false, true);
+        public static CacheEntry failure(long token) {
+            return new CacheEntry(null, false, true, token, System.currentTimeMillis());
+        }
+
+        /** 下载卡住（超过 {@link #PENDING_TIMEOUT_MILLIS} 仍未完成）：允许重新发起。 */
+        public boolean isStale() {
+            return System.currentTimeMillis() - stampMillis > PENDING_TIMEOUT_MILLIS;
+        }
+
+        /** 失败后经过冷却期才允许重试，避免离线时每帧都发一次必然失败的请求。 */
+        public boolean canRetry() {
+            return failed && System.currentTimeMillis() - stampMillis >= RETRY_COOLDOWN_MILLIS;
         }
     }
 }

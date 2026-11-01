@@ -159,6 +159,11 @@ public final class MusicApiRouter implements MusicApi {
     }
 
     @Override
+    public CompletableFuture<String> songCover(String id) {
+        return dispatch(api -> api.songCover(id), api -> api.songCover(id));
+    }
+
+    @Override
     public CompletableFuture<TrackInfo> resolveRadioSong(String id) {
         return dispatch(api -> api.resolveRadioSong(id), api -> api.resolveRadioSong(id));
     }
@@ -173,6 +178,11 @@ public final class MusicApiRouter implements MusicApi {
     @Override
     public CompletableFuture<List<SearchEntry>> searchSongs(String keyword, int page) {
         return dispatch(api -> api.searchSongs(keyword, page), api -> api.searchSongs(keyword, page));
+    }
+
+    @Override
+    public CompletableFuture<SearchPage> searchSongPage(String keyword, int page) {
+        return dispatch(api -> api.searchSongPage(keyword, page), api -> api.searchSongPage(keyword, page));
     }
 
     @Override
