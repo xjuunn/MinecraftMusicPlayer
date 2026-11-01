@@ -238,20 +238,48 @@ public class GlassListView extends AbstractWidget {
         graphics.disableScissor();
     }
 
-    /** 主文本 + 次文本，按可用宽度截断；截断处补省略号。 */
+    /**
+     * 主文本 + 次文本。
+     *
+     * <p>窗口做窄之后不能再把两者拼成一个字符串统一截断：那样歌名一长，作者就被整段吃掉，
+     * 连"这里有作者"都看不出来。这里分开处理——</p>
+     * <ul>
+     *   <li>歌名放不下：截断歌名并补省略号，次文本直接不画；</li>
+     *   <li>歌名放得下：剩余宽度够放次文本才画，放不下就只留歌名。</li>
+     * </ul>
+     */
     private void drawRowText(GuiGraphicsExtractor graphics, Font font, Row row, int x, int y) {
-        Font used = font;
         String title = row.title() == null ? "" : row.title().getString();
         String detail = row.detail() == null ? "" : row.detail().getString();
-        String plain = detail.isBlank() ? title : title + "  ·  " + detail;
-
         int available = Math.round((actionX0() - x - 6) / TEXT_SCALE);
-        String clipped = used.plainSubstrByWidth(plain, Math.max(0, available));
-        if (clipped.length() < plain.length()) {
-            String ellipsis = "…";
-            clipped = used.plainSubstrByWidth(plain, Math.max(0, available - used.width(ellipsis))) + ellipsis;
+        if (available <= 0) {
+            return;
         }
-        GlassWidgets.text(graphics, used, Component.literal(clipped), x, y, GlassTheme.TEXT, TEXT_SCALE);
+
+        String line;
+        int titleWidth = font.width(title);
+        if (titleWidth >= available) {
+            line = ellipsize(font, title, available);
+        } else if (detail.isBlank()) {
+            line = title;
+        } else {
+            String separator = "  ·  ";
+            int room = available - titleWidth - font.width(separator);
+            // 剩余宽度连一个字都放不下就别硬塞，只显示歌名
+            line = room >= font.width("字")
+                    ? title + separator + ellipsize(font, detail, room)
+                    : title;
+        }
+        GlassWidgets.text(graphics, font, Component.literal(line), x, y, GlassTheme.TEXT, TEXT_SCALE);
+    }
+
+    /** 按像素宽度截断，超出部分换成省略号。 */
+    private static String ellipsize(Font font, String text, int width) {
+        if (font.width(text) <= width) {
+            return text;
+        }
+        String ellipsis = "…";
+        return font.plainSubstrByWidth(text, Math.max(0, width - font.width(ellipsis))) + ellipsis;
     }
 
     private void drawScrollbar(GuiGraphicsExtractor graphics, int x1, int y0, int y1) {

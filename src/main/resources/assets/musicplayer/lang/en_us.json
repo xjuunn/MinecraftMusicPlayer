@@ -63,6 +63,7 @@
   "musicplayer.discmaster.loading": "Searching...",
   "musicplayer.discmaster.failed": "Search failed: %s",
   "musicplayer.discmaster.count": "%s results · page %s",
+  "musicplayer.discmaster.page": "Page %s",
   "musicplayer.discmaster.burn": "Burn",
   "musicplayer.discmaster.burn_wait": "Burning",
   "musicplayer.discmaster.burning": "Burning the disc master, please wait...",

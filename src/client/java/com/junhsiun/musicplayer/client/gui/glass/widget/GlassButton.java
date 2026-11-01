@@ -78,16 +78,24 @@ public class GlassButton extends AbstractButton {
         int x1 = x0 + width;
         int y1 = y0 + height;
         boolean prominent = kind == Kind.PROMINENT;
+        // 与玻璃的 SDF 用同一套圆角规则：着色器取 min(材质半径, 半宽, 半高)。
+        // 叠加层若用固定的小半径，胶囊按钮外面会多出一圈圆角矩形，看着像"包了一层"。
+        float radius = Math.min(GlassTheme.BUTTON.radius(), Math.min(width * 0.5F, height * 0.5F));
 
         if (!GlassWidgets.glassBackground(graphics, x0, y0, x1, y1, GlassTheme.BUTTON, lift, down)) {
             // 退化：半透明白片
             GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, 0xFFFFFF, 0x000000,
-                    GlassTheme.Sizes.RADIUS, 0.55F, 1.0F - 0.03F * down);
+                    radius, 0.55F, 1.0F - 0.03F * down);
         }
-        // 强调款在玻璃上再叠系统蓝
+        // 强调款在玻璃上叠一层<b>半透明</b>系统蓝。
+        //
+        // 不透明度必须低：玻璃的折射、色散和边缘高光都在材质本身，一旦用接近实色的
+        // 叠加盖上去，这些光学响应就全被压掉，按钮会变成一块实心蓝色圆角块，
+        // 也就是"强调按钮不是液态玻璃"的观感来源。这里保留三成左右的染色，
+        // 背景仍能透过来并被折射。
         if (prominent) {
             GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, GlassTheme.ACCENT, GlassTheme.ACCENT,
-                    GlassTheme.Sizes.RADIUS, 0.92F, 1.0F - 0.03F * down);
+                    radius, 0.32F + 0.08F * lift, 1.0F - 0.03F * down);
         }
 
         // 文字永远是白色，不随背景变化

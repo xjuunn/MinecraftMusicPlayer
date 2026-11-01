@@ -99,6 +99,12 @@ public final class DirectMusicApi implements MusicApi {
         return resolveTrack(id);
     }
 
+    @Override
+    public CompletableFuture<String> songCover(String id) {
+        // 只查详情：详情接口几百毫秒就能带回 al.picUrl，不必等直链解析
+        return async(() -> songDetailSync(id).coverUrl());
+    }
+
     private CompletableFuture<TrackInfo> resolveTrack(String id) {
         // 详情与直链互不依赖，并行发起；此处不阻塞线程池
         CompletableFuture<TrackInfo> detailFuture = async(() -> songDetailSync(id));
@@ -186,7 +192,16 @@ public final class DirectMusicApi implements MusicApi {
         return search(keyword, SEARCH_TYPE_RADIO, page);
     }
 
+    @Override
+    public CompletableFuture<SearchPage> searchSongPage(String keyword, int page) {
+        return searchPage(keyword, SEARCH_TYPE_SONG, page);
+    }
+
     private CompletableFuture<List<SearchEntry>> search(String keyword, int type, int page) {
+        return searchPage(keyword, type, page).thenApply(SearchPage::entries);
+    }
+
+    private CompletableFuture<SearchPage> searchPage(String keyword, int type, int page) {
         int limit = Math.max(1, MusicPlayerConfigManager.get().searchLimit);
         int offset = (Math.max(1, page) - 1) * limit;
         return async(() -> {
@@ -206,7 +221,7 @@ public final class DirectMusicApi implements MusicApi {
             };
             List<SearchEntry> entries = new ArrayList<>();
             if (list == null) {
-                return entries;
+                return new SearchPage(entries, totalOf(result, type));
             }
             for (JsonElement element : list) {
                 if (!element.isJsonObject()) continue;
@@ -216,8 +231,19 @@ public final class DirectMusicApi implements MusicApi {
                     entries.add(entry);
                 }
             }
-            return entries;
+            return new SearchPage(entries, totalOf(result, type));
         });
+    }
+
+    /**
+     * 总命中数。
+     *
+     * <p>只有歌曲搜索读 {@code result.songCount}（已按实际接口核对过字段名）。
+     * 其它类型的计数字段各不相同（{@code artistCount}、{@code playlistCount} 等），
+     * 不在这里猜，一律返回 -1 让上层隐藏总数。</p>
+     */
+    private static int totalOf(JsonObject result, int type) {
+        return type == SEARCH_TYPE_SONG ? ApiJson.intVal(result, "songCount") : -1;
     }
 
     private static SearchEntry toSearchEntry(JsonObject node, int type) {
