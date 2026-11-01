@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "musicplayer:item/jukebox_vanilla"
+  }
+}

@@ -31,16 +31,42 @@ public final class CoverArtTextureCache {
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
     /** 封面解码最大边长，防止超大图触发 OOM。 */
     private static final int MAX_IMAGE_DIMENSION = 4096;
-    /** 处理后纹理最大边长：唱片封面在世界中显示尺寸很小，上传也发生在渲染线程，必须封顶。 */
-    private static final int MAX_PROCESSED_DIMENSION = 512;
+    /**
+     * 封面纹理尺寸：与唱片机侧面显示区域同比例（贴图上是 10×10 像素，正方形）。
+     *
+     * <p>画布保持正方形；封面按原比例缩放后居中放进去，空出来的部分填黑。</p>
+     */
+    private static final int COVER_WIDTH = 500;
+    private static final int COVER_HEIGHT = 500;
+    /** 显示区域是 10×10 个材质像素，画布按整数倍放大，方便按像素格子抠图。 */
+    private static final int COVER_CELLS = 10;
+    private static final int COVER_CELL_SIZE = COVER_WIDTH / COVER_CELLS;
+    /** 留黑边的底色（不透明纯黑）。 */
+    private static final int LETTERBOX_COLOR = 0xFF000000;
+    /**
+     * 需要抠成透明的格子（列, 行，0 基，相对显示区域左上角）。
+     *
+     * <p>唱片机材质在那两处是圆角/边框，抠掉之后就能看到唱片机本身的材质：
+     * 第一行左右各 2 格，第二行左右各 1 格。</p>
+     */
+    private static final int[][] TRANSPARENT_CELLS = {
+            {0, 0}, {1, 0}, {8, 0}, {9, 0},
+            {0, 1}, {9, 1}
+    };
+    /** 内阴影/反光的参数（单位：材质像素格）。 */
+    private static final float INSET_TOP_CELLS = 1.8F;
+    private static final float INSET_TOP_STRENGTH = 0.45F;
+    private static final float INSET_BOTTOM_CELLS = 1.4F;
+    private static final float INSET_BOTTOM_STRENGTH = 0.10F;
+    private static final float INSET_SIDE_CELLS = 1.0F;
+    private static final float INSET_SIDE_STRENGTH = 0.22F;
     /**
      * 向图床要的边长。
      *
-     * <p>唱片在世界里只有 0.68 格宽，256 已经够用；而原始封面常常是 1000+ 像素、
-     * 几百 KB（实测有 616 KB 的），弱网下这就是"先黑几秒"的主要来源。
-     * 网易图床支持 {@code ?param=WxH} 服务端缩放，同一张图 256 只要几十 KB。</p>
+     * <p>封面在近处大约占 300×430 屏幕像素，纹理按 500×500 做；源图要 512 才不会因为
+     * 放大而发糊。网易图床支持 {@code ?param=WxH} 服务端缩放。</p>
      */
-    private static final int REQUEST_DIMENSION = 256;
+    private static final int REQUEST_DIMENSION = 512;
     /** 失败后的重试冷却（毫秒）。 */
     private static final long RETRY_COOLDOWN_MILLIS = 5000L;
     /** 下载卡住的判定时间（毫秒）：超过它仍是 pending 就允许重新下载。 */
@@ -150,7 +176,7 @@ public final class CoverArtTextureCache {
                         || image.getWidth() > MAX_IMAGE_DIMENSION || image.getHeight() > MAX_IMAGE_DIMENSION) {
                     throw new IOException("Image dimensions out of range: " + image.getWidth() + "x" + image.getHeight());
                 }
-                NativeImage processedImage = toCircularTexture(image);
+                NativeImage processedImage = toCoverTexture(image);
                 Identifier textureId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "cover/" + hashUrl(coverUrl));
                 Minecraft.getInstance().execute(() -> registerTexture(coverUrl, token, textureId, processedImage, startedNanos));
             }
@@ -225,38 +251,108 @@ public final class CoverArtTextureCache {
         }
     }
 
-    private static NativeImage toCircularTexture(NativeImage source) {
-        int srcSize = Math.max(1, Math.min(source.getWidth(), source.getHeight()));
-        int offsetX = Math.max(0, (source.getWidth() - srcSize) / 2);
-        int offsetY = Math.max(0, (source.getHeight() - srcSize) / 2);
-        int size = Math.min(srcSize, MAX_PROCESSED_DIMENSION);
-        float center = (size - 1) / 2.0F;
-        float radius = size / 2.0F;
-        float feather = Math.max(1.5F, size * 0.03F);
+    /**
+     * 把原图按原比例缩放进正方形画布，居中显示，空出来的部分填黑，最后抠掉圆角。
+     *
+     * <p>不裁切：封面完整显示，避免把图片边缘切掉。宽高比不一致时，多出来的上下或左右
+     * 就留黑边。正方形封面（绝大多数）正好铺满，没有黑边。</p>
+     */
+    private static NativeImage toCoverTexture(NativeImage source) {
+        int srcWidth = Math.max(1, source.getWidth());
+        int srcHeight = Math.max(1, source.getHeight());
+        float srcAspect = (float) srcWidth / srcHeight;
+        float targetAspect = (float) COVER_WIDTH / COVER_HEIGHT;
 
-        NativeImage result = new NativeImage(size, size, true);
-        for (int y = 0; y < size; y++) {
-            int srcY = offsetY + y * srcSize / size;
-            for (int x = 0; x < size; x++) {
-                int srcX = offsetX + x * srcSize / size;
-                int color = source.getPixel(srcX, srcY);
-                float dx = x - center;
-                float dy = y - center;
-                float distance = (float) Math.sqrt(dx * dx + dy * dy);
-                float alphaFactor = clamp((radius - distance) / feather);
-                if (alphaFactor <= 0.0F) {
-                    result.setPixel(x, y, 0x00000000);
-                    continue;
-                }
-                int alpha = (color >>> 24) & 0xFF;
-                int red = (color >>> 16) & 0xFF;
-                int green = (color >>> 8) & 0xFF;
-                int blue = color & 0xFF;
-                int maskedAlpha = Math.min(255, Math.max(0, Math.round(alpha * alphaFactor)));
-                result.setPixel(x, y, (maskedAlpha << 24) | (red << 16) | (green << 8) | blue);
+        int drawWidth;
+        int drawHeight;
+        if (srcAspect > targetAspect) {
+            // 原图比区域更宽（正方形封面走这条）：左右铺满，上下留黑边
+            drawWidth = COVER_WIDTH;
+            drawHeight = Math.max(1, Math.round(COVER_WIDTH / srcAspect));
+        } else {
+            // 原图比区域更窄：上下铺满，左右留黑边
+            drawHeight = COVER_HEIGHT;
+            drawWidth = Math.max(1, Math.round(COVER_HEIGHT * srcAspect));
+        }
+        drawWidth = Math.min(drawWidth, COVER_WIDTH);
+        drawHeight = Math.min(drawHeight, COVER_HEIGHT);
+        int offsetX = (COVER_WIDTH - drawWidth) / 2;
+        int offsetY = (COVER_HEIGHT - drawHeight) / 2;
+
+        NativeImage result = new NativeImage(COVER_WIDTH, COVER_HEIGHT, true);
+        for (int y = 0; y < COVER_HEIGHT; y++) {
+            for (int x = 0; x < COVER_WIDTH; x++) {
+                result.setPixel(x, y, LETTERBOX_COLOR);
             }
         }
+        for (int y = 0; y < drawHeight; y++) {
+            int srcY = y * srcHeight / drawHeight;
+            for (int x = 0; x < drawWidth; x++) {
+                int srcX = x * srcWidth / drawWidth;
+                result.setPixel(offsetX + x, offsetY + y, source.getPixel(srcX, srcY));
+            }
+        }
+        clearCorners(result);
+        applyInsetShading(result);
         return result;
+    }
+
+    /**
+     * 给封面加一层"嵌进去"的明暗：顶部一道内阴影、左右轻微压暗、底部一点点反光。
+     *
+     * <p>光源按惯例在上方，所以凹槽的上内壁会挡住光、在封面顶部留下阴影，下内壁受光反射
+     * 到底部。配合整体压暗，看上去就像封面陷在唱片机内部，而不是贴在表面。</p>
+     */
+    private static void applyInsetShading(NativeImage image) {
+        for (int y = 0; y < COVER_HEIGHT; y++) {
+            float cellY = (y + 0.5F) / COVER_CELL_SIZE;
+            float topShadow = clamp01((INSET_TOP_CELLS - cellY) / INSET_TOP_CELLS) * INSET_TOP_STRENGTH;
+            float bottomLight = clamp01((cellY - (COVER_CELLS - INSET_BOTTOM_CELLS)) / INSET_BOTTOM_CELLS)
+                    * INSET_BOTTOM_STRENGTH;
+            for (int x = 0; x < COVER_WIDTH; x++) {
+                float cellX = (x + 0.5F) / COVER_CELL_SIZE;
+                float sideShadow = (clamp01(INSET_SIDE_CELLS - cellX)
+                        + clamp01(cellX - (COVER_CELLS - INSET_SIDE_CELLS))) * INSET_SIDE_STRENGTH;
+                float factor = 1.0F - topShadow - sideShadow + bottomLight;
+                if (factor >= 0.999F) {
+                    continue;
+                }
+                int color = image.getPixel(x, y);
+                int alpha = (color >>> 24) & 0xFF;
+                if (alpha == 0) {
+                    continue;
+                }
+                int red = scaleChannel((color >>> 16) & 0xFF, factor);
+                int green = scaleChannel((color >>> 8) & 0xFF, factor);
+                int blue = scaleChannel(color & 0xFF, factor);
+                image.setPixel(x, y, (alpha << 24) | (red << 16) | (green << 8) | blue);
+            }
+        }
+    }
+
+    private static float clamp01(float value) {
+        if (value < 0.0F) {
+            return 0.0F;
+        }
+        return Math.min(1.0F, value);
+    }
+
+    private static int scaleChannel(int channel, float factor) {
+        int scaled = Math.round(channel * factor);
+        return Math.max(0, Math.min(255, scaled));
+    }
+
+    /** 把 {@link #TRANSPARENT_CELLS} 列出的格子抠成全透明，露出唱片机本身的材质。 */
+    private static void clearCorners(NativeImage image) {
+        for (int[] cell : TRANSPARENT_CELLS) {
+            int startX = cell[0] * COVER_CELL_SIZE;
+            int startY = cell[1] * COVER_CELL_SIZE;
+            for (int y = startY; y < startY + COVER_CELL_SIZE; y++) {
+                for (int x = startX; x < startX + COVER_CELL_SIZE; x++) {
+                    image.setPixel(x, y, 0x00000000);
+                }
+            }
+        }
     }
 
     /**
@@ -301,13 +397,6 @@ public final class CoverArtTextureCache {
         } catch (NoSuchAlgorithmException e) {
             return Integer.toHexString(url.hashCode());
         }
-    }
-
-    private static float clamp(float value) {
-        if (value < 0.0F) {
-            return 0.0F;
-        }
-        return Math.min(1.0F, value);
     }
 
     private record CacheEntry(Identifier textureId, boolean loading, boolean failed, long token, long stampMillis) {
