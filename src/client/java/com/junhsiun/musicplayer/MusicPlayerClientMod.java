@@ -12,6 +12,7 @@ import com.junhsiun.musicplayer.client.gui.glass.GlassPanel;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.network.BgmConfigPayload;
+import com.junhsiun.musicplayer.network.DiscMasterBurnResultPayload;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.OpenUrlPayload;
@@ -74,6 +75,14 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(BgmConfigPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> ClientBgmController.getInstance()
                         .configureServer(payload.playlistId(), payload.baseUrl()))
+        );
+        WorldRenderEvents.AFTER_ENTITIES.register(JukeboxCoverRenderer::render);
+        ClientPlayNetworking.registerGlobalReceiver(DiscMasterBurnResultPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> {
+                    if (context.client().screen instanceof DiscMasterScreen screen) {
+                        screen.handleBurnResult(payload);
+                    }
+                })
         );
         WorldRenderEvents.AFTER_ENTITIES.register(JukeboxCoverRenderer::render);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
