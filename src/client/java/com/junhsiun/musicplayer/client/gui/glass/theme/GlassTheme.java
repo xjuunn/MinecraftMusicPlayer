@@ -75,6 +75,25 @@ public final class GlassTheme {
             2.0F, 1.10F, 3.5F,
             0.50F);
 
+    /**
+     * 输入框玻璃：搜索框这类"要长时间停留、里面还要写字"的控件。
+     *
+     * <p>比 {@link #BUTTON} 再收敛一档折射与色散。按钮上强折射会让它显得"活起来"，
+     * 但文字压在强折射背景上会发飘，读起来累。圆角同样给 32，由着色器夹到半高，
+     * 22 像素高的搜索框因此自动变成胶囊。</p>
+     */
+    public static final GlassStyle FIELD = new GlassStyle(
+            32.0F,
+            1.0F, 1.0F, 1.0F, 0.0F,
+            0.86F, 1.06F,
+            2.0F, 0.16F, 0.8F,
+            1.20F,
+            GlassShadow.NONE,
+            0xF2FFFFFF,
+            1.0F,
+            2.0F, 1.00F, 3.0F,
+            0.46F);
+
     public static final GlassStyle TOGGLE = new GlassStyle(
             32.0F,
             1.0F, 1.0F, 1.0F, 0.0F,
