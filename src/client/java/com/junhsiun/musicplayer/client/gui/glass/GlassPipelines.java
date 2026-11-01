@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.client.gui.glass;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.renderpearl.api.GpuFormat;
@@ -25,7 +26,7 @@ import java.util.Optional;
  *
  * <p>本类返回的管线分三种：</p>
  * <ul>
- *   <li>{@link #panel(GlassStyle)}：玻璃本体（折射 + 色散 + 高光 + 染色）；</li>
+ *   <li>{@link #panel(GlassStyle, GlassLook)}：玻璃本体（折射 + 色散 + 高光 + 染色）；</li>
  *   <li>{@link #shadow(GlassStyle)}：面板投影，和本体共用一份着色器，用 define 切分支；</li>
  *   <li>{@link #blur(boolean)}：把画面逐级降采样并做可分离高斯模糊。</li>
  * </ul>
@@ -54,9 +55,14 @@ public final class GlassPipelines {
      *
      * <p>注意折射、斜面、色散、中心色散<b>不在这里</b>：它们逐 draw 由顶点色传入
      * （见 {@link GlassDebug#encode(GlassStyle)}），所以不需要为它们各编译一份管线。</p>
+     *
+     * <p>模糊度是编译期常量（顶点格式只有一路 color，已被六项光学参数占满），
+     * 因此它被量化成有限档位，见 {@link GlassLook}。同一档位共用一份管线。</p>
      */
-    public static synchronized RenderPipeline panel(GlassStyle style) {
-        return PANEL_PIPELINES.computeIfAbsent(style.pipelineKey(), key -> {
+    public static synchronized RenderPipeline panel(GlassStyle style, GlassLook look) {
+        String cacheKey = style.pipelineKey() + "/" + look.key();
+        return PANEL_PIPELINES.computeIfAbsent(cacheKey, key -> {
+            float[] tintColor = GlassTheme.overlayColorRgb();
             RenderPipeline.Builder builder = baseGuiPipeline("panel", key)
                     .withFragmentShader(GLASS_FRAGMENT_SHADER)
                     .withShaderDefine("GLASS_RADIUS", style.radius())
@@ -66,15 +72,40 @@ public final class GlassPipelines {
                     .withShaderDefine("GLASS_TINT_A", style.tintA())
                     .withShaderDefine("GLASS_MAX_LUMA", style.maxLuma())
                     .withShaderDefine("GLASS_SATURATION", style.saturation())
-                    .withShaderDefine("GLASS_FROST", style.frost())
                     .withShaderDefine("GLASS_HIGHLIGHT", style.highlight())
-                    .withShaderDefine("GLASS_OPACITY", style.opacity());
+                    .withShaderDefine("GLASS_EDGE_LIGHT", style.edgeLight())
+                    .withShaderDefine("GLASS_OPACITY", style.opacity())
+                    .withShaderDefine("GLASS_BLUR", look.quantizedBlur())
+                    // 模糊层级：0 = 只用原图（1 次采样），1 = 两层（2 次），2 = 三层（3 次）。
+                    // 着色器据此做编译期静态分支，把色散路径的采样次数从 9 次压到 3~9 次中的最小值。
+                    .withShaderDefine("GLASS_BLUR_LEVEL", blurLevel(look.quantizedBlur()))
+                    // 子控件用：把"世界背景 + 窗口叠加层"合成为底色，
+                    // 等价于把所在的窗口玻璃当成背景。窗口自身这一项是 0。
+                    .withShaderDefine("GLASS_WINDOW_TINT", look.quantizedWindowTint())
+                    // 叠加层颜色由 GlassTheme 单一来源提供，避免着色器里再抄一份常量而失配
+                    .withShaderDefine("GLASS_WINDOW_TINT_R", tintColor[0])
+                    .withShaderDefine("GLASS_WINDOW_TINT_G", tintColor[1])
+                    .withShaderDefine("GLASS_WINDOW_TINT_B", tintColor[2]);
             return builder
                     .withBindGroupLayout(BindGroupLayouts.PROJECTION)
                     .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
-                    .withBindGroupLayout(BindGroupLayouts.SAMPLER0_SAMPLER1)
+                    .withBindGroupLayout(BindGroupLayouts.SAMPLER0_SAMPLER1_SAMPLER2)
                     .build();
         });
+    }
+
+    /**
+     * 把模糊度映射到"需要几层贴图"，供着色器做静态分支。
+     *
+     * <p>{@code blur = 0} 时着色器只用 Sampler0（原图），完全不需要另两张，
+     * 直接省掉 2/3 的采样；{@code blur <= 0.5} 时第三层的混合权重为 0，
+     * 也一并省掉。其余情况三层都要。</p>
+     */
+    private static int blurLevel(float quantizedBlur) {
+        if (quantizedBlur <= 0.0F) {
+            return 0;
+        }
+        return quantizedBlur <= 0.5F ? 1 : 2;
     }
 
     /** 面板投影管线。 */

@@ -23,6 +23,8 @@
   "musicplayer.request.duplicate": "该歌曲正在播放或已在队列中。",
   "musicplayer.disc.random": "随机音乐唱片",
   "musicplayer.disc.random_hint": "右键使用以生成随机音乐",
+  "musicplayer.disc.master": "唱片母版",
+  "musicplayer.disc.master_lore": "需要刻录后才能播放",
   "musicplayer.disc.brand": "音乐播放器",
   "musicplayer.disc.song": "歌曲: %s",
   "musicplayer.disc.artist": "作者: %s",
