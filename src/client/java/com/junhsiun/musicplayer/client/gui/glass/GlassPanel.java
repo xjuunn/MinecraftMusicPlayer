@@ -1,8 +1,11 @@
 package com.junhsiun.musicplayer.client.gui.glass;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
@@ -55,6 +58,32 @@ public final class GlassPanel {
         draw(graphics, x0, y0, x1, y1, style, true);
     }
 
+    /** 当前这一帧的外观（模糊度），由界面在提取阶段设置。 */
+    private static GlassLook look = new GlassLook(1.0F);
+
+    /**
+     * 子控件用的外观：在 {@link #look} 的基础上带上窗口叠加层的浓度。
+     *
+     * <p>按钮、滑块、开关都在窗口玻璃之内，它们的底色应该是"世界背景 + 窗口叠加"，
+     * 否则会直接显示裸的世界颜色，看起来像浮在窗口外面。窗口自身仍用 {@link #look}。</p>
+     */
+    private static GlassLook childLook = new GlassLook(1.0F);
+
+    public static void setLook(GlassLook value) {
+        look = value == null ? new GlassLook(1.0F) : value;
+        // 子控件沿用同一档模糊度，外加窗口叠加层的浓度
+        childLook = new GlassLook(look.blur(), GlassTheme.overlayAlpha());
+    }
+
+    public static GlassLook look() {
+        return look;
+    }
+
+    /** 子控件（按钮 / 滑块 / 开关）的外观：模糊度同 {@link #look}，另含窗口叠加层浓度。 */
+    public static GlassLook childLook() {
+        return childLook;
+    }
+
     /**
      * 提前把玻璃要用的一切重资源准备好：编译全部管线、创建离屏贴图并抓好第一份背景。
      *
@@ -73,7 +102,9 @@ public final class GlassPanel {
             return;
         }
         try {
-            RenderSystem.getCompiledPipeline(GlassPipelines.panel(style));
+            RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, look));
+            // 子控件用的是带窗口叠加的变体，一并编译，避免首次画按钮时才编译
+            RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, childLook));
             prepared = true;
             compileShadowPipeline(style);
         } catch (Throwable throwable) {
@@ -105,7 +136,8 @@ public final class GlassPanel {
         }
         if (!prepared) {
             try {
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(style));
+                RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, look));
+                RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, childLook));
                 prepared = true;
             } catch (Throwable throwable) {
                 unavailable = true;
@@ -167,7 +199,8 @@ public final class GlassPanel {
             graphics.fill(x0, y0, x1, y1, style.fallback());
             return;
         }
-        if (!backdrop.isReady() || backdrop.softView() == null || backdrop.frostView() == null) {
+        if (!backdrop.isReady() || backdrop.softView() == null || backdrop.frostView() == null
+                || backdrop.heavyView() == null) {
             // 只是背景贴图这一帧还没抓好（界面刚打开的第一帧）：直接跳过，什么都不画。
             // 这里绝对不能填 fallback——那是一块 88% 不透明的深色，正好盖住大半个屏幕，
             // 就是"打开窗口瞬间闪一下"的来源。少画一帧玻璃肉眼看不出，画深色块却很显眼。
@@ -175,18 +208,71 @@ public final class GlassPanel {
         }
 
         GlassShadow shadow = style.shadow();
-        if (withShadow && shadow.visible() && style.pipelineKey().equals(compiledShadowKey)) {
+        // 阴影开关关闭时整块投影都不提交
+        if (withShadow && shadow.visible() && GlassTheme.shadowEnabled()
+                && style.pipelineKey().equals(compiledShadowKey)) {
             int padding = shadow.padding();
             // 投影不读调参通道，给个不透明的白色即可
             submit(graphics, GlassPipelines.shadow(style), TextureSetup.noTexture(),
                     x0 - padding, y0 - padding, x1 + padding, y1 + padding, 0xFFFFFFFF);
         }
 
-        TextureSetup setup = TextureSetup.doubleTexture(
-                backdrop.softView(), backdrop.sampler(),
-                backdrop.frostView(), backdrop.sampler());
-        submit(graphics, GlassPipelines.panel(style), setup, x0, y0, x1, y1,
+        TextureSetup setup = tripleTexture(backdrop);
+        submit(graphics, GlassPipelines.panel(style, look), setup, x0, y0, x1, y1,
                 GlassDebug.encode(style));
+    }
+
+    /**
+     * 三张背景层打包成 TextureSetup，供玻璃着色器按模糊度混合。
+     *
+     * <p>模糊度为 0 时把 Sampler0 换成原图（1:1 拷贝），这样"关掉模糊"是真的逐像素还原，
+     * 而不是停在 1/2 降采样的柔化上；有模糊时才用 1/2 的清透层。</p>
+     */
+    private static TextureSetup tripleTexture(GlassBackdrop backdrop) {
+        GpuSampler sampler = backdrop.sampler();
+        GpuTextureView base = look.quantizedBlur() <= 0.0F
+                ? backdrop.sharpView() : backdrop.softView();
+        return new TextureSetup(base, backdrop.frostView(), backdrop.heavyView(),
+                sampler, sampler, sampler);
+    }
+
+    /**
+     * 画一块玻璃控件（无投影），边缘折射与色散可逐帧覆盖，其余参数取自材质。
+     *
+     * <p>这些参数走顶点色、不进管线定义，所以 hover / 按下的连续变化不会触发重编译。</p>
+     *
+     * @return 是否画成功；背景未就绪或着色器不可用时返回 {@code false}
+     */
+    public static boolean drawTuned(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+                                    GlassStyle style, float refraction, float dispersion,
+                                    float centerDispersion) {
+        return drawTuned(graphics, x0, y0, x1, y1, style, refraction, dispersion, centerDispersion,
+                GlassDebug.aDistance(style),
+                GlassDebug.contraRatio(style), GlassDebug.shrink(style));
+    }
+
+    /**
+     * 画一块玻璃控件（无投影），六项光学参数均可逐帧覆盖。
+     *
+     * @return 是否画成功；背景未就绪或着色器不可用时返回 {@code false}
+     */
+    public static boolean drawTuned(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+                                    GlassStyle style, float refraction, float dispersion,
+                                    float centerDispersion, float aDistance,
+                                    float contraRatio, float shrink) {
+        if (x1 <= x0 || y1 <= y0) {
+            return false;
+        }
+        GlassBackdrop backdrop = GlassBackdrop.getInstance();
+        if (unavailable || !prepared || backdrop.hasFailed()
+                || !backdrop.isReady() || backdrop.softView() == null || backdrop.frostView() == null
+                || backdrop.heavyView() == null) {
+            return false;
+        }
+        submit(graphics, GlassPipelines.panel(style, childLook), tripleTexture(backdrop), x0, y0, x1, y1,
+                GlassDebug.pack(refraction, dispersion, centerDispersion,
+                        aDistance, contraRatio, shrink));
+        return true;
     }
 
     /**

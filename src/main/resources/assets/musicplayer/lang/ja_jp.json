@@ -23,6 +23,8 @@
   "musicplayer.request.duplicate": "この曲は既に再生中またはキューに入っています。",
   "musicplayer.disc.random": "ランダム音楽ディスク",
   "musicplayer.disc.random_hint": "右クリックでランダムな音楽を生成",
+  "musicplayer.disc.master": "音楽ディスクのマスター",
+  "musicplayer.disc.master_lore": "再生するには書き込みが必要です",
   "musicplayer.disc.brand": "音楽プレイヤー",
   "musicplayer.disc.song": "曲名: %s",
   "musicplayer.disc.artist": "歌手: %s",

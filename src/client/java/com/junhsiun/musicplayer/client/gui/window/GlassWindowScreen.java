@@ -1,6 +1,8 @@
 package com.junhsiun.musicplayer.client.gui.window;
 
 import com.junhsiun.musicplayer.client.gui.glass.GlassPanel;
+import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
+import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Renderable;
@@ -99,9 +101,17 @@ public abstract class GlassWindowScreen extends Screen {
         WindowTransform transform = window.transform(elapsed());
         WindowBounds animated = transform.apply(baseBounds);
 
+        GlassPanel.setLook(GlassTheme.look());
         GlassPanel.beginFrame(window.style());
+        // 控件玻璃用几份固定材质，提前校验编译
+        GlassPanel.beginFrame(GlassTheme.BUTTON);
+        GlassPanel.beginFrame(GlassTheme.TOGGLE);
+        GlassPanel.beginFrame(GlassTheme.KNOB);
         applyTransformToChildren(transform);
         GlassPanel.draw(graphics, animated.x0(), animated.y0(), animated.x1(), animated.y1(), window.style());
+        // 窗口的染色同样走叠加层，和控件共用同一个透明度
+        GlassWidgets.windowOverlay(graphics, animated.x0(), animated.y0(),
+                animated.x1(), animated.y1(), GlassTheme.Sizes.WINDOW_RADIUS);
 
         // 控件必须在玻璃之后提交，才会落在玻璃上层（见类注释）
         super.extractRenderState(graphics);

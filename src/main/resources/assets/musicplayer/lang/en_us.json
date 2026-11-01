@@ -23,6 +23,8 @@
   "musicplayer.request.duplicate": "This song is already playing or queued.",
   "musicplayer.disc.random": "Random Music Disc",
   "musicplayer.disc.random_hint": "Right-click to generate random music",
+  "musicplayer.disc.master": "Music Disc Master",
+  "musicplayer.disc.master_lore": "Must be burned before it can be played",
   "musicplayer.disc.brand": "Music Player",
   "musicplayer.disc.song": "Song: %s",
   "musicplayer.disc.artist": "Artist: %s",
