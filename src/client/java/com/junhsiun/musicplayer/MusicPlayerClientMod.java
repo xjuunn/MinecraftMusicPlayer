@@ -23,7 +23,6 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConfirmLinkScreen;
@@ -95,11 +94,16 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             return InteractionResult.PASS;
         });
 
-        // 手持唱片母版右键（对着空气 / 方块 / 实体）→ 打开液态玻璃界面
+        // 手持唱片母版右键空气 → 打开液态玻璃界面
+        //
+        // 只监听 UseItemCallback。刻意不监听 UseBlockCallback / UseEntityCallback：
+        // 那两个回调返回 SUCCESS 会吞掉方块与实体的右键交互，表现为手持母版时
+        // 打不开箱子、用不了工作台、也没法和村民交易。
+        //
+        // 这样也足够：对着可交互方块右键时，原版 interactBlock 会先返回成功，
+        // 后续的 interactItem 根本不会被调用，界面不会和容器界面抢；
+        // 对着无交互方块或空气右键时 interactItem 才触发，界面照常打开。
         UseItemCallback.EVENT.register((player, world, hand) -> tryOpenDiscMaster(player, world, hand));
-        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> tryOpenDiscMaster(player, world, hand));
-        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) ->
-                tryOpenDiscMaster(player, world, hand));
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) ->
                 ClientBgmController.getInstance().onEnteredWorld());

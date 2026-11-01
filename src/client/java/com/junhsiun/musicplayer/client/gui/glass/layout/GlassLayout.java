@@ -86,6 +86,7 @@ public final class GlassLayout {
         private final List<Item> items = new ArrayList<>();
         private int gap;
         private int padding;
+        private int align = Align.START;
 
         public Row gap(int value) {
             this.gap = value;
@@ -94,6 +95,12 @@ public final class GlassLayout {
 
         public Row padding(int value) {
             this.padding = value;
+            return this;
+        }
+
+        /** 纵向对齐：START / CENTER / END。 */
+        public Row align(int value) {
+            this.align = value;
             return this;
         }
 
@@ -123,12 +130,28 @@ public final class GlassLayout {
             int gaps = gap * Math.max(0, items.size() - 1);
             int free = Math.max(0, area.width() - padding * 2 - fixed - gaps);
             int growWidth = growCount == 0 ? 0 : free / growCount;
+            // 行内各项可以不等高，按最高的那条算可用高度，才能正确居中
+            int available = area.height() - padding * 2;
 
             for (Item item : items) {
                 int w = item.width < 0 ? growWidth : item.width;
-                item.placer.accept(new Slot(x, y, w, item.height));
+                int itemY = switch (align) {
+                    case Align.CENTER -> y + (available - item.height) / 2;
+                    case Align.END -> y + available - item.height;
+                    default -> y;
+                };
+                item.placer.accept(new Slot(x, itemY, w, item.height));
                 x += w + gap;
             }
+        }
+
+        /** 行内最高的那项，便于确定容器高度。 */
+        public int height() {
+            int tallest = 0;
+            for (Item item : items) {
+                tallest = Math.max(tallest, item.height);
+            }
+            return tallest + padding * 2;
         }
     }
 
@@ -144,6 +167,15 @@ public final class GlassLayout {
 
         public int centerX() {
             return x + width / 2;
+        }
+
+        public int centerY() {
+            return y + height / 2;
+        }
+
+        /** 转成 {@link WindowBounds}，便于把一个槽位再交给别的容器继续布局。 */
+        public WindowBounds toBounds() {
+            return WindowBounds.of(x, y, width, height);
         }
     }
 
