@@ -1,7 +1,6 @@
 package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
-import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.platform.NeteaseApiClient;
 import com.junhsiun.musicplayer.platform.api.DirectMusicApi;
 import com.junhsiun.musicplayer.platform.api.MusicApi;
@@ -9,7 +8,6 @@ import com.junhsiun.musicplayer.platform.api.MusicApiMode;
 import com.junhsiun.musicplayer.platform.api.MusicApiRouter;
 import com.junhsiun.musicplayer.platform.api.ProxyMusicApi;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -40,9 +38,14 @@ public final class DiscMasterSearchService {
         return limit < 1 ? 8 : limit;
     }
 
-    /** 搜索歌曲，{@code page} 从 1 开始。 */
-    public CompletableFuture<List<SearchEntry>> searchSongs(String keyword, int page) {
-        return api().searchSongs(keyword, page);
+    /**
+     * 搜索歌曲，{@code page} 从 1 开始。
+     *
+     * <p>返回 {@link MusicApi.SearchPage}：界面底部的"共 N 首"要用<b>总命中数</b>，
+     * 而不是本页条数。数据来源给不出总数时 {@code total} 为 -1，界面就不显示这一段。</p>
+     */
+    public CompletableFuture<MusicApi.SearchPage> searchSongPage(String keyword, int page) {
+        return api().searchSongPage(keyword, page);
     }
 
     private MusicApi api() {
