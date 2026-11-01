@@ -20,6 +20,15 @@ public interface Easing {
         return 1.0F - inverted * inverted * inverted;
     };
 
+    /**
+     * 加速（缓入）：起步慢、末尾快。
+     *
+     * <p>入场用 {@link #EASE_OUT_CUBIC}（起步快、末尾平顺），退场用这个，
+     * 两者方向相反：退场越到后面越快，像被抽走；退场若也缓出，末尾会拖长，
+     * 观感上反而像卡住。</p>
+     */
+    Easing EASE_IN_CUBIC = progress -> progress * progress * progress;
+
     Easing EASE_IN_OUT_CUBIC = progress -> {
         if (progress < 0.5F) {
             return 4.0F * progress * progress * progress;
