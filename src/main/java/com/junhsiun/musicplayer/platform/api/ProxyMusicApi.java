@@ -41,6 +41,11 @@ public final class ProxyMusicApi implements MusicApi {
     }
 
     @Override
+    public CompletableFuture<String> songCover(String id) {
+        return client.songCover(id);
+    }
+
+    @Override
     public CompletableFuture<List<SearchEntry>> searchSongs(String keyword) {
         return client.searchSongs(keyword);
     }
@@ -48,6 +53,11 @@ public final class ProxyMusicApi implements MusicApi {
     @Override
     public CompletableFuture<List<SearchEntry>> searchSongs(String keyword, int page) {
         return client.searchSongs(keyword, page);
+    }
+
+    @Override
+    public CompletableFuture<SearchPage> searchSongPage(String keyword, int page) {
+        return client.searchSongPage(keyword, page);
     }
 
     @Override
