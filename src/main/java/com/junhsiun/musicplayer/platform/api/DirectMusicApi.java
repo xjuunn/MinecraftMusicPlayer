@@ -7,6 +7,10 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.model.ArtistInfo;
+import com.junhsiun.musicplayer.model.MediaDetail;
+import com.junhsiun.musicplayer.model.MediaItem;
+import com.junhsiun.musicplayer.model.MediaKind;
+import com.junhsiun.musicplayer.model.MediaPage;
 import com.junhsiun.musicplayer.model.PlaylistInfo;
 import com.junhsiun.musicplayer.model.ProgramInfo;
 import com.junhsiun.musicplayer.model.RadioInfo;
@@ -281,6 +285,78 @@ public final class DirectMusicApi implements MusicApi {
                         ApiCommands.viewRadio(rid), ApiCommands.playRadio(rid));
             }
             default -> null;
+        };
+    }
+
+    // ── 浏览界面 ────────────────────────────────────────────────────
+
+    @Override
+    public CompletableFuture<MediaPage> searchMedia(MediaKind kind, String keyword, int page, int limit) {
+        int size = Math.max(1, limit);
+        int offset = (Math.max(1, page) - 1) * size;
+        int type = MediaJson.searchType(kind);
+        return async(() -> {
+            JsonObject root = DirectHttp.get(NeteaseEndpoints.CLOUD_SEARCH,
+                    "s", keyword,
+                    "type", Integer.toString(type),
+                    "limit", Integer.toString(size),
+                    "offset", Integer.toString(offset));
+            return MediaJson.searchPage(root, kind);
+        });
+    }
+
+    @Override
+    public CompletableFuture<MediaDetail> mediaDetail(MediaKind kind, String id) {
+        return async(() -> {
+            JsonObject root = switch (kind) {
+                // 批量歌曲详情是 POST 表单，字段名是 c，不是 ids（见 fetchSongNodes）
+                case SONG -> DirectHttp.post(NeteaseEndpoints.SONG_DETAIL,
+                        Map.of("c", "[{\"id\":\"" + id + "\"}]"));
+                case PLAYLIST -> DirectHttp.get(NeteaseEndpoints.PLAYLIST_DETAIL,
+                        "id", id, "n", "1", "s", PLAYLIST_DETAIL_S);
+                case ARTIST -> DirectHttp.get(NeteaseEndpoints.ARTIST_DETAIL + id);
+                case USER -> DirectHttp.get(NeteaseEndpoints.USER_DETAIL + id);
+                case RADIO -> DirectHttp.get(NeteaseEndpoints.RADIO_DETAIL, "id", id);
+            };
+            return switch (kind) {
+                case SONG -> MediaJson.songDetail(root, id);
+                case PLAYLIST -> MediaJson.playlistDetail(root);
+                case ARTIST -> MediaJson.artistDetail(root);
+                case USER -> MediaJson.userDetail(root, id);
+                case RADIO -> MediaJson.radioDetail(root);
+            };
+        });
+    }
+
+    @Override
+    public CompletableFuture<List<MediaItem>> mediaEntries(MediaKind kind, String id, int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, limit);
+        return switch (kind) {
+            // 单曲没有下级条目
+            case SONG -> CompletableFuture.completedFuture(List.of());
+            case PLAYLIST -> async(() -> {
+                List<String> allIds = playlistTrackIdsSync(id);
+                int from = Math.min(safeOffset, allIds.size());
+                int to = Math.min(allIds.size(), from + safeLimit);
+                if (from >= to) {
+                    return List.<MediaItem>of();
+                }
+                return MediaJson.songNodes(fetchSongNodes(allIds.subList(from, to)));
+            });
+            case ARTIST -> async(() -> MediaJson.songItems(DirectHttp.get(NeteaseEndpoints.ARTIST_SONGS,
+                    "id", id,
+                    "limit", Integer.toString(safeLimit),
+                    "offset", Integer.toString(safeOffset))));
+            case USER -> async(() -> MediaJson.playlistItems(DirectHttp.get(NeteaseEndpoints.USER_PLAYLIST,
+                    "uid", id,
+                    "limit", Integer.toString(safeLimit),
+                    "offset", Integer.toString(safeOffset))));
+            case RADIO -> async(() -> MediaJson.programItems(DirectHttp.get(NeteaseEndpoints.RADIO_PROGRAMS,
+                    "radioId", id,
+                    "limit", Integer.toString(safeLimit),
+                    "offset", Integer.toString(safeOffset),
+                    "asc", "false")));
         };
     }
 

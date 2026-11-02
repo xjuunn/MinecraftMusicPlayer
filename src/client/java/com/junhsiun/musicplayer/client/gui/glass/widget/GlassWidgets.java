@@ -16,11 +16,21 @@ import net.minecraft.util.Mth;
 import net.minecraft.util.Util;
 import org.joml.Matrix3x2f;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** 控件公共绘制：玻璃底、圆角填充、缩放文字、交互弹簧。 */
 public final class GlassWidgets {
+
+    /**
+     * 玻璃方块的裁剪区栈。
+     *
+     * <p>GUI 渲染是单线程的，静态字段在这里是安全的；用栈是为了支持嵌套（列表里再套一层
+     * 滚动区），语义与 {@code GuiGraphicsExtractor} 的 scissor 栈一致。</p>
+     */
+    private static final Deque<ScreenRectangle> CLIP_STACK = new ArrayDeque<>();
 
     private static final Set<String> FAILED = ConcurrentHashMap.newKeySet();
     private static final Set<String> CHECKED = ConcurrentHashMap.newKeySet();
@@ -237,8 +247,62 @@ public final class GlassWidgets {
         return (argb & 0xFF000000) | (r << 16) | (g << 8) | b;
     }
 
+    /**
+     * 开始一段裁剪：<b>同时</b>作用于原版绘制和玻璃方块。
+     *
+     * <p>为什么不能只用 {@code graphics.enableScissor}：玻璃方块不是原版绘制，而是本类自己
+     * 组 {@code BlitRenderState} 提交的。原版的 scissor 栈只挂到它自己产出的渲染状态上，
+     * 手写提交的那些方块完全看不到它——表现就是"文字被切掉了，玻璃还在外面画"（徽标、
+     * 播放按钮、行底会在滚动区外露出来）。</p>
+     *
+     * <p>这里维护一份自己的裁剪区栈，提交玻璃时作为 {@code scissorArea} 传给渲染状态，
+     * 由渲染器真正裁剪。这样滚动区里的<b>所有</b>元素（文字、图标、玻璃、圆角填充）都由
+     * 同一道边界遮挡，不需要每个元素自己算可见区。</p>
+     *
+     * <p>必须与 {@link #endClip} 成对使用；嵌套时取交集，与 {@code enableScissor} 一致。</p>
+     */
+    public static void beginClip(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1) {
+        graphics.enableScissor(x0, y0, x1, y1);
+        ScreenRectangle rect = new ScreenRectangle(x0, y0,
+                Math.max(0, x1 - x0), Math.max(0, y1 - y0));
+        ScreenRectangle parent = CLIP_STACK.peek();
+        CLIP_STACK.push(parent == null ? rect : parent.intersection(rect));
+    }
+
+    /** 清空裁剪区。每帧开头调一次，防止某个控件漏掉 {@link #endClip} 之后一直影响后续绘制。 */
+    public static void resetClip() {
+        CLIP_STACK.clear();
+    }
+
+    /** 结束一段裁剪，与 {@link #beginClip} 成对使用。 */
+    public static void endClip(GuiGraphicsExtractor graphics) {
+        if (!CLIP_STACK.isEmpty()) {
+            CLIP_STACK.pop();
+        }
+        graphics.disableScissor();
+    }
+
+    /**
+     * 当前玻璃裁剪区；没有裁剪时为 {@code null}。
+     *
+     * <p>公开给 {@link com.junhsiun.musicplayer.client.gui.glass.GlassPanel}：玻璃面板也是
+     * 手写 {@code BlitRenderState} 提交的，必须拿同一个裁剪区，否则面板（行底、徽标、
+     * 播放按钮）会绕过滚动区的边界画到外面去。</p>
+     */
+    public static ScreenRectangle clipRectangle() {
+        return CLIP_STACK.peek();
+    }
+
     private static void submit(GuiGraphicsExtractor graphics, RenderPipeline pipeline,
                                int x0, int y0, int x1, int y1, int color) {
+        ScreenRectangle clip = clipRectangle();
+        if (clip != null
+                && (x1 <= clip.left() || x0 >= clip.right() || y1 <= clip.top() || y0 >= clip.bottom())) {
+            // 完全在裁剪区外：连渲染状态都不用提交
+            return;
+        }
+        // 第十三个参数是 scissorArea，渲染器据此真正裁剪；完全靠它遮挡，
+        // 不在这里改坐标——改坐标会把圆角/边缘畸变的形状弄歪
         graphics.guiRenderState.addGuiElement(new BlitRenderState(
                 pipeline,
                 TextureSetup.noTexture(),
@@ -247,7 +311,6 @@ public final class GlassWidgets {
                 0.0F, 1.0F,
                 0.0F, 1.0F,
                 color,
-                null,
-                new ScreenRectangle(x0, y0, x1 - x0, y1 - y0)));
+                clip));
     }
 }

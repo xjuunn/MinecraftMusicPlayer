@@ -142,6 +142,75 @@ public final class GlassTheme {
             3.0F, 0.75F, 4.0F,
             0.30F);
 
+    /**
+     * 分段控件（tabs）的<b>底槽</b>：一整条浅玻璃。
+     *
+     * <p>它和 {@link #CARD} 一样是"窗口里的第二层玻璃"，所以折射、色散、中心收缩都要比
+     * 窗口收一档，否则两层折射叠在一起，中间会糊成一块。圆角给 11 是因为分段控件高 20~22，
+     * 着色器会夹到半高，正好成为一条胶囊。</p>
+     */
+    public static final GlassStyle TRACK = new GlassStyle(
+            11.0F,
+            1.0F, 1.0F, 1.0F, 0.0F,
+            0.70F, 1.24F,
+            8.0F, 0.22F, 1.6F,
+            0.72F,
+            GlassShadow.NONE,
+            0xE6F2F3F7,
+            1.0F,
+            2.5F, 0.70F, 2.6F,
+            0.26F);
+
+    /**
+     * 分段控件的<b>选中胶囊</b>：比底槽亮一档，用来"顶起"当前标签。
+     *
+     * <p>它是叠在底槽上的第三层，折射再收一档，只保留边缘高光与轻微折射——观感上是一块
+     * 被抬起来的玻璃，而不是又一块会晃动的放大镜。</p>
+     */
+    public static final GlassStyle PILL = new GlassStyle(
+            10.0F,
+            1.0F, 1.0F, 1.0F, 0.0F,
+            0.80F, 1.18F,
+            5.0F, 0.16F, 1.1F,
+            1.00F,
+            GlassShadow.NONE,
+            0xF2F3F7,
+            1.0F,
+            2.0F, 0.65F, 1.6F,
+            0.34F);
+
+    /**
+     * 列表行：每条结果自己的一块薄玻璃。
+     *
+     * <p>行高只有二十几像素、又密密麻麻排一列，所以折射与色散都压到最低，只留圆角、边缘
+     * 高光和一丁点折射——远看是一排玻璃片，近看不会互相打架。悬停/按下由
+     * {@code GlassWidgets.glassBackground} 的 lift / press 参数继续提亮。</p>
+     */
+    public static final GlassStyle ROW = new GlassStyle(
+            7.0F,
+            1.0F, 1.0F, 1.0F, 0.0F,
+            0.74F, 1.16F,
+            5.0F, 0.12F, 1.0F,
+            0.62F,
+            GlassShadow.NONE,
+            0xE6F2F3F7,
+            1.0F,
+            2.0F, 0.70F, 1.4F,
+            0.22F);
+
+    /** 详情页上的数据小标签（badge），比列表行再薄一档。 */
+    public static final GlassStyle BADGE = new GlassStyle(
+            5.0F,
+            1.0F, 1.0F, 1.0F, 0.0F,
+            0.76F, 1.14F,
+            3.5F, 0.08F, 0.7F,
+            0.56F,
+            GlassShadow.NONE,
+            0xE6F2F3F7,
+            1.0F,
+            1.5F, 0.70F, 0.9F,
+            0.18F);
+
     private GlassTheme() {
     }
 

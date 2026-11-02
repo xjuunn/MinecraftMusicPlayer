@@ -27,6 +27,8 @@ public final class NeteaseEndpoints {
     public static final String PLAYLIST_HOT_TAGS = "/api/playlist/hottags";
     public static final String PLAYLIST_LIST = "/api/playlist/list";
     public static final String USER_PLAYLIST = "/api/user/playlist";
+    /** 用户资料；末尾直接拼用户 ID（形如 {@code /api/v1/user/detail/1732443319}）。 */
+    public static final String USER_DETAIL = "/api/v1/user/detail/";
 
     public static final String RADIO_DETAIL = "/api/djradio/v2/get";
     public static final String RADIO_PROGRAMS = "/api/dj/program/byradio";
