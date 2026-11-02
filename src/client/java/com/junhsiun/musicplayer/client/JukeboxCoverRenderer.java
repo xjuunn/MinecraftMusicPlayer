@@ -16,7 +16,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -69,11 +68,18 @@ public final class JukeboxCoverRenderer {
     private static final double RENDER_DISTANCE_SQR = 96.0D * 96.0D;
 
     /** 滑入时长（秒）：从槽口上方落到槽底。 */
-    private static final double SLIDE_IN_SECONDS = 0.30D;
+    private static final double SLIDE_IN_SECONDS = 0.32D;
     /** 滑出时长（秒）：从槽底退到槽口上方。 */
     private static final double SLIDE_OUT_SECONDS = 0.20D;
-    /** 滑入收尾的回弹幅度（easeOutBack 的 c1），越大越弹；1.3 大约多冲 6%。 */
-    private static final double SLIDE_BOUNCE = 1.30D;
+    /**
+     * 状态"短暂消失"的宽限时间（秒）。
+     *
+     * <p>服务端 stop/play 抖动、区块重载、玩家在可听范围边界来回走，都会让状态消失一两帧。
+     * 连续消失超过这个时间才当作唱片真的被取走，否则封面一直挂着不动。</p>
+     */
+    private static final double MISSING_GRACE_SECONDS = 0.12D;
+    /** 等新封面下载的最长时间（秒），超时就直接换，交给 {@code HIDDEN} 继续等。 */
+    private static final double SWITCH_WAIT_SECONDS = 1.20D;
     private static final double NANOS_PER_SECOND = 1.0e9D;
 
     /** 每个唱片机的封面动画状态，按方块坐标索引。 */
@@ -153,31 +159,44 @@ public final class JukeboxCoverRenderer {
     /**
      * 推进动画状态机。
      *
+     * <p>两条"防抖"规则，都是为了不再出现封面闪一下/收回再滑下来：</p>
+     * <ul>
+     *   <li><b>状态短暂消失不算取出</b>：服务端 {@code stop}/{@code play} 抖动、区块重载、
+     *       玩家在可听范围边界来回走，都会让状态消失一两帧。要连续消失
+     *       {@link #MISSING_GRACE_SECONDS} 才认为唱片真的被取走。</li>
+     *   <li><b>新封面下载好才换</b>：目标封面变了之后，先让旧封面继续挂着，等新图就绪再滑出
+     *       滑入。否则换封面那一瞬间槽是空的，看起来就是闪一下。等太久（
+     *       {@link #SWITCH_WAIT_SECONDS}）则照常滑出，在 {@link Phase#HIDDEN} 里继续等。</li>
+     * </ul>
+     *
      * @param target 本帧期望显示的封面地址，{@code null} 表示唱片机里已经没有唱片
      * @return {@code false} 表示动画已经结束、可以从表里删掉
      */
     private static boolean advance(CoverAnimation animation, String target, double now) {
+        if (target == null) {
+            if (animation.missingSince < 0.0D) {
+                animation.missingSince = now;
+            }
+        } else {
+            animation.missingSince = -1.0D;
+        }
+        // 消失超过宽限时间才当作"唱片被取出"
+        boolean removed = target == null && now - animation.missingSince >= MISSING_GRACE_SECONDS;
+
         switch (animation.phase) {
             case SLIDE_IN -> {
                 double progress = (now - animation.phaseStart) / SLIDE_IN_SECONDS;
                 if (progress >= 1.0D) {
                     animation.phase = Phase.IDLE;
                     animation.phaseStart = now;
-                } else if (!Objects.equals(target, animation.url)) {
+                } else if (removed || shouldSwitch(animation, target, now)) {
                     // 滑到一半换歌或者被取出：从当前位置接着往上滑，不要跳变
                     startPhase(animation, Phase.SLIDE_OUT, now);
-                    if (target != null) {
-                        CoverArtTextureCache.getInstance().request(target);
-                    }
                 }
             }
             case IDLE -> {
-                if (!Objects.equals(target, animation.url)) {
+                if (removed || shouldSwitch(animation, target, now)) {
                     startPhase(animation, Phase.SLIDE_OUT, now);
-                    if (target != null) {
-                        // 提前开始下载，让"上一首滑出"和"下一首下载"并行
-                        CoverArtTextureCache.getInstance().request(target);
-                    }
                 }
             }
             case SLIDE_OUT -> {
@@ -201,11 +220,15 @@ public final class JukeboxCoverRenderer {
                             startPhase(animation, Phase.SLIDE_IN, now);
                         }
                     }
+                    animation.switchSince = -1.0D;
                 }
             }
             case HIDDEN -> {
                 if (target == null) {
-                    return false;
+                    if (removed) {
+                        return false;
+                    }
+                    return true;
                 }
                 if (target.equals(animation.url)) {
                     startPhase(animation, Phase.SLIDE_IN, now);
@@ -225,6 +248,26 @@ public final class JukeboxCoverRenderer {
     }
 
     /**
+     * 目标封面变了，并且新封面已经下载好（或者等太久了）才允许开始换。
+     *
+     * <p>新封面还没就绪时返回 {@code false}，让旧封面继续显示，避免槽出现空档。</p>
+     */
+    private static boolean shouldSwitch(CoverAnimation animation, String target, double now) {
+        if (target == null || target.equals(animation.url)) {
+            animation.switchSince = -1.0D;
+            return false;
+        }
+        if (animation.switchSince < 0.0D) {
+            animation.switchSince = now;
+        }
+        if (CoverArtTextureCache.getInstance().getTextureId(target) != null) {
+            return true;
+        }
+        CoverArtTextureCache.getInstance().request(target);
+        return now - animation.switchSince >= SWITCH_WAIT_SECONDS;
+    }
+
+    /**
      * 切换动画阶段，并把当前滑动量记成起点。
      *
      * <p>这样无论在哪一帧被打断（滑到一半换歌、滑到一半被取出），封面都会从当前位置继续，
@@ -240,7 +283,7 @@ public final class JukeboxCoverRenderer {
     private static double slideOf(CoverAnimation animation, double now) {
         return switch (animation.phase) {
             case SLIDE_IN -> animation.fromSlide
-                    * (1.0D - easeOutBack(clamp01((now - animation.phaseStart) / SLIDE_IN_SECONDS)));
+                    * (1.0D - easeOutQuint(clamp01((now - animation.phaseStart) / SLIDE_IN_SECONDS)));
             case IDLE -> 0.0D;
             case SLIDE_OUT -> animation.fromSlide
                     + (1.0D - animation.fromSlide) * easeInQuad(clamp01((now - animation.phaseStart) / SLIDE_OUT_SECONDS));
@@ -361,12 +404,15 @@ public final class JukeboxCoverRenderer {
         return Math.min(value, 1.0D);
     }
 
-    /** 结尾轻微过冲再回弹，滑下来才有"咔哒"落位的感觉。 */
-    private static double easeOutBack(double progress) {
-        double c1 = SLIDE_BOUNCE;
-        double c3 = c1 + 1.0D;
-        double inverse = progress - 1.0D;
-        return 1.0D + c3 * inverse * inverse * inverse + c1 * inverse * inverse;
+    /**
+     * 起步快、后面长长地减速，滑下来像有惯性。
+     *
+     * <p>刻意<b>不过冲</b>：滑动量一旦越过 0，封面顶部就会退到槽口上沿之上，露出槽口里的
+     * 唱片机材质，看起来像弹了一下。</p>
+     */
+    private static double easeOutQuint(double progress) {
+        double inverse = 1.0D - progress;
+        return 1.0D - inverse * inverse * inverse * inverse * inverse;
     }
 
     /** 起步慢、越抽越快，像被从槽里抽出去。 */
@@ -392,6 +438,10 @@ public final class JukeboxCoverRenderer {
         private double phaseStart;
         /** 本阶段开始时的滑动量，用来保证被打断时从当前位置接着走。 */
         private double fromSlide;
+        /** 状态从什么时候开始"看不见"；-1 表示当前有状态。 */
+        private double missingSince = -1.0D;
+        /** 从什么时候开始想换封面（用来给下载留时间）；-1 表示没在等。 */
+        private double switchSince = -1.0D;
 
         private CoverAnimation(String url, Identifier texture, double now) {
             this.url = url;

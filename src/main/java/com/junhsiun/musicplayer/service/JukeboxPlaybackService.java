@@ -204,7 +204,7 @@ public final class JukeboxPlaybackService {
             return;
         }
         DiscTrackData previous = current.discData();
-        DiscTrackData resolved = resolveDiscData(original, track, throwable);
+        DiscTrackData resolved = resolveDiscData(original, previous, track, throwable);
         current.setDiscData(resolved);
         boolean urlsChanged = !resolved.urls().equals(previous.urls());
         if (urlsChanged
@@ -215,19 +215,34 @@ public final class JukeboxPlaybackService {
         }
     }
 
-    private DiscTrackData resolveDiscData(DiscTrackData original, TrackInfo track, Throwable throwable) {
+    /**
+     * 把解析到的曲目信息合并进唱片数据。
+     *
+     * <p><b>封面只在"还没有封面"时才补。</b>接口返回的封面地址和唱片 NBT 里存的不一定是
+     * 同一个字符串（CDN 节点、参数都可能不同），一旦用接口的地址覆盖已经生效的地址，
+     * 客户端就得重新下载一张一模一样的图，那张图下载完之前唱片机的槽是空的——表现为封面
+     * "闪一下"（有动画之后就是"收回去再滑下来"）。所以这里优先保留现有封面。</p>
+     */
+    private DiscTrackData resolveDiscData(DiscTrackData original, DiscTrackData previous, TrackInfo track, Throwable throwable) {
         if (throwable != null || track == null || track.sourceUrls() == null || track.sourceUrls().isEmpty()) {
             if (throwable != null) {
                 MusicPlayerMod.LOGGER.warn("解析唱片曲目数据失败: {}", original.trackId(), throwable);
             }
             return original;
         }
+        String coverUrl = previous.coverUrl();
+        if (coverUrl.isBlank()) {
+            coverUrl = original.coverUrl();
+        }
+        if (coverUrl.isBlank()) {
+            coverUrl = track.coverUrl();
+        }
         return new DiscTrackData(
                 original.trackId(),
                 track.title().isBlank() ? original.title() : track.title(),
                 track.artist().isBlank() ? original.artist() : track.artist(),
                 track.artistId().isBlank() ? original.artistId() : track.artistId(),
-                track.coverUrl().isBlank() ? original.coverUrl() : track.coverUrl(),
+                coverUrl,
                 track.sourceUrls(),
                 track.durationMillis() > 0L ? track.durationMillis() : original.durationMillis()
         );
