@@ -7,8 +7,11 @@ import com.junhsiun.musicplayer.client.ClientMusicController;
 import com.junhsiun.musicplayer.client.JukeboxCoverRenderer;
 import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfigManager;
 import com.junhsiun.musicplayer.client.gui.DiscMasterScreen;
+import com.junhsiun.musicplayer.client.gui.browser.MusicBrowserScreen;
 import com.junhsiun.musicplayer.client.gui.glass.GlassBackdrop;
 import com.junhsiun.musicplayer.client.gui.glass.GlassPanel;
+import com.junhsiun.musicplayer.client.gui.media.MediaThumbnails;
+import com.junhsiun.musicplayer.client.gui.window.GlassWindowScreen;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.network.BgmConfigPayload;
@@ -17,17 +20,21 @@ import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.OpenUrlPayload;
 import com.mojang.blaze3d.Blaze3D;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.ConfirmLinkScreen;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -39,6 +46,14 @@ import net.minecraft.world.item.ItemStack;
 import java.net.URI;
 
 public final class MusicPlayerClientMod implements ClientModInitializer {
+
+    /** 打开音乐浏览界面的快捷键，默认 M。 */
+    private static final KeyMapping OPEN_BROWSER = new KeyMapping(
+            "key.musicplayer.open_browser",
+            InputConstants.Type.KEYBOARD,
+            InputConstants.KEY_M,
+            KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music")));
+
     @Override
     public void onInitializeClient() {
         // 客户端本地配置（BGM 音量/开关）独立于服务端共享配置
@@ -83,11 +98,20 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
                 })
         );
         LevelRenderEvents.COLLECT_SUBMITS.register(JukeboxCoverRenderer::render);
+        // 快捷键默认 M，玩家可在「选项 → 控制」里改键（KeyMapping 就是原版的改键机制）
+        KeyMappingHelper.registerKeyMapping(OPEN_BROWSER);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             MusicPlayerClientConfigManager.tick();
             ClientJukeboxController.getInstance().tick(client);
             ClientMusicController.getInstance().tick();
             prefetchHeldCover(client);
+            // consumeClick 会把一次按下消费成一次打开，长按不会连续弹窗
+            while (OPEN_BROWSER.consumeClick()) {
+                if (client.gui.screen() == null && client.player != null) {
+                    // 打开玻璃界面的唯一正确入口（预编译 + 不强制渲染一帧），见 GlassWindowScreen#open
+                    GlassWindowScreen.open(new MusicBrowserScreen());
+                }
+            }
         });
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             if (!world.isClientSide() || hitResult == null) {
@@ -123,6 +147,8 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             ClientBgmController.getInstance().configureLocal(MusicPlayerConfigManager.get().bgmPlaylistId);
             ClientJukeboxController.getInstance().stopAll("Disconnected.");
             CoverArtTextureCache.getInstance().clear();
+            // 浏览界面的缩略图纹理同理：退出世界就放掉，别把上一局的封面带进下一局
+            MediaThumbnails.getInstance().clear();
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             MusicPlayerClientConfigManager.flushDirty();
@@ -186,12 +212,8 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
         // 之外）做完，界面出现的那一帧就是正常的完整帧；若拖到界面首帧的提取/绘制阶段，
         // 会打断正在进行的帧，驱动先送出一帧黑屏再显示界面。
         DiscMasterScreen screen = new DiscMasterScreen();
-        GlassPanel.prewarm(screen.window().style());
-        // 不能用 setScreenAndShow：它会在设置界面后同步强制渲染一帧，且这一帧
-        // 跳过世界提取（extract(deltaTracker, false)），主渲染目标只剩清屏黑色，
-        // 背景抓取采样到黑屏，整屏就会闪一帧黑。Gui.setScreen 做同样的界面切换
-        // （init、鼠标、输入处理）但不强制渲染，世界照常绘制到下一帧。
-        Minecraft.getInstance().gui.setScreen(screen);
+        // 统一走框架入口：预编译管线 + Gui.setScreen（不强制渲染，避免闪一帧黑）
+        GlassWindowScreen.open(screen);
         return InteractionResult.SUCCESS;
     }
 }

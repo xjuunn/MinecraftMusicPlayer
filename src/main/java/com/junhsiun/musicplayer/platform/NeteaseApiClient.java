@@ -8,12 +8,17 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.model.ArtistInfo;
+import com.junhsiun.musicplayer.model.MediaDetail;
+import com.junhsiun.musicplayer.model.MediaItem;
+import com.junhsiun.musicplayer.model.MediaKind;
+import com.junhsiun.musicplayer.model.MediaPage;
 import com.junhsiun.musicplayer.model.PlaylistInfo;
 import com.junhsiun.musicplayer.model.ProgramInfo;
 import com.junhsiun.musicplayer.model.RadioInfo;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.model.UserPlaylistView;
+import com.junhsiun.musicplayer.platform.api.MediaJson;
 import com.junhsiun.musicplayer.platform.api.MusicApi;
 import com.junhsiun.musicplayer.platform.url.ByfunsUrlProvider;
 import com.junhsiun.musicplayer.platform.url.MycelisUrlProvider;
@@ -720,6 +725,69 @@ public final class NeteaseApiClient {
             }
             return entries;
         });
+    }
+
+    // ── 浏览界面 ────────────────────────────────────────────────────
+
+    /**
+     * 后端（binaryify 版 NeteaseCloudMusicApi）路径与直连不同，但返回的是同一套网易云 JSON，
+     * 所以解析统一交给 {@link MediaJson}，这里只负责把请求发到正确的路径上。
+     */
+    public CompletableFuture<MediaPage> searchMedia(MediaKind kind, String keyword, int page, int limit) {
+        int size = Math.max(1, limit);
+        int offset = (Math.max(1, page) - 1) * size;
+        return getJson("/cloudsearch",
+                "keywords", keyword,
+                "type", Integer.toString(MediaJson.searchType(kind)),
+                "limit", Integer.toString(size),
+                "offset", Integer.toString(offset))
+                .thenApply(root -> MediaJson.searchPage(root, kind));
+    }
+
+    public CompletableFuture<MediaDetail> mediaDetail(MediaKind kind, String id) {
+        CompletableFuture<JsonObject> request = switch (kind) {
+            case SONG -> getJson("/song/detail", "ids", id);
+            case PLAYLIST -> getJson("/playlist/detail", "id", id);
+            case ARTIST -> getJson("/artists", "id", id);
+            case USER -> getJson("/user/detail", "uid", id);
+            case RADIO -> getJson("/dj/detail", "rid", id);
+        };
+        return request.thenApply(root -> switch (kind) {
+            case SONG -> MediaJson.songDetail(root, id);
+            case PLAYLIST -> MediaJson.playlistDetail(root);
+            case ARTIST -> MediaJson.artistDetail(root);
+            case USER -> MediaJson.userDetail(root, id);
+            case RADIO -> MediaJson.radioDetail(root);
+        });
+    }
+
+    public CompletableFuture<List<MediaItem>> mediaEntries(MediaKind kind, String id, int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, limit);
+        return switch (kind) {
+            case SONG -> CompletableFuture.completedFuture(List.of());
+            case PLAYLIST -> getJson("/playlist/track/all",
+                    "id", id,
+                    "limit", Integer.toString(safeLimit),
+                    "offset", Integer.toString(safeOffset))
+                    .thenApply(MediaJson::songItems);
+            case ARTIST -> getJson("/artist/songs",
+                    "id", id,
+                    "limit", Integer.toString(safeLimit),
+                    "offset", Integer.toString(safeOffset))
+                    .thenApply(MediaJson::songItems);
+            case USER -> getJson("/user/playlist",
+                    "uid", id,
+                    "limit", Integer.toString(safeLimit),
+                    "offset", Integer.toString(safeOffset))
+                    .thenApply(MediaJson::playlistItems);
+            case RADIO -> getJson("/dj/program",
+                    "rid", id,
+                    "limit", Integer.toString(safeLimit),
+                    "offset", Integer.toString(safeOffset),
+                    "asc", "false")
+                    .thenApply(MediaJson::programItems);
+        };
     }
 
     private CompletableFuture<JsonObject> getJson(String path, String... queryPairs) {
