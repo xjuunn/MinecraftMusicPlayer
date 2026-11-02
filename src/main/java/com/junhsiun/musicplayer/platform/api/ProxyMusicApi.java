@@ -1,6 +1,10 @@
 package com.junhsiun.musicplayer.platform.api;
 
 import com.junhsiun.musicplayer.model.ArtistInfo;
+import com.junhsiun.musicplayer.model.MediaDetail;
+import com.junhsiun.musicplayer.model.MediaItem;
+import com.junhsiun.musicplayer.model.MediaKind;
+import com.junhsiun.musicplayer.model.MediaPage;
 import com.junhsiun.musicplayer.model.PlaylistInfo;
 import com.junhsiun.musicplayer.model.ProgramInfo;
 import com.junhsiun.musicplayer.model.RadioInfo;
@@ -48,6 +52,21 @@ public final class ProxyMusicApi implements MusicApi {
     @Override
     public CompletableFuture<List<SearchEntry>> searchSongs(String keyword) {
         return client.searchSongs(keyword);
+    }
+
+    @Override
+    public CompletableFuture<MediaPage> searchMedia(MediaKind kind, String keyword, int page, int limit) {
+        return client.searchMedia(kind, keyword, page, limit);
+    }
+
+    @Override
+    public CompletableFuture<MediaDetail> mediaDetail(MediaKind kind, String id) {
+        return client.mediaDetail(kind, id);
+    }
+
+    @Override
+    public CompletableFuture<List<MediaItem>> mediaEntries(MediaKind kind, String id, int offset, int limit) {
+        return client.mediaEntries(kind, id, offset, limit);
     }
 
     @Override

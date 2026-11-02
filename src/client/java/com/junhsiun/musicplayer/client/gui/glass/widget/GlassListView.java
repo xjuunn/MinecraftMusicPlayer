@@ -57,7 +57,8 @@ public class GlassListView extends AbstractWidget {
     private final GlassWidgets.Spring hover = new GlassWidgets.Spring();
     private final GlassWidgets.Spring press = new GlassWidgets.Spring();
 
-    private double scroll;
+    /** 滚动带惯性 + 平滑，和浏览界面的列表共用一套手感。 */
+    private final GlassScroll scroll = new GlassScroll();
     private int pressedRow = -1;
 
     public GlassListView(int x, int y, int width, int height) {
@@ -70,12 +71,12 @@ public class GlassListView extends AbstractWidget {
             this.rows.addAll(rows);
         }
         this.pressedRow = -1;
-        clampScroll();
+        this.scroll.reset();
+        this.scroll.setMax(maxScroll());
     }
 
     public void clear() {
         setRows(List.of());
-        this.scroll = 0;
     }
 
     public int rowCount() {
@@ -92,12 +93,8 @@ public class GlassListView extends AbstractWidget {
         return Math.max(0, contentHeight() - height);
     }
 
-    private void clampScroll() {
-        scroll = Math.max(0.0D, Math.min(scroll, maxScroll()));
-    }
-
     private int rowTop(int index) {
-        return getY() + index * ROW_HEIGHT - (int) Math.round(scroll);
+        return getY() + index * ROW_HEIGHT - scroll.offset();
     }
 
     private int actionX0() {
@@ -113,7 +110,7 @@ public class GlassListView extends AbstractWidget {
         if (!isMouseOver(mouseX, mouseY)) {
             return -1;
         }
-        int relative = (int) Math.floor(mouseY - getY() + scroll);
+        int relative = (int) Math.floor(mouseY - getY() + scroll.position());
         if (relative < 0) {
             return -1;
         }
@@ -169,10 +166,15 @@ public class GlassListView extends AbstractWidget {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (!active || !visible || !isMouseOver(mouseX, mouseY) || maxScroll() <= 0) {
+        if (!active || !visible || !isMouseOver(mouseX, mouseY)) {
             return false;
         }
-        scroll = Math.max(0.0D, Math.min(scroll - scrollY * ROW_HEIGHT, maxScroll()));
+        scroll.setMax(maxScroll());
+        if (!scroll.canScroll()) {
+            return false;
+        }
+        // 只给冲量：惯性与平滑跟随由 GlassScroll 推进（和浏览界面同一套手感）
+        scroll.impulse(-scrollY * ROW_HEIGHT);
         return true;
     }
 
@@ -183,6 +185,9 @@ public class GlassListView extends AbstractWidget {
         if (rows.isEmpty()) {
             return;
         }
+        // 先推进滚动：位置在这一帧内保持不变，下面所有坐标都用同一份
+        scroll.setMax(maxScroll());
+        scroll.tick();
         int x0 = getX();
         int y0 = getY();
         int x1 = x0 + width;
@@ -199,7 +204,10 @@ public class GlassListView extends AbstractWidget {
         float down = GlassWidgets.clamp01(press.value());
 
         Font font = Minecraft.getInstance().font;
-        graphics.enableScissor(x0, y0, x1, y1);
+        // 一道裁剪管住文字和玻璃：滚出可见区的行、行尾按钮都由它遮挡。
+        // 只用 enableScissor 是不够的——玻璃是手写 BlitRenderState 提交的，看不到原版
+        // 的 scissor 栈，行尾按钮会在滚动区外露出来。
+        GlassWidgets.beginClip(graphics, x0, y0, x1, y1);
         for (int index = 0; index < rows.size(); index++) {
             int top = rowTop(index);
             if (top + ROW_HEIGHT <= y0 || top >= y1) {
@@ -208,10 +216,14 @@ public class GlassListView extends AbstractWidget {
             Row row = rows.get(index);
             boolean rowHovered = index == hoverRow;
 
-            if (rowHovered) {
-                // 悬停底色：一行玻璃感的高亮，不额外画整块玻璃（太贵且没必要）
-                GlassWidgets.roundedFill(graphics, x0, top + 1, x1 - SCROLLBAR_WIDTH - 3, top + ROW_HEIGHT - 1,
-                        0xFFFFFF, 0xFFFFFF, 6.0F, 0.05F + 0.05F * lift, 1.0F);
+            // 每一行都是一小块液态玻璃（ROW 材质），悬停时靠 lift 提亮。
+            // 和浏览界面的列表行用同一套材质，两个列表看起来才是同一种东西。
+            // 越界部分交给外层的裁剪，不再夹几何（夹了会把圆角压歪）。
+            if (!GlassWidgets.glassBackground(graphics, x0, top + 1, x1 - SCROLLBAR_WIDTH - 3,
+                    top + ROW_HEIGHT - 1, GlassTheme.ROW, rowHovered ? 1.0F : 0.18F, 0.0F)) {
+                GlassWidgets.roundedFill(graphics, x0, top + 1, x1 - SCROLLBAR_WIDTH - 3,
+                        top + ROW_HEIGHT - 1,
+                        0xFFFFFF, 0xFFFFFF, 6.0F, 0.05F + 0.05F * (rowHovered ? lift : 0.0F), 1.0F);
             }
 
             int textY = top + Math.round((ROW_HEIGHT - 8 * TEXT_SCALE) / 2.0F);
@@ -235,7 +247,7 @@ public class GlassListView extends AbstractWidget {
                     GlassWidgets.dim(GlassTheme.TEXT, 0.10F * actionDown), ACTION_SCALE);
         }
         drawScrollbar(graphics, x1, y0, y1);
-        graphics.disableScissor();
+        GlassWidgets.endClip(graphics);
     }
 
     /**
@@ -289,7 +301,7 @@ public class GlassListView extends AbstractWidget {
         int trackX0 = x1 - SCROLLBAR_WIDTH;
         int trackHeight = y1 - y0;
         int thumbHeight = Math.max(12, trackHeight * trackHeight / contentHeight());
-        int thumbY = y0 + (int) Math.round((trackHeight - thumbHeight) * (scroll / maxScroll()));
+        int thumbY = y0 + (int) Math.round((trackHeight - thumbHeight) * (scroll.position() / maxScroll()));
         GlassWidgets.roundedFill(graphics, trackX0, thumbY, trackX0 + SCROLLBAR_WIDTH, thumbY + thumbHeight,
                 0xFFFFFF, 0xFFFFFF, SCROLLBAR_WIDTH / 2.0F, 0.28F, 1.0F);
     }

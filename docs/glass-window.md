@@ -161,6 +161,25 @@ right.layoutContent();
 卡片通过 `GlassPanel.drawTuned` 绘制，用的是 `childLook`（带窗口叠加浓度），
 所以它折射的是"世界背景 + 窗口那层浅色叠加"，看起来嵌在窗口里而不是浮在外面。
 
+### 次级材质：TRACK / PILL / ROW / BADGE
+
+界面里还有几类"窗口内的第二、第三层玻璃"，参数都按同一套规律收：
+
+| 材质 | 用途 | 半径 | 折射 | 色散 | 中心收缩 |
+|---|---|---|---|---|---|
+| `TRACK` | 分段控件（tabs）底槽 | 11 | 8 | 0.22 | 2.6 |
+| `PILL` | 分段控件选中胶囊 | 10 | 5 | 0.16 | 1.6 |
+| `ROW` | 列表行、返回按钮、"加载更多" | 7 | 5 | 0.12 | 1.4 |
+| `BADGE` | 详情页数据小标签 | 5 | 3.5 | 0.08 | 0.9 |
+
+规律是**层数越往上、元素越小，折射与色散越低**。原因有两个：
+
+- 玻璃叠玻璃会把折射重复施加，中心区域糊成一团（和 `CARD` 同一条约束）；
+- 列表行一屏十几条、标签一屏三四个，任何一项调大都会互相打架，远看是一片噪点。
+
+这四套材质都走 `GlassWidgets.glassBackground`，和按钮、开关是同一个封装：悬停靠 `lift`
+提亮边缘折射，按下靠 `press` 收缩并压暗，退化路径的圆角与着色器同一套规则。
+
 ### 圆角必须与容器同心
 
 卡片贴着窗口边缘时，两者的圆角若不同心，角落处会露出两条错开的弧线，看起来就是
@@ -580,15 +599,45 @@ SELECTION 12→9.6、BUTTON 32→4、TOGGLE 24→4.5、KNOB 18→3.5。
 
 ## 打开界面
 
-玻璃界面打开前要预编译管线并抓第一份背景，且**不能用 `setScreenAndShow`**——它会同步强制
-渲染一帧，而这一帧会跳过世界提取（`GameRenderer.extract(deltaTracker, false)`），主渲染目标
-只剩清屏黑色，玻璃采样到的就是整屏黑，表现为"打开窗口闪一帧黑屏"。正确写法：
+**唯一正确入口是 `GlassWindowScreen.open(screen)`**，不要自己写 `new XxxScreen()` + `setScreen`。
+它只做两件事，但两件都不能漏：
 
 ```java
-MyScreen screen = new MyScreen();
-GlassPanel.prewarm(screen.window().style());   // 在渲染循环之外完成全部重资源准备
-Minecraft.getInstance().gui.setScreen(screen); // 不强制渲染，下一帧世界照常绘制
+public static void open(GlassWindowScreen screen) {
+    GlassPanel.prewarm(screen.window().style());   // ① 编译管线 + 分配离屏贴图（不提交 GPU 命令）
+    Minecraft.getInstance().gui.setScreen(screen); // ② 不强制渲染，下一帧世界照常绘制
+}
 ```
+
+### ① 预编译只做"不提交命令"的部分
+
+`prewarm` 会编译全部玻璃管线（窗口 + 按钮/输入框/开关/卡片/分段控件/列表行/标签）、
+按当前分辨率分配 8 张离屏贴图，**但不抓取背景**。
+
+早先的版本会在 `prewarm` 里顺手 `captureFrame()`，想的是"界面第一帧就有内容可画"。这行不通：
+抓取要 `createCommandEncoder()` + `submit()`，而"打开界面"发生在**客户端 tick 阶段**——
+上一帧刚呈现、本帧的命令还没开始。在这个位置插一条提交，驱动会把当前帧当成一次不完整的
+呈现，表现就是打开窗口时闪一帧黑屏。显存分配与管线编译在 tick 阶段是安全的（它们不提交
+命令），所以两件事必须拆开。
+
+第一份背景模糊留给 `GlassPanel.beforeGui()` 在帧内抓（由 `GameRendererMixin` 挂在
+`GuiRenderer.render()` 之前），那里世界已经画好、界面还没画，且处在帧内。
+
+### ② 首帧背景没就绪时整扇窗口都不画
+
+`GlassPanel.draw` 返回 `boolean`：背景还没抓好的那一帧返回 `false`，**不填 fallback 色**
+（那是一块 88% 不透明的深色，正好盖住大半个屏幕，就是"打开窗口瞬间闪一下"的来源）。
+`GlassWindowScreen.extractRenderState` 拿到 `false` 就直接返回，连叠加层和控件都不画——
+只画叠加层会出现"一块没有玻璃质感的半透明色板 + 一排控件"，比晚一帧出现更像 bug。
+开场动画本来就把窗口放在屏幕外，晚一帧不会露馅。
+
+### ③ 不能用 `setScreenAndShow`
+
+`Minecraft.setScreenAndShow` 会在设置界面后**同步强制渲染一帧**，而那一帧跳过世界提取
+（`GameRenderer.extract(deltaTracker, false)` → `gameRenderState.shouldRenderLevel = false`），
+`GameRenderer.render()` 走"只清屏"的分支，主渲染目标只剩清屏黑色，玻璃采样到的就是整屏黑。
+`Gui.setScreen` 做同样的界面切换（`init`、鼠标释放、`KeyMapping.releaseAll`、输入处理），
+但不会强制渲染，世界照常绘制到下一帧。
 
 ---
 
@@ -696,6 +745,73 @@ WindowAnimation custom = new WindowAnimation(400L, elapsed -> {
 绘制顺序上，玻璃先提交、控件后提交。`GuiRenderState` 是分层结构，`addGuiElement` 会把新
 元素放进所有"边界相交"元素的上层，所以控件必定浮在玻璃之上——与 `RenderPipeline` 的排序
 键无关。
+
+### 界面已经开着，只想换一批控件
+
+窗口缩放、`rebuildWidgets()` 会走 `init()` → `buildContent`，但 `init()` 会重新播一遍开场
+动画。**界面内部换页**（例如从搜索页进到详情页，详情页不需要搜索框和标签栏）要调
+`relayoutContent()`：清空控件、重算内容区、再调一次 `buildContent`，不碰动画时间轴。
+
+它还会顺手 `setFocused(null)`——控件马上要被整体丢弃，留着焦点会让下一次鼠标释放事件派发
+给一个已经不在界面上的控件。
+
+调用方要保证 `buildContent` 能**只按字段状态**把控件重新摆一遍：状态挂字段、控件每次新建。
+
+---
+
+## 滚动：`GlassScroll`
+
+列表滚动不要自己写 `scroll += delta`。那是**瞬时跳变**——滚一格画面就跳一格，帧率再高也是
+阶梯状的，观感就是"不丝滑"。统一用 `GlassScroll`，它把滚动拆成两层：
+
+| 层 | 职责 | 时间常数 |
+| --- | --- | --- |
+| 目标位置 | 吃滚轮的**冲量**，按 `e^(-t/τ)` 衰减地往前滑 | `DAMPING = 0.17s` |
+| 画面位置 | 指数逼近目标位置，形成轻微滞后 | `FOLLOW = 0.055s` |
+
+两层都用 `1 - e^(-dt/τ)`（而不是固定比例系数），所以 30 / 60 / 144 帧率下滑动**距离与手感
+完全一致**，不会出现"高帧率滚得飞快、掉帧时一顿一顿"。`dt` 还夹了 50ms 上限，卡顿一下回来
+不会瞬移。
+
+```java
+private final GlassScroll scroll = new GlassScroll();
+
+// 每帧绘制开头
+scroll.setMax(contentHeight() - height);
+scroll.tick();
+
+// 滚轮
+scroll.impulse(-scrollY * step);
+
+// 排版
+int top = getY() + index * ROW_HEIGHT - scroll.offset();
+```
+
+撞到上下边界时速度会被清零，否则会一直"顶"着边界抖动。`reset()` 用于换数据（回到顶部并
+清速度），`snap()` 用于内容整体替换（立刻定位、不要动画）。
+
+### 裁剪：`GlassWidgets.beginClip` / `endClip`
+
+玻璃方块不是原版绘制，而是 `GlassWidgets` 自己组 `BlitRenderState` 提交的。原版的
+`enableScissor` 只把裁剪区挂到**它自己产出的渲染状态**上，手写提交的那些方块完全看不到——
+表现就是"文字被切掉了，玻璃还在外面画"：滚动区外的行底、徽标、行尾按钮会露出来。
+
+所以滚动区统一用这一对：
+
+```java
+GlassWidgets.beginClip(graphics, x0, y0, x1, y1);   // 原版 scissor + 玻璃 scissorArea
+// …画文字、图标、玻璃…
+GlassWidgets.endClip(graphics);
+```
+
+`beginClip` 内部做两件事：`graphics.enableScissor(...)`（管文字/图标/原版 blit），以及把矩形
+压进一份自己的裁剪区栈（管玻璃）。提交玻璃时把这个栈顶作为 `BlitRenderState` 的
+`scissorArea` 传给渲染器，由渲染器真正裁剪。嵌套时取交集，语义和原版 scissor 一致。
+
+**不要**再用"按可见区夹几何"的办法处理玻璃：夹完的矩形会让圆角、边缘畸变变形，滚到边界
+的那一行看起来像被压扁了。裁剪交给渲染器，形状完全不变，只是被挡住。
+
+滚动条要占一列固定宽度，行内容的右边界得把这列让出来，否则行和滚动条会叠在一起。
 
 ---
 
