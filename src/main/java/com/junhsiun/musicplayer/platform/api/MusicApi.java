@@ -1,6 +1,10 @@
 package com.junhsiun.musicplayer.platform.api;
 
 import com.junhsiun.musicplayer.model.ArtistInfo;
+import com.junhsiun.musicplayer.model.MediaDetail;
+import com.junhsiun.musicplayer.model.MediaItem;
+import com.junhsiun.musicplayer.model.MediaKind;
+import com.junhsiun.musicplayer.model.MediaPage;
 import com.junhsiun.musicplayer.model.PlaylistInfo;
 import com.junhsiun.musicplayer.model.ProgramInfo;
 import com.junhsiun.musicplayer.model.RadioInfo;
@@ -89,6 +93,36 @@ public interface MusicApi {
     CompletableFuture<List<SearchEntry>> searchRadios(String keyword);
 
     CompletableFuture<List<SearchEntry>> searchRadios(String keyword, int page);
+
+    // ── 浏览界面 ────────────────────────────────────────────────────
+
+    /**
+     * 按类型分页搜索，并带回封面 / 头像。
+     *
+     * <p>和上面那组 {@code searchXxx} 的区别只有两点：<b>带封面</b>、<b>统一入口</b>。
+     * 命令输出只需要文字，所以老方法返回 {@link SearchEntry}；浏览界面要画缩略图，
+     * 就需要 {@link MediaItem} 里那个封面地址。</p>
+     *
+     * <p>默认实现返回空页：数据来源没实现这个能力时，界面显示"没有结果"而不是报错——
+     * 少一个类型的封面不该让整个面板打不开。</p>
+     */
+    default CompletableFuture<MediaPage> searchMedia(MediaKind kind, String keyword, int page, int limit) {
+        return CompletableFuture.completedFuture(MediaPage.EMPTY);
+    }
+
+    /** 详情页元数据；条目本体另走 {@link #mediaEntries}。 */
+    default CompletableFuture<MediaDetail> mediaDetail(MediaKind kind, String id) {
+        return CompletableFuture.completedFuture(MediaDetail.empty(kind, id));
+    }
+
+    /**
+     * 详情页内的条目分页：歌单/歌手的曲目、用户的歌单、播客的节目。
+     *
+     * @param offset 从 0 开始的条目序号
+     */
+    default CompletableFuture<List<MediaItem>> mediaEntries(MediaKind kind, String id, int offset, int limit) {
+        return CompletableFuture.completedFuture(List.of());
+    }
 
     // ── 歌单 ────────────────────────────────────────────────────────
 

@@ -134,6 +134,35 @@ public final class GlassBackdrop {
     }
 
     /**
+     * 只把离屏贴图准备好（尺寸变化时重建），<b>不提交任何 GPU 命令</b>。
+     *
+     * <p>给 {@link GlassPanel#prewarm(GlassStyle)} 用：打开界面之前先把显存分配做掉，
+     * 免得界面首帧在渲染中途去建 8 张全屏级别的贴图。但<b>绝对不能</b>在这里顺手抓取——
+     * 抓取要 {@code createCommandEncoder()} + {@code submit()}，而"打开界面"发生在客户端 tick
+     * 阶段，那时上一帧刚提交完、本帧的命令还没开始，插一条提交进去会让驱动把当前帧当成
+     * 一次不完整的呈现，表现就是打开窗口时闪一帧黑。</p>
+     *
+     * <p>真正的抓取只允许出现在 {@link #captureFrame()}，由 {@code GameRendererMixin} 挂在
+     * {@code GuiRenderer.render()} 之前调用——那里世界已经画好、界面还没画，且处在帧内。</p>
+     */
+    public void prepare() {
+        if (failed) {
+            return;
+        }
+        RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
+        if (main == null || main.width <= 0 || main.height <= 0) {
+            return;
+        }
+        try {
+            ensureResources(main.width, main.height);
+        } catch (Throwable throwable) {
+            failed = true;
+            ready = false;
+            MusicPlayerMod.LOGGER.warn("液态玻璃背景贴图创建失败，改用简易面板", throwable);
+        }
+    }
+
+    /**
      * 抓取当前画面并重新计算两级模糊。必须在当前帧的界面绘制之前调用一次。
      */
     public void captureFrame() {
