@@ -65,6 +65,38 @@ public abstract class GlassWindowScreen extends Screen {
     }
 
     /**
+     * <b>打开液态玻璃界面的唯一正确入口。</b>
+     *
+     * <p>所有需要弹出玻璃窗口的地方都必须走这里，不要再自己写
+     * {@code new XxxScreen()} + {@code setScreen}。这里一次性把两件容易忘的事做对：</p>
+     *
+     * <ol>
+     *   <li><b>预编译管线、预分配离屏贴图</b>：{@link GlassPanel#prewarm} 只做这两件不提交
+     *       GPU 命令的事。放到打开界面的那一帧去做，会在渲染中途编译着色器 / 分配显存，
+     *       打断当前帧。</li>
+     *   <li><b>用 {@code Gui.setScreen} 而不是 {@code Minecraft.setScreenAndShow}</b>：
+     *       后者会在设置界面后同步强制渲染一帧，而那一帧跳过世界提取，主渲染目标只剩清屏
+     *       黑色，玻璃采样到的就是整屏黑——也就是"打开窗口闪一帧黑屏"。{@code Gui.setScreen}
+     *       做同样的界面切换（{@code init}、鼠标释放、输入处理），但世界照常绘制到下一帧。</li>
+     * </ol>
+     *
+     * <p>第一帧背景模糊还没抓（抓取只在 {@code beforeGui()} 里做，必须处在帧内），
+     * {@link GlassPanel#draw} 会因此跳过一帧玻璃；开场动画本来就是从屏幕外升进来，
+     * 少画一帧看不出来，比闪黑好得多。</p>
+     */
+    public static void open(GlassWindowScreen screen) {
+        if (screen == null) {
+            return;
+        }
+        GlassPanel.prewarm(screen.window().style());
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.gui == null) {
+            return;
+        }
+        minecraft.gui.setScreen(screen);
+    }
+
+    /**
      * 摆放内容控件。坐标以传入的内容区为参照，控件会自动跟随窗口动画。
      *
      * <p>每次 {@code init()}（首次打开、窗口缩放、{@link #replayOpening()} 触发的重建）都会调用。</p>
@@ -86,6 +118,26 @@ public abstract class GlassWindowScreen extends Screen {
     /** 重新播放一次开场动画，便于反复观察手感。 */
     protected final void replayOpening() {
         animationStartMillis = Util.getMillis();
+    }
+
+    /**
+     * 重新摆放内容控件，<b>不</b>播开场动画。
+     *
+     * <p>给"页面内切换"用：界面已经打开，只是内容区的控件换了一批（比如从搜索页进到详情页，
+     * 详情页不需要搜索框和标签栏）。直接复用 {@link #init()} 会把开场动画再播一遍，
+     * 看起来像窗口重新打开了一次。</p>
+     *
+     * <p>控件会被整体清空重建，所以调用方必须能在 {@link #buildContent} 里<b>按当前状态</b>
+     * 重新摆一遍——这也正是本类要求"状态挂在字段上、控件每次新建"的原因。</p>
+     */
+    protected final void relayoutContent() {
+        // 先把焦点清掉：控件马上就要被整体丢弃，留着焦点会让下一次鼠标释放事件
+        // 派发给一个已经不在界面上的控件
+        setFocused(null);
+        clearWidgets();
+        trackedWidgets.clear();
+        baseBounds = window.layout(this.width, this.height);
+        buildContent(window.contentBounds(baseBounds));
     }
 
     /** 开场动画是否已经播完。 */
@@ -260,14 +312,32 @@ public abstract class GlassWindowScreen extends Screen {
         WindowTransform transform = currentTransform();
         WindowBounds animated = transform.apply(baseBounds);
 
+        // 每帧开头清一次玻璃裁剪区：万一某个控件在 beginClip 之后提前返回，
+        // 残留的裁剪区会一直影响后面所有玻璃（包括窗口本身）
+        GlassWidgets.resetClip();
         GlassPanel.setLook(GlassTheme.look());
         GlassPanel.beginFrame(window.style());
-        // 控件玻璃用几份固定材质，提前校验编译
+        // 控件玻璃用几份固定材质，提前校验编译（管线在 prewarm 里已经编译过，这里只是标记本帧要画）
         GlassPanel.beginFrame(GlassTheme.BUTTON);
+        GlassPanel.beginFrame(GlassTheme.FIELD);
         GlassPanel.beginFrame(GlassTheme.TOGGLE);
         GlassPanel.beginFrame(GlassTheme.KNOB);
+        GlassPanel.beginFrame(GlassTheme.CARD);
+        GlassPanel.beginFrame(GlassTheme.TRACK);
+        GlassPanel.beginFrame(GlassTheme.PILL);
+        GlassPanel.beginFrame(GlassTheme.ROW);
+        GlassPanel.beginFrame(GlassTheme.BADGE);
         applyTransformToChildren(transform);
-        GlassPanel.draw(graphics, animated.x0(), animated.y0(), animated.x1(), animated.y1(), window.style());
+        boolean glassDrawn = GlassPanel.draw(graphics, animated.x0(), animated.y0(),
+                animated.x1(), animated.y1(), window.style());
+        if (!glassDrawn) {
+            // 这一帧背景模糊还没就绪（界面刚打开的第一帧）：整扇窗口都先不画。
+            //
+            // 不能只跳过玻璃、照画叠加层和控件：那样屏幕上会先出现一块没有玻璃质感的
+            // 半透明色板 + 一排控件，比"晚一帧出现"更像 bug。开场动画本来就把窗口放在
+            // 屏幕外，晚一帧不会露馅。
+            return;
+        }
         // 窗口的染色同样走叠加层，和控件共用同一个透明度
         GlassWidgets.windowOverlay(graphics, animated.x0(), animated.y0(),
                 animated.x1(), animated.y1(), GlassTheme.Sizes.WINDOW_RADIUS);

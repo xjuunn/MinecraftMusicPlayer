@@ -2,6 +2,7 @@ package com.junhsiun.musicplayer.client.gui.glass;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
+import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.textures.GpuSampler;
@@ -41,6 +42,17 @@ public final class GlassPanel {
     /** 本帧是否有界面请求了玻璃（由提取阶段登记，绘制前消费）。 */
     private static boolean requested;
 
+    /**
+     * 控件用的固定材质。
+     *
+     * <p>它们全部在 {@link #prewarm(GlassStyle)} 里一次性编译：这些材质的参数不会变，
+     * 每份只有两套（窗口背景 / 子控件背景），一次编译就能一直复用。</p>
+     */
+    private static final GlassStyle[] CONTROL_STYLES = {
+            GlassTheme.BUTTON, GlassTheme.FIELD, GlassTheme.TOGGLE, GlassTheme.KNOB,
+            GlassTheme.CARD, GlassTheme.TRACK, GlassTheme.PILL, GlassTheme.ROW, GlassTheme.BADGE
+    };
+
     private GlassPanel() {
     }
 
@@ -53,9 +65,11 @@ public final class GlassPanel {
      * @param x1       右下角 x
      * @param y1       右下角 y
      * @param style    材质参数
+     * @return 是否真的提交了玻璃；{@code false} 表示这一帧背景还没就绪（首帧）
      */
-    public static void draw(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1, GlassStyle style) {
-        draw(graphics, x0, y0, x1, y1, style, true);
+    public static boolean draw(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+                               GlassStyle style) {
+        return draw(graphics, x0, y0, x1, y1, style, true);
     }
 
     /** 当前这一帧的外观（模糊度），由界面在提取阶段设置。 */
@@ -85,18 +99,28 @@ public final class GlassPanel {
     }
 
     /**
-     * 提前把玻璃要用的一切重资源准备好：编译全部管线、创建离屏贴图并抓好第一份背景。
+     * 提前把玻璃要用的一切重资源准备好：编译全部管线、创建离屏贴图。
      *
-     * <p><b>必须在一帧的渲染流程之外调用</b>（例如打开界面前的交互回调 / 客户端 tick）。
-     * 管线编译和纹理创建是耗时的 GPU 操作，如果放在界面那一帧的提取或绘制阶段里做，
-     * 会打断正在进行的帧，驱动会先送出一帧黑屏，然后才出现界面。挪到渲染循环之外，
-     * 它后面那一帧就是完整的正常帧。</p>
+     * <p><b>这个方法不会提交任何 GPU 命令。</b>它只做两件"一次性、可重复调用"的事：
+     * 编译管线（CPU 侧）、按当前分辨率分配离屏贴图（显存分配）。第一份背景模糊留给
+     * {@link #beforeGui()} 在帧内抓——原因见下。</p>
+     *
+     * <p>曾经这里会顺手 {@code captureFrame()}，想的是"界面第一帧就有内容可画"。但那会在
+     * <b>客户端 tick 阶段</b>提交一条命令缓冲：此时上一帧刚呈现、本帧还没开始，驱动会把这次
+     * 提交当成一次不完整的呈现，于是打开窗口时闪一帧黑。管线编译与贴图分配放在 tick 阶段是
+     * 安全的（没有提交），所以两者要拆开。</p>
+     *
+     * <p>首帧背景没就绪时 {@link #draw} 会直接跳过绘制，窗口等下一帧再出现；
+     * 开场动画本来就是从屏幕外升进来，少画一帧玻璃看不出来。</p>
      *
      * <p>失败时退回简易面板，不影响界面可用性。</p>
      */
     public static void prewarm(GlassStyle style) {
         GlassBackdrop backdrop = GlassBackdrop.getInstance();
-        // 先标记内容不可信：抓取成功后会重新置为可用；万一抓取抛错，也不会拿旧内容去画
+        // 先把外观同步成配置里的值：管线是按 look 编译的。若这里用默认 look 编译、
+        // 界面里再 setLook 成配置值，等于首帧又要重新编译一遍（正是要避免的那件事）。
+        setLook(GlassTheme.look());
+        // 先标记内容不可信：抓好之后会重新置为可用；万一这一帧抓取抛错，也不会拿旧内容去画
         backdrop.invalidate();
         if (unavailable) {
             return;
@@ -105,6 +129,12 @@ public final class GlassPanel {
             RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, look));
             // 子控件用的是带窗口叠加的变体，一并编译，避免首次画按钮时才编译
             RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, childLook));
+            // 控件材质一次编译完：它们都是固定风格，一次性把 GPU 程序编译掉，
+            // 免得界面首帧在渲染中途才开始编译（那会打断当前帧）
+            for (GlassStyle control : CONTROL_STYLES) {
+                RenderSystem.getCompiledPipeline(GlassPipelines.panel(control, look));
+                RenderSystem.getCompiledPipeline(GlassPipelines.panel(control, childLook));
+            }
             prepared = true;
             compileShadowPipeline(style);
         } catch (Throwable throwable) {
@@ -112,8 +142,8 @@ public final class GlassPanel {
             MusicPlayerMod.LOGGER.warn("液态玻璃着色器编译失败，改用简易面板", throwable);
             return;
         }
-        // 建好 4 张离屏贴图并算好第一份模糊，界面第一帧直接就有内容可用
-        backdrop.captureFrame();
+        // 只分配离屏贴图，不提交命令；第一份模糊由本帧的 beforeGui() 完成
+        backdrop.prepare();
     }
 
     /**
@@ -187,24 +217,25 @@ public final class GlassPanel {
      * 画一块玻璃面板。
      *
      * @param withShadow 是否绘制底部投影
+     * @return 是否真的提交了玻璃
      */
-    public static void draw(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
-                            GlassStyle style, boolean withShadow) {
+    public static boolean draw(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+                               GlassStyle style, boolean withShadow) {
         if (x1 <= x0 || y1 <= y0) {
-            return;
+            return false;
         }
         GlassBackdrop backdrop = GlassBackdrop.getInstance();
         if (unavailable || !prepared || backdrop.hasFailed()) {
             // 着色器或背景永久不可用：退化成参考实现的 fallback 填充色，保证界面依旧可操作
             graphics.fill(x0, y0, x1, y1, style.fallback());
-            return;
+            return false;
         }
         if (!backdrop.isReady() || backdrop.softView() == null || backdrop.frostView() == null
                 || backdrop.heavyView() == null) {
             // 只是背景贴图这一帧还没抓好（界面刚打开的第一帧）：直接跳过，什么都不画。
             // 这里绝对不能填 fallback——那是一块 88% 不透明的深色，正好盖住大半个屏幕，
             // 就是"打开窗口瞬间闪一下"的来源。少画一帧玻璃肉眼看不出，画深色块却很显眼。
-            return;
+            return false;
         }
 
         GlassShadow shadow = style.shadow();
@@ -220,6 +251,7 @@ public final class GlassPanel {
         TextureSetup setup = tripleTexture(backdrop);
         submit(graphics, GlassPipelines.panel(style, look), setup, x0, y0, x1, y1,
                 GlassDebug.encode(style));
+        return true;
     }
 
     /**
@@ -283,6 +315,13 @@ public final class GlassPanel {
      */
     private static void submit(GuiGraphicsExtractor graphics, RenderPipeline pipeline,
                                TextureSetup setup, int x0, int y0, int x1, int y1, int color) {
+        // 带上当前裁剪区：玻璃面板是手写 BlitRenderState 提交的，原版 enableScissor 管不到，
+        // 不传的话滚动区里的面板会画到列表外面去（行、徽标、播放按钮都会漏出来）
+        ScreenRectangle clip = GlassWidgets.clipRectangle();
+        if (clip != null
+                && (x1 <= clip.left() || x0 >= clip.right() || y1 <= clip.top() || y0 >= clip.bottom())) {
+            return;
+        }
         graphics.guiRenderState.addGuiElement(new BlitRenderState(
                 pipeline,
                 setup,
@@ -291,7 +330,6 @@ public final class GlassPanel {
                 0.0F, 1.0F,
                 0.0F, 1.0F,
                 color,
-                null,
-                new ScreenRectangle(x0, y0, x1 - x0, y1 - y0)));
+                clip));
     }
 }
