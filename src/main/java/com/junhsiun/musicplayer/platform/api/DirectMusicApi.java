@@ -22,7 +22,6 @@ import com.junhsiun.musicplayer.platform.url.ByfunsUrlProvider;
 import com.junhsiun.musicplayer.platform.url.MycelisUrlProvider;
 import com.junhsiun.musicplayer.platform.url.QijieyaUrlProvider;
 import com.junhsiun.musicplayer.platform.url.SongUrlResolver;
-import com.junhsiun.musicplayer.platform.url.VkeysUrlProvider;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -68,13 +67,17 @@ public final class DirectMusicApi implements MusicApi {
     private final SongUrlResolver urlResolver;
     private final Map<String, CachedTrackIds> trackIdsCache = new ConcurrentHashMap<>();
 
-    /** 直连模式下的音源顺序：官方直链优先，Mycelis 仍作最后保底。 */
+    /**
+     * 音源顺序：Qijieya → Byfuns → 网易云官方直连 → Mycelis（保底）。
+     *
+     * <p>与 {@code NeteaseApiClient} 保持完全一致——两条取数路径（直连 / 后端）拿到的播放源
+     * 必须一样，否则同一首歌在两种模式下会有不同的可用性。每个音源失败会重试一次。</p>
+     */
     public DirectMusicApi() {
         SongUrlResolver resolver = new SongUrlResolver();
-        resolver.register(new DirectSongUrlProvider());
-        resolver.register(new ByfunsUrlProvider());
         resolver.register(new QijieyaUrlProvider());
-        resolver.register(new VkeysUrlProvider());
+        resolver.register(new ByfunsUrlProvider());
+        resolver.register(new DirectSongUrlProvider());
         resolver.register(new MycelisUrlProvider(DirectMusicApi::configuredBaseUrl));
         this.urlResolver = resolver;
     }

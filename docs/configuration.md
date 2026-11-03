@@ -158,6 +158,34 @@ config/minecraft-music-player.json
 
 迁移刻意做成"不覆盖用户已改过的值"，避免每次启动都把新配置打回旧值。
 
+## 音乐 URL 音源链
+
+点歌、刻录唱片、随机播放最终都要把「网易云歌曲 ID」换成一条**可播放的音频直链**，
+这件事由 `SongUrlResolver` 统一负责，顺序固定为：
+
+| 顺位 | 音源 | 说明 |
+|---|---|---|
+| 1 | **Qijieya** | `api.qijieya.cn/meting/`，302 跳到网易云 CDN 的 MP3；实测唯一稳定返回**完整时长**（VIP 曲也给整首）的免费源 |
+| 2 | **Byfuns** | `api.byfuns.top/1/`，纯文本返回 MP3 直链；偶发 504，故排第二 |
+| 3 | **网易云官方直连** | `/api/song/enhance/player/url`；免费曲可达 320k，VIP 曲无登录态时返回空 |
+| 4 | **Mycelis（后端代理）** | `{neteaseBaseUrl}/song/url/v1`；VIP 曲可能只给试听，因此只作最后保底 |
+
+规则：
+
+- **每个音源失败后会重试一次**（`SongUrlResolver.PROVIDER_ATTEMPTS = 2`），两次都失败才换下一个；
+- **命中即停**：拿到可用直链立刻返回，不再打扰后面的音源（第三方都是免费公共接口，
+  串行 + 命中即停能显著减少无谓请求，避免被限流）；
+- 整条链有总预算 `CHAIN_BUDGET_MILLIS = 12s`，全部音源都不可达时超时放弃；
+- 全部失败时：点歌返回 `musicplayer.song.no_source`（"无法获取可播放的音乐链接"），
+  客户端播放侧返回 `musicplayer.playback.no_source` / `all_sources_failed`。
+
+直连模式（`DirectMusicApi`）和后端模式（`NeteaseApiClient`）注册的是**同一条链**，
+避免同一首歌在两种模式下可用性不一致。
+
+> 音源站点随时可能失效或改动返回格式。新增/替换音源只需实现 `SongUrlProvider`
+> 并在上面两处注册；已移除的 VKEYS（`api.vkeys.cn`）实测对任意歌曲都返回
+> `code=500 未找到当前歌曲信息`，故不再参与。
+
 ## 相关文件
 
 - `src/main/java/com/junhsiun/musicplayer/config/MusicPlayerConfig.java` — 数据模型
