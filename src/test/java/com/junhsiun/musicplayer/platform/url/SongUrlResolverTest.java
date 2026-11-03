@@ -7,6 +7,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -14,20 +15,44 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SongUrlResolverTest {
 
-    /** 测试用假提供者：固定返回预设 URL，可选延迟。 */
+    /** 测试用假提供者：按次数返回预设结果，并记录被调用的次数与顺序。 */
     private static final class FakeProvider implements SongUrlProvider {
         private final String name;
-        private final List<String> result;
+        private final List<List<String>> resultsPerAttempt;
         private final long delayMillis;
+        private final AtomicInteger calls = new AtomicInteger();
+        private final List<String> callLog;
 
         FakeProvider(String name, List<String> result) {
-            this(name, result, 0L);
+            this(name, List.of(result), 0L, null);
         }
 
-        FakeProvider(String name, List<String> result, long delayMillis) {
+        FakeProvider(String name, List<List<String>> resultsPerAttempt, long delayMillis, List<String> callLog) {
             this.name = name;
-            this.result = result;
+            this.resultsPerAttempt = resultsPerAttempt;
             this.delayMillis = delayMillis;
+            this.callLog = callLog;
+        }
+
+        /**
+         * 每次调用依次返回一项结果，用完后重复最后一项。
+         *
+         * <p>用静态工厂而不是重载构造器：{@code List<String>} 与 {@code List<List<String>>}
+         * 的擦除类型相同，两个构造器会名称冲突。</p>
+         */
+        @SafeVarargs
+        static FakeProvider attempts(String name, List<String>... perAttempt) {
+            return new FakeProvider(name, List.of(perAttempt), 0L, null);
+        }
+
+        /** 同上，并把每次调用的音源名记进 {@code callLog}。 */
+        @SafeVarargs
+        static FakeProvider attemptsLogged(String name, List<String> callLog, List<String>... perAttempt) {
+            return new FakeProvider(name, List.of(perAttempt), 0L, callLog);
+        }
+
+        int calls() {
+            return calls.get();
         }
 
         @Override
@@ -37,17 +62,32 @@ class SongUrlResolverTest {
 
         @Override
         public CompletableFuture<List<String>> resolve(String songId) {
-            if (delayMillis > 0) {
-                return CompletableFuture.supplyAsync(() -> result,
-                        CompletableFuture.delayedExecutor(delayMillis, TimeUnit.MILLISECONDS));
+            return resolve(songId, SongUrlResolver.PROVIDER_TIMEOUT_SECONDS);
+        }
+
+        @Override
+        public CompletableFuture<List<String>> resolve(String songId, int timeoutSeconds) {
+            int index = calls.getAndIncrement();
+            if (callLog != null) {
+                callLog.add(name);
             }
-            return CompletableFuture.completedFuture(result);
+            List<String> result = resultsPerAttempt.get(Math.min(index, resultsPerAttempt.size() - 1));
+            if (delayMillis <= 0L) {
+                return CompletableFuture.completedFuture(result);
+            }
+            // 真实提供者由 submitProbe 在超时后让 future 以空结果收尾；这里同样按超时
+            // 判失败，否则慢速提供者"超时后照样返回结果"，测不出解析器的超时行为。
+            CompletableFuture<List<String>> future = new CompletableFuture<>();
+            CompletableFuture.delayedExecutor(delayMillis, TimeUnit.MILLISECONDS)
+                    .execute(() -> future.complete(result));
+            return future.completeOnTimeout(List.of(), timeoutSeconds, TimeUnit.SECONDS);
         }
     }
 
-    /** 抛异常的提供者，用于测试异常处理。 */
+    /** 抛异常的提供者，用于测试异常处理与重试。 */
     private static final class ThrowingProvider implements SongUrlProvider {
         private final String name;
+        private final AtomicInteger calls = new AtomicInteger();
 
         ThrowingProvider(String name) {
             this.name = name;
@@ -60,121 +100,134 @@ class SongUrlResolverTest {
 
         @Override
         public CompletableFuture<List<String>> resolve(String songId) {
+            calls.incrementAndGet();
             CompletableFuture<List<String>> f = new CompletableFuture<>();
             f.completeExceptionally(new RuntimeException("模拟失败"));
             return f;
         }
     }
 
-    private static List<String> await(CompletableFuture<List<String>> future) throws ExecutionException, InterruptedException, TimeoutException {
-        return future.get(5, TimeUnit.SECONDS);
+    private static List<String> await(CompletableFuture<List<String>> future)
+            throws ExecutionException, InterruptedException, TimeoutException {
+        return future.get(10, TimeUnit.SECONDS);
     }
 
-    // ── 基本优先级 ────────────────────────────────────────
+    // ── 优先级与短路 ──────────────────────────────────────
 
     @Test
-    void 按注册顺序返回去重后的URL_Byfuns优先() throws Exception {
+    void 首选音源命中时不再尝试后续音源() throws Exception {
+        List<String> callLog = new java.util.ArrayList<>();
         SongUrlResolver resolver = new SongUrlResolver();
-        resolver.register(new FakeProvider("Byfuns", List.of("https://byfuns.mp3")));
-        resolver.register(new FakeProvider("Qijieya", List.of("https://qijieya.mp3")));
-        resolver.register(new FakeProvider("Mycelis", List.of("https://mycelis.mp3")));
-
-        List<String> urls = await(resolver.resolve("123"));
-        assertEquals(List.of("https://byfuns.mp3", "https://qijieya.mp3", "https://mycelis.mp3"), urls);
-    }
-
-    @Test
-    void 先注册的提供者URL排在前面() throws Exception {
-        SongUrlResolver resolver = new SongUrlResolver();
-        resolver.register(new FakeProvider("First", List.of("https://first.mp3")));
-        resolver.register(new FakeProvider("Second", List.of("https://second.mp3")));
+        resolver.register(FakeProvider.attemptsLogged("Qijieya", callLog, List.of("https://q.mp3")));
+        resolver.register(FakeProvider.attemptsLogged("Byfuns", callLog, List.of("https://b.mp3")));
+        resolver.register(FakeProvider.attemptsLogged("Mycelis", callLog, List.of("https://m.mp3")));
 
         List<String> urls = await(resolver.resolve("1"));
-        assertEquals("https://first.mp3", urls.get(0));
-        assertEquals("https://second.mp3", urls.get(1));
+        assertEquals(List.of("https://q.mp3"), urls);
+        assertEquals(List.of("Qijieya"), callLog);
     }
 
     @Test
-    void 多个提供者每个返回多个URL全部保留且按序() throws Exception {
+    void 按注册顺序选第一个可用的音源() throws Exception {
         SongUrlResolver resolver = new SongUrlResolver();
-        resolver.register(new FakeProvider("A", List.of("https://a1.mp3", "https://a2.mp3")));
-        resolver.register(new FakeProvider("B", List.of("https://b1.mp3")));
+        resolver.register(new FakeProvider("Qijieya", List.of()));
+        resolver.register(new FakeProvider("Byfuns", List.of("https://b.mp3")));
+        resolver.register(new FakeProvider("Direct", List.of("https://d.mp3")));
 
-        List<String> urls = await(resolver.resolve("1"));
-        assertEquals(List.of("https://a1.mp3", "https://a2.mp3", "https://b1.mp3"), urls);
+        assertEquals(List.of("https://b.mp3"), await(resolver.resolve("1")));
     }
 
-    // ── 回退 ──────────────────────────────────────────────
-
     @Test
-    void 前段源失败时回退到后段源() throws Exception {
+    void 后续音源也失败时继续往下一个() throws Exception {
         SongUrlResolver resolver = new SongUrlResolver();
+        resolver.register(new FakeProvider("Qijieya", List.of()));
         resolver.register(new FakeProvider("Byfuns", List.of()));
-        resolver.register(new FakeProvider("Qijieya", List.of("https://qijieya.mp3")));
-        resolver.register(new FakeProvider("Mycelis", List.of("https://mycelis.mp3")));
+        resolver.register(new FakeProvider("Direct", List.of("https://d.mp3")));
 
-        List<String> urls = await(resolver.resolve("123"));
-        assertEquals(List.of("https://qijieya.mp3", "https://mycelis.mp3"), urls);
+        assertEquals(List.of("https://d.mp3"), await(resolver.resolve("1")));
     }
 
+    // ── 重试 ──────────────────────────────────────────────
+
     @Test
-    void 所有提供者都抛异常时返回空列表() throws Exception {
+    void 音源首次失败会重试一次并采用重试结果() throws Exception {
         SongUrlResolver resolver = new SongUrlResolver();
-        resolver.register(new ThrowingProvider("Bad1"));
-        resolver.register(new ThrowingProvider("Bad2"));
+        FakeProvider qijieya = FakeProvider.attempts("Qijieya", List.of(), List.of("https://retry.mp3"));
+
+        resolver.register(qijieya);
+        resolver.register(new FakeProvider("Byfuns", List.of("https://b.mp3")));
 
         List<String> urls = await(resolver.resolve("1"));
-        assertTrue(urls.isEmpty());
+        assertEquals(List.of("https://retry.mp3"), urls);
+        assertEquals(2, qijieya.calls());
     }
 
     @Test
-    void 混合成功与异常提供者() throws Exception {
+    void 重试成功后不再尝试后面的音源() throws Exception {
+        List<String> callLog = new java.util.ArrayList<>();
         SongUrlResolver resolver = new SongUrlResolver();
-        resolver.register(new ThrowingProvider("Bad"));
+
+        resolver.register(FakeProvider.attemptsLogged("Qijieya", callLog, List.of(), List.of("https://retry.mp3")));
+        resolver.register(FakeProvider.attemptsLogged("Byfuns", callLog, List.of("https://b.mp3")));
+
+        await(resolver.resolve("1"));
+        assertEquals(List.of("Qijieya", "Qijieya"), callLog);
+    }
+
+    @Test
+    void 两次都失败才换下一个音源() throws Exception {
+        SongUrlResolver resolver = new SongUrlResolver();
+        FakeProvider qijieya = FakeProvider.attempts("Qijieya", List.of());
+        resolver.register(qijieya);
+        resolver.register(new FakeProvider("Byfuns", List.of("https://b.mp3")));
+
+        List<String> urls = await(resolver.resolve("1"));
+        assertEquals(List.of("https://b.mp3"), urls);
+        assertEquals(2, qijieya.calls());
+    }
+
+    @Test
+    void 每个音源最多尝试两次() throws Exception {
+        SongUrlResolver resolver = new SongUrlResolver();
+        FakeProvider qijieya = FakeProvider.attempts("Qijieya", List.of());
+        FakeProvider byfuns = FakeProvider.attempts("Byfuns", List.of());
+        resolver.register(qijieya);
+        resolver.register(byfuns);
+
+        assertTrue(await(resolver.resolve("1")).isEmpty());
+        assertEquals(2, qijieya.calls());
+        assertEquals(2, byfuns.calls());
+    }
+
+    @Test
+    void 抛异常的音源也会重试() throws Exception {
+        SongUrlResolver resolver = new SongUrlResolver();
+        ThrowingProvider bad = new ThrowingProvider("Bad");
+        resolver.register(bad);
         resolver.register(new FakeProvider("Good", List.of("https://good.mp3")));
 
-        List<String> urls = await(resolver.resolve("1"));
-        assertEquals(List.of("https://good.mp3"), urls);
+        assertEquals(List.of("https://good.mp3"), await(resolver.resolve("1")));
+        assertEquals(2, bad.calls.get());
     }
 
-    // ── 去重 ──────────────────────────────────────────────
+    // ── 全部失败 ──────────────────────────────────────────
 
     @Test
-    void 重复URL会去重() throws Exception {
+    void 全部音源都失败时返回空列表() throws Exception {
         SongUrlResolver resolver = new SongUrlResolver();
-        resolver.register(new FakeProvider("Byfuns", List.of("https://same.mp3")));
-        resolver.register(new FakeProvider("Qijieya", List.of("https://same.mp3")));
-
-        List<String> urls = await(resolver.resolve("123"));
-        assertEquals(List.of("https://same.mp3"), urls);
-    }
-
-    @Test
-    void 部分URL重复时保留首次出现的顺序() throws Exception {
-        SongUrlResolver resolver = new SongUrlResolver();
-        resolver.register(new FakeProvider("A", List.of("https://a.mp3", "https://shared.mp3")));
-        resolver.register(new FakeProvider("B", List.of("https://shared.mp3", "https://b.mp3")));
-
-        List<String> urls = await(resolver.resolve("1"));
-        assertEquals(List.of("https://a.mp3", "https://shared.mp3", "https://b.mp3"), urls);
-    }
-
-    // ── 空与边界 ──────────────────────────────────────────
-
-    @Test
-    void 全部失败时返回空列表() throws Exception {
-        SongUrlResolver resolver = new SongUrlResolver();
-        resolver.register(new FakeProvider("Byfuns", List.of()));
         resolver.register(new FakeProvider("Qijieya", List.of()));
+        resolver.register(new FakeProvider("Byfuns", List.of()));
+        resolver.register(new FakeProvider("Direct", List.of()));
+        resolver.register(new FakeProvider("Mycelis", List.of()));
 
-        List<String> urls = await(resolver.resolve("123"));
-        assertTrue(urls.isEmpty());
+        assertTrue(await(resolver.resolve("123")).isEmpty());
     }
 
     @Test
     void 无注册提供者时返回空列表() throws Exception {
         SongUrlResolver resolver = new SongUrlResolver();
         assertTrue(await(resolver.resolve("123")).isEmpty());
+        assertEquals(0, resolver.size());
     }
 
     @Test
@@ -183,27 +236,30 @@ class SongUrlResolverTest {
         resolver.register(null);
         resolver.register(new FakeProvider("OK", List.of("https://ok.mp3")));
 
-        List<String> urls = await(resolver.resolve("1"));
-        assertEquals(List.of("https://ok.mp3"), urls);
+        assertEquals(List.of("https://ok.mp3"), await(resolver.resolve("1")));
+        assertEquals(1, resolver.size());
     }
 
     @Test
-    void 提供者返回null列表时跳过() throws Exception {
-        CompletableFuture<List<String>> nullFuture = CompletableFuture.completedFuture(null);
+    void 提供者返回null列表时视为失败并重试() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
         SongUrlProvider nullProvider = new SongUrlProvider() {
             @Override public String name() { return "Null"; }
-            @Override public CompletableFuture<List<String>> resolve(String id) { return nullFuture; }
+            @Override public CompletableFuture<List<String>> resolve(String id) {
+                calls.incrementAndGet();
+                return CompletableFuture.completedFuture(null);
+            }
         };
         SongUrlResolver resolver = new SongUrlResolver();
         resolver.register(nullProvider);
         resolver.register(new FakeProvider("OK", List.of("https://ok.mp3")));
 
-        List<String> urls = await(resolver.resolve("1"));
-        assertEquals(List.of("https://ok.mp3"), urls);
+        assertEquals(List.of("https://ok.mp3"), await(resolver.resolve("1")));
+        assertEquals(2, calls.get());
     }
 
     @Test
-    void 提供者返回含空字符串的列表时过滤() throws Exception {
+    void 提供者返回含空白项的列表时过滤() throws Exception {
         List<String> mixed = new java.util.ArrayList<>();
         mixed.add("https://good.mp3");
         mixed.add("");
@@ -212,40 +268,33 @@ class SongUrlResolverTest {
         SongUrlResolver resolver = new SongUrlResolver();
         resolver.register(new FakeProvider("Mixed", mixed));
 
-        List<String> urls = await(resolver.resolve("1"));
-        assertEquals(List.of("https://good.mp3"), urls);
+        assertEquals(List.of("https://good.mp3"), await(resolver.resolve("1")));
     }
 
     // ── 超时 ──────────────────────────────────────────────
 
     @Test
-    void 超时的提供者会被跳过() throws Exception {
-        SongUrlResolver resolver = new SongUrlResolver();
-        resolver.register(new FakeProvider("Slow", List.of("https://slow.mp3"), 10_000L));
+    void 超时的音源会被跳过() throws Exception {
+        SongUrlResolver resolver = new SongUrlResolver(1);
+        resolver.register(new FakeProvider("Slow", List.of(List.of("https://slow.mp3")), 5_000L, null));
         resolver.register(new FakeProvider("Fast", List.of("https://fast.mp3")));
 
-        List<String> urls = await(resolver.resolve("123"));
-        assertEquals(List.of("https://fast.mp3"), urls);
+        assertEquals(List.of("https://fast.mp3"), await(resolver.resolve("1")));
     }
 
     @Test
-    void 自定义短超时() throws Exception {
+    void 所有音源都超时时返回空列表() throws Exception {
         SongUrlResolver resolver = new SongUrlResolver(1);
-        resolver.register(new FakeProvider("Slow", List.of("https://slow.mp3"), 5_000L));
-        resolver.register(new FakeProvider("Fast", List.of("https://fast.mp3")));
+        resolver.register(new FakeProvider("Slow1", List.of(List.of("https://1.mp3")), 5_000L, null));
+        resolver.register(new FakeProvider("Slow2", List.of(List.of("https://2.mp3")), 5_000L, null));
 
-        List<String> urls = await(resolver.resolve("1"));
-        assertEquals(List.of("https://fast.mp3"), urls);
+        assertTrue(await(resolver.resolve("1")).isEmpty());
     }
 
     @Test
-    void 所有提供者都超时时返回空列表() throws Exception {
-        SongUrlResolver resolver = new SongUrlResolver(1);
-        resolver.register(new FakeProvider("Slow1", List.of("https://1.mp3"), 5_000L));
-        resolver.register(new FakeProvider("Slow2", List.of("https://2.mp3"), 5_000L));
-
-        List<String> urls = await(resolver.resolve("1"));
-        assertTrue(urls.isEmpty());
+    void 自定义短超时不改变内置超时常量() {
+        assertEquals(3, SongUrlResolver.PROVIDER_TIMEOUT_SECONDS);
+        assertEquals(2, SongUrlResolver.PROVIDER_ATTEMPTS);
     }
 
     // ── URL trim ──────────────────────────────────────────
@@ -255,8 +304,7 @@ class SongUrlResolverTest {
         SongUrlResolver resolver = new SongUrlResolver();
         resolver.register(new FakeProvider("P", List.of("  https://trimmed.mp3  \n")));
 
-        List<String> urls = await(resolver.resolve("1"));
-        assertEquals(List.of("https://trimmed.mp3"), urls);
+        assertEquals(List.of("https://trimmed.mp3"), await(resolver.resolve("1")));
     }
 
     // ── 歌曲 ID 透传 ──────────────────────────────────────
