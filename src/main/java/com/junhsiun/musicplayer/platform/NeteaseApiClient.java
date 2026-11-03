@@ -18,13 +18,13 @@ import com.junhsiun.musicplayer.model.RadioInfo;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.model.UserPlaylistView;
+import com.junhsiun.musicplayer.platform.api.DirectSongUrlProvider;
 import com.junhsiun.musicplayer.platform.api.MediaJson;
 import com.junhsiun.musicplayer.platform.api.MusicApi;
 import com.junhsiun.musicplayer.platform.url.ByfunsUrlProvider;
 import com.junhsiun.musicplayer.platform.url.MycelisUrlProvider;
 import com.junhsiun.musicplayer.platform.url.QijieyaUrlProvider;
 import com.junhsiun.musicplayer.platform.url.SongUrlResolver;
-import com.junhsiun.musicplayer.platform.url.VkeysUrlProvider;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
 import com.junhsiun.musicplayer.util.Messages;
 import net.minecraft.network.chat.Component;
@@ -163,7 +163,10 @@ public final class NeteaseApiClient {
         return future;
     }
 
-    /** 单曲音源解析器：Byfuns/Qijieya 优先，Mycelis 保底。 */
+    /**
+     * 单曲音源解析器。顺序：Qijieya → Byfuns → 网易云官方直连 → Mycelis（保底），
+     * 每个音源失败会重试一次，细节见 {@link SongUrlResolver}。
+     */
     private final SongUrlResolver urlResolver;
     /** 基础地址提供者；为 null 时回退到共享配置（服务端行为）。 */
     private final Supplier<String> baseUrlSupplier;
@@ -179,9 +182,9 @@ public final class NeteaseApiClient {
     public NeteaseApiClient(Supplier<String> baseUrlSupplier) {
         this.baseUrlSupplier = baseUrlSupplier;
         urlResolver = new SongUrlResolver();
-        urlResolver.register(new ByfunsUrlProvider());
         urlResolver.register(new QijieyaUrlProvider());
-        urlResolver.register(new VkeysUrlProvider());
+        urlResolver.register(new ByfunsUrlProvider());
+        urlResolver.register(new DirectSongUrlProvider());
         urlResolver.register(baseUrlSupplier == null
                 ? new MycelisUrlProvider()
                 : new MycelisUrlProvider(this::baseUrl));
