@@ -165,7 +165,7 @@ public final class ClientMusicController {
             }
             try {
                 MusicPlayerMod.LOGGER.debug("开始尝试播放源 {}/{}: {} - {}", index + 1, urls.size(), title, Messages.sanitizeForLog(url));
-                playSingle(url, title, subtitle);
+                playSingle(url, title, subtitle, !bgm);
                 if (!Thread.currentThread().isInterrupted()) {
                     if (bgm) {
                         if (listener != null) {
@@ -195,7 +195,7 @@ public final class ClientMusicController {
         }
     }
 
-    private void playSingle(String url, String title, String subtitle) throws IOException, JavaLayerException {
+    private void playSingle(String url, String title, String subtitle, boolean notifyStart) throws IOException, JavaLayerException {
         OkHttpClient client = HttpClientFactory.create();
         Request request = new Request.Builder()
                 .url(url)
@@ -234,6 +234,12 @@ public final class ClientMusicController {
                     player = currentPlayer;
                 }
                 MusicPlayerMod.LOGGER.info("开始播放: {} - {}", title, subtitle);
+                // 下载完成的这一刻才是"真正开始出声"：先告诉服务端，再真正播放，
+                // 免得服务端从发出 play 包起就算时间，歌词比声音先跑。
+                if (notifyStart) {
+                    // 注意：这里不能动 audioDevice 的 seek 偏移——seek/resume 正是靠它跳转的
+                    reportStarted(currentTrackId);
+                }
                 currentPlayer.play();
             }
         } finally {
@@ -246,6 +252,14 @@ public final class ClientMusicController {
                 }
             }
         }
+    }
+
+    /** 告诉服务端"现在才真正开始出声"，服务端据此重新对齐歌词时间轴。 */
+    private void reportStarted(String trackId) {
+        if (trackId == null || trackId.isBlank()) {
+            return;
+        }
+        ClientPlayNetworking.send(MusicPlaybackReportPayload.started(trackId));
     }
 
     private void reportEnded(String trackId) {
@@ -272,10 +286,14 @@ public final class ClientMusicController {
         private FloatControl gainControl;
         private double jukeboxFadeVolume = 1.0D;
         private long seekPositionMillis;
+        /** 本次播放的起始偏移（毫秒），进度上报要加回来。 */
+        private long seekStartMillis;
         private long decodedMillis;
 
         private void setSeekPosition(long millis) {
             this.seekPositionMillis = millis;
+            // 记录本次播放的起始偏移：getPosition 要把它算进去
+            this.seekStartMillis = Math.max(0L, millis);
             this.decodedMillis = 0L;
         }
 
@@ -289,6 +307,8 @@ public final class ClientMusicController {
             gainControl = null;
             audioFormat = null;
             jukeboxFadeVolume = 1.0D;
+            // 声卡位置归零了，起始偏移也必须归零，否则下一次上报会带着上一条的偏移
+            seekStartMillis = 0L;
         }
 
         @Override
@@ -364,8 +384,16 @@ public final class ClientMusicController {
         }
 
         @Override
+        /**
+         * 当前播放位置（毫秒）。
+         *
+         * <p>{@code sourceLine} 的位置只统计<b>真正写进声卡</b>的音频；seek / resume 时
+         * 起始那一段是被解码后直接丢弃的（没有 write），声卡位置自然从 0 开始。
+         * 所以必须把 seek 起点加回来，否则歌词会比声音慢一整段。
+         */
         public int getPosition() {
-            return sourceLine == null ? 0 : (int) (sourceLine.getMicrosecondPosition() / 1000L);
+            long played = sourceLine == null ? 0L : sourceLine.getMicrosecondPosition() / 1000L;
+            return (int) (seekStartMillis + played);
         }
 
         private byte[] getByteArray(int length) {

@@ -128,4 +128,35 @@ public final class LyricService {
         }
         return best;
     }
+
+    /**
+     * 歌词时间轴该走多远。
+     *
+     * <p>服务端一发 {@code play} 就开始计时，但客户端还要把整首曲子下载完才出声，
+     * 这段静默期里如果照常按墙钟推进，歌词就会比声音先跑。所以：</p>
+     * <ul>
+     *   <li>客户端已经上报过真实位置 → <b>只信它</b>（它反映的是声卡真实播放进度）；</li>
+     *   <li>客户端刚收到 play、还没出声 → 返回 {@code 0}，歌词停在第一句之前；</li>
+     *   <li>一直没收到回报（无模组客户端）→ 过了宽限期回退到服务端计时。</li>
+     * </ul>
+     *
+     * @param started         客户端是否已经确认出声
+     * @param clientPosition  客户端上报的位置（毫秒），{@code < 0} 表示还没收到
+     * @param clientAgeMillis 距上次上报过了多久（毫秒）
+     * @param wallClockMillis 服务端从发出 play 算起的墙钟时间（毫秒）
+     * @param graceMillis     等不到上报时的宽限时间（毫秒）
+     */
+    public static long resolveElapsedMillis(boolean started, long clientPosition, long clientAgeMillis,
+                                            long wallClockMillis, long graceMillis) {
+        if (started && clientPosition >= 0L) {
+            return Math.max(0L, clientPosition + Math.max(0L, clientAgeMillis));
+        }
+        if (!started && wallClockMillis < graceMillis) {
+            return 0L;
+        }
+        if (clientPosition >= 0L) {
+            return Math.max(0L, Math.max(wallClockMillis, clientPosition + Math.max(0L, clientAgeMillis)));
+        }
+        return Math.max(0L, wallClockMillis);
+    }
 }
