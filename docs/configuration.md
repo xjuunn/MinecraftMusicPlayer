@@ -158,6 +158,67 @@ config/minecraft-music-player.json
 
 迁移刻意做成"不覆盖用户已改过的值"，避免每次启动都把新配置打回旧值。
 
+## 音乐 URL 音源链
+
+点歌、刻录唱片、随机播放最终都要把「网易云歌曲 ID」换成一条**可播放的音频直链**，
+这件事由 `SongUrlResolver` 统一负责，顺序固定为：
+
+| 顺位 | 音源 | 说明 |
+|---|---|---|
+| 1 | **Qijieya** | `api.qijieya.cn/meting/`，302 跳到网易云 CDN 的 MP3；实测唯一稳定返回**完整时长**（VIP 曲也给整首）的免费源 |
+| 2 | **Byfuns** | `api.byfuns.top/1/`，纯文本返回 MP3 直链；偶发 504，故排第二 |
+| 3 | **网易云官方直连** | `/api/song/enhance/player/url`；免费曲可达 320k，VIP 曲无登录态时返回空 |
+| 4 | **Mycelis（后端代理）** | `{neteaseBaseUrl}/song/url/v1`；VIP 曲可能只给试听，因此只作最后保底 |
+
+规则：
+
+- **每个音源失败后会重试一次**（`SongUrlResolver.PROVIDER_ATTEMPTS = 2`），两次都失败才换下一个；
+- **命中即停**：拿到可用直链立刻返回，不再打扰后面的音源（第三方都是免费公共接口，
+  串行 + 命中即停能显著减少无谓请求，避免被限流）；
+- 整条链有总预算 `CHAIN_BUDGET_MILLIS = 12s`，全部音源都不可达时超时放弃；
+- 全部失败时：点歌返回 `musicplayer.song.no_source`（"无法获取可播放的音乐链接"），
+  客户端播放侧返回 `musicplayer.playback.no_source` / `all_sources_failed`。
+
+直连模式（`DirectMusicApi`）和后端模式（`NeteaseApiClient`）注册的是**同一条链**，
+避免同一首歌在两种模式下可用性不一致。
+
+> 音源站点随时可能失效或改动返回格式。新增/替换音源只需实现 `SongUrlProvider`
+> 并在上面两处注册；已移除的 VKEYS（`api.vkeys.cn`）实测对任意歌曲都返回
+> `code=500 未找到当前歌曲信息`，故不再参与。
+
+## 歌词时间轴对齐
+
+歌词发在 action bar 上，跟着"当前播放位置"走。这里有个容易踩的坑：
+
+> 服务端发出 `play` 包就按墙钟开始计时，但客户端要**先把整首 MP3 下载完**才开始出声。
+> 几 MB 的曲子下载要几秒，这段静默期如果照常推进，歌词就会比声音先跑。
+
+处理办法是让客户端在**真正出声**时回报一条 `started`（`MusicPlaybackReportPayload.started`），
+服务端据此对齐时间轴：
+
+| 状态 | 歌词位置 |
+|---|---|
+| 收到 `play`，还没收到 `started` | **停在 0**，不推进 |
+| 收到 `started` 且收到过 `position` | **只信客户端位置**（声卡真实进度 + 上报间隔外推） |
+| 一直是没回报的旧客户端 | 超过 `PLAYBACK_START_GRACE_MILLIS = 3s` 宽限期后回退服务端计时 |
+
+判定集中在 `LyricService.resolveElapsedMillis(...)` 这个纯函数里，便于单测覆盖。
+
+几个配套细节：
+
+- **换曲 / seek / resume** 都要把 `clientPlaybackStarted` 复位并清掉旧位置——
+  否则新曲会沿用上一条的进度，歌词直接跳到中间；
+- **位置上报带脏数据保护**：超过曲长 + 5 秒的位置一律丢弃（旧曲残留或进度重置会产生这种值）；
+- **`AudioDevice.getPosition()` 必须加上 seek 起点**：seek / resume 时起始那段是被解码后
+  直接丢弃的（没写进声卡），声卡位置从 0 起算，不加回起点歌词会慢一整段；
+- **action bar 有显示时限**：原版约 3 秒（60 tick）自动隐藏，所以同一句歌词必须
+  周期性保活重发（`OVERLAY_REFRESH_TICKS = 40` ≈ 2 秒），否则会反复"消失—重现"，
+  看起来就是在闪。发送判断统一收敛成两点：**内容变了** 或 **保活到期**；
+- **曲终必须主动清屏**：歌词变空时要显式发一条空 overlay，否则原版会把最后一句留在
+  action bar 上；唱片机非歌单模式播完也要真正停止并从 `activeJukeboxes` 移除；
+- **唱片机**同理：`JukeboxPlaybackService.getJukeboxElapsedMillisForPlayer` 没收到真实位置时
+  在宽限期内返回 0。
+
 ## 相关文件
 
 - `src/main/java/com/junhsiun/musicplayer/config/MusicPlayerConfig.java` — 数据模型

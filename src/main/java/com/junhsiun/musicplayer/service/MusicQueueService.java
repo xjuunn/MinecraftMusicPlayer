@@ -68,6 +68,23 @@ public final class MusicQueueService {
     private volatile boolean lyricFetchAttempted = false;
     private long clientPositionMillis = -1L;
     private long clientPositionTime = 0L;
+    /**
+     * 客户端是否已经<b>真正出声</b>（收到 {@code started} 回报）。
+     *
+     * <p>服务端发出 {@code play} 后客户端要先下载完整首曲子，这段"静默加载期"里如果照常
+     * 按 {@code startedAt} 推进，歌词就会比声音先跑。收不到该回报时只在宽限期后回退到
+     * 乐观计时（例如没装模组客户端的兼容场景）。</p>
+     */
+    private boolean clientPlaybackStarted = false;
+    /** 等不到 {@code started} 时最多等这么久就按乐观计时继续，避免歌词永远不动。 */
+    private static final long PLAYBACK_START_GRACE_MILLIS = 3_000L;
+    /**
+     * 同一句歌词的保活重发周期（tick）。
+     *
+     * <p>原版 action bar 约 3 秒（60 tick）后自动隐藏，所以同一句歌词必须定期重发，
+     * 否则会反复"消失—重现"，看起来就是在闪。取 40 tick ≈ 2 秒，留出网络延迟余量。</p>
+     */
+    private static final int OVERLAY_REFRESH_TICKS = 40;
     private final Map<String, List<LyricLine>> jukeboxLyricsCache = new ConcurrentHashMap<>();
     private final Map<UUID, String> playerJukeboxTrackId = new HashMap<>();
     private final Map<UUID, String> playerJukeboxLastLyric = new HashMap<>();
@@ -160,6 +177,8 @@ public final class MusicQueueService {
         }
         long timeout = Math.min(currentPlayback.expectedEndAt() - currentPlayback.startedAt() + now - newElapsed, duration + 60_000L);
         currentPlayback = new CurrentPlayback(currentPlayback.track(), now - newElapsed, now - newElapsed + timeout, currentPlayback.requesterId(), currentPlayback.requesterName());
+        // 拖动进度会让客户端重新下载并重新出声，时间轴要以新的 started 为准
+        clientPlaybackStarted = false;
         clientPositionMillis = -1L;
         clientPositionTime = 0L;
         server.getPlayerList().getPlayers().stream()
@@ -187,6 +206,8 @@ public final class MusicQueueService {
         currentPlayback = new CurrentPlayback(currentPlayback.track(), now - offset, now - offset + timeout, currentPlayback.requesterId(), currentPlayback.requesterName());
         paused = false;
         pausedAtMillis = 0L;
+        // 恢复播放等于重新下发一次 play，同样要等客户端出声
+        clientPlaybackStarted = false;
         clientPositionMillis = -1L;
         clientPositionTime = 0L;
         server.getPlayerList().getPlayers().stream()
@@ -289,10 +310,20 @@ public final class MusicQueueService {
                         && (currentPlayback != null
                         || MusicPlayerMod.jukeboxService().isPlayerListening(player));
             }
-            if (!playerWantsLyrics) continue;
+            if (!playerWantsLyrics) {
+                // 玩家关掉歌词 / 已经没有音乐在放：手上有残留歌词就清掉再跳过，
+                // 否则关掉歌词开关或曲终之后 action bar 会一直挂着最后一句。
+                if (!playerLastOverlay.getOrDefault(player.getUUID(), "").isEmpty()) {
+                    player.sendOverlayMessage(Component.empty());
+                    playerLastOverlay.put(player.getUUID(), "");
+                }
+                continue;
+            }
 
             boolean nearJukebox = MusicPlayerMod.jukeboxService().isPlayerListening(player);
             String overlayText = "";
+            // 周期性保活标记：action bar 约 3 秒自动隐藏，必须定期重发同一句
+            boolean refreshDue = false;
 
             if (nearJukebox) {
                 String jtId = MusicPlayerMod.jukeboxService().getJukeboxTrackIdForPlayer(player);
@@ -326,14 +357,17 @@ public final class MusicQueueService {
 
                         String lastSent = playerJukeboxSentLyricText.getOrDefault(player.getUUID(), "");
                         int counter = playerJukeboxRefresh.merge(player.getUUID(), 0, (old, v) -> old + 1);
-                        if (counter >= 5) {
+                        if (counter >= OVERLAY_REFRESH_TICKS) {
                             playerJukeboxRefresh.put(player.getUUID(), 0);
-                            overlayText = jText;
+                            // 同一句歌词的保活重发：绕过"内容没变就不发"的去重
+                            refreshDue = true;
                         }
+                        // overlayText 始终是"当前该显示的歌词"，发不发由下面统一判断
+                        overlayText = jText;
                         if (!jText.equals(lastSent)) {
                             playerJukeboxSentLyricText.put(player.getUUID(), jText);
                             playerJukeboxRefresh.put(player.getUUID(), 0);
-                            overlayText = jText;
+                            refreshDue = true;
                         }
                     }
                 }
@@ -343,9 +377,9 @@ public final class MusicQueueService {
                 playerJukeboxSentLyricText.remove(player.getUUID());
                 playerJukeboxRefresh.remove(player.getUUID());
 
-                if (currentPlayback == null || currentLyrics.isEmpty()) {
+                if (currentPlayback == null || currentLyrics.isEmpty() || !lyricsReady()) {
                     if (!playerLastOverlay.getOrDefault(player.getUUID(), "").isEmpty()) {
-                        player.displayClientMessage(Component.literal(""), true);
+                        player.sendOverlayMessage(Component.empty());
                         playerLastOverlay.put(player.getUUID(), "");
                     }
                     continue;
@@ -363,38 +397,78 @@ public final class MusicQueueService {
                 }
 
                 int refreshCounter = playerLyricRefresh.merge(player.getUUID(), 1, Integer::sum);
-                if (refreshCounter >= 5) {
+                if (refreshCounter >= OVERLAY_REFRESH_TICKS) {
                     playerLyricRefresh.put(player.getUUID(), 0);
-                    overlayText = lyricText;
+                    // 同一句歌词的保活重发：绕过"内容没变就不发"的去重
+                    refreshDue = true;
                 }
+                // overlayText 始终是"当前该显示的歌词"，发不发由下面统一判断，
+                // 否则内容没变又赶上保活时会误判成"该清空"。
+                overlayText = lyricText;
                 String lastSent = playerLyricSentText.getOrDefault(player.getUUID(), "");
                 if (!lyricText.equals(lastSent)) {
                     playerLyricSentText.put(player.getUUID(), lyricText);
                     playerLyricRefresh.put(player.getUUID(), 0);
-                    overlayText = lyricText;
+                    refreshDue = true;
                     if (!lyricText.isEmpty()) playerLyricLastText.put(player.getUUID(), lyricText);
                 }
             }
 
+            // 曲终 / 唱片机停止后 overlayText 会变空，此时必须主动发一条空消息把
+            // 上一句歌词从 action bar 上抹掉，否则原版会把最后一句一直留着。
+            //
+            // 非空时只在「内容变了」或「保活到期」才发：原版 action bar 约 3 秒后
+            // 自动隐藏，所以同一句歌词必须周期性重发，否则会"消失—重现"地闪。
             if (!overlayText.isEmpty()) {
-                player.displayClientMessage(Component.literal("♫ " + overlayText).withStyle(ChatFormatting.AQUA), true);
-                playerLastOverlay.put(player.getUUID(), overlayText);
+                if (refreshDue) {
+                    player.sendOverlayMessage(Component.literal("♫ " + overlayText).withStyle(ChatFormatting.AQUA));
+                    playerLastOverlay.put(player.getUUID(), overlayText);
+                }
+            } else if (!playerLastOverlay.getOrDefault(player.getUUID(), "").isEmpty()) {
+                player.sendOverlayMessage(Component.empty());
+                playerLastOverlay.put(player.getUUID(), "");
             }
         }
     }
 
+    /**
+     * 当前歌词应处的时间轴位置（毫秒）。
+     *
+     * <p>优先级：<b>客户端上报的真实播放位置</b> &gt; 服务端乐观计时。
+     * 客户端刚收到 {@code play} 时还在下载音频，这段时间返回 {@code 0}，歌词停在第一句之前，
+     * 不会出现"歌还没响，词先跑"。</p>
+     */
     private long getElapsedMillis() {
         if (paused) {
             return Math.max(0L, pausedAtMillis);
         }
-        long monotonic = currentPlayback != null
-                ? System.currentTimeMillis() - currentPlayback.startedAt()
-                : 0L;
-        if (clientPositionMillis < 0) {
-            return monotonic;
+        if (currentPlayback == null) {
+            return 0L;
         }
-        long clientBased = clientPositionMillis + (System.currentTimeMillis() - clientPositionTime);
-        return Math.max(monotonic, clientBased);
+        long now = System.currentTimeMillis();
+        long clientAge = clientPositionMillis < 0 ? 0L : Math.max(0L, now - clientPositionTime);
+        return LyricService.resolveElapsedMillis(
+                clientPlaybackStarted,
+                clientPositionMillis,
+                clientAge,
+                Math.max(0L, now - currentPlayback.startedAt()),
+                PLAYBACK_START_GRACE_MILLIS);
+    }
+
+    /**
+     * 歌词现在能不能开始推进。
+     *
+     * <p>客户端收到 {@code play} 后要先下载整首曲子，这段静默期里歌词不该跑；
+     * 等到 {@code started} 回报（或宽限期过后兼容旧客户端）才放行。</p>
+     */
+    private boolean lyricsReady() {
+        if (currentPlayback == null) {
+            return false;
+        }
+        if (clientPlaybackStarted) {
+            return true;
+        }
+        return System.currentTimeMillis() - currentPlayback.startedAt() >= PLAYBACK_START_GRACE_MILLIS;
     }
 
     public boolean isLyricsEnabled(ServerPlayer player) {
@@ -407,7 +481,7 @@ public final class MusicQueueService {
             lyricsPreference.put(player.getUUID(), true);
         } else {
             lyricsPreference.put(player.getUUID(), false);
-            player.displayClientMessage(Component.literal(""), true);
+            player.sendOverlayMessage(Component.empty());
         }
         if (lyricsPreferenceState != null) {
             lyricsPreferenceState.setEnabled(player.getUUID(), enabled);
@@ -418,7 +492,7 @@ public final class MusicQueueService {
         Boolean current = lyricsPreference.get(player.getUUID());
         if (current != null && current) {
             lyricsPreference.put(player.getUUID(), false);
-            player.displayClientMessage(Component.literal(""), true);
+            player.sendOverlayMessage(Component.empty());
             if (lyricsPreferenceState != null) {
                 lyricsPreferenceState.setEnabled(player.getUUID(), false);
             }
@@ -448,7 +522,7 @@ public final class MusicQueueService {
 
     public void initLyricsState(MinecraftServer server) {
         lyricsPreferenceState = server.overworld().getDataStorage()
-                .computeIfAbsent(LyricsPreferenceState::fromTag, LyricsPreferenceState::new, LyricsPreferenceState.storageId());
+                .computeIfAbsent(LyricsPreferenceState.TYPE);
     }
 
     // ── Player join / leave / report ─────────────────────────────────
@@ -485,10 +559,17 @@ public final class MusicQueueService {
     }
 
     public void handlePlaybackReport(MinecraftServer server, ServerPlayer player, MusicPlaybackReportPayload payload) {
-        if (payload == null || optedOutPlayers.contains(player.getUUID())) {
+        if (payload == null) {
             return;
         }
         if (payload.trackId() == null || payload.trackId().isBlank()) {
+            return;
+        }
+        if ("jukebox_ended".equals(payload.action())) {
+            MusicPlayerMod.jukeboxService().handlePlaybackEnded(player, payload.trackId());
+            return;
+        }
+        if (optedOutPlayers.contains(player.getUUID())) {
             return;
         }
 
@@ -505,6 +586,15 @@ public final class MusicQueueService {
             return;
         }
 
+        if ("started".equals(payload.action())) {
+            // 客户端下载完成、真正开始出声：以这一刻为新的时间轴原点并清掉旧位置，
+            // 否则后面还会用上一条残留的 clientPosition 把歌词拉到错误的位置。
+            clientPlaybackStarted = true;
+            clientPositionMillis = -1L;
+            clientPositionTime = 0L;
+            MusicPlayerMod.LOGGER.debug("客户端已开始出声: {}", payload.trackId());
+            return;
+        }
         if ("ended".equals(payload.action())) {
             advance(server, Component.empty());
             return;
@@ -519,7 +609,9 @@ public final class MusicQueueService {
         if ("position".equals(payload.action())) {
             try {
                 long pos = Long.parseLong(payload.message());
-                if (pos >= 0) {
+                long duration = currentPlayback.track().durationMillis();
+                // 越过曲长的位置一定是脏数据（旧曲残留或进度重置），丢掉免得歌词跳飞
+                if (pos >= 0 && (duration <= 0L || pos <= duration + 5_000L)) {
                     clientPositionMillis = pos;
                     clientPositionTime = System.currentTimeMillis();
                 }
@@ -661,7 +753,7 @@ public final class MusicQueueService {
                 playlistReversed = reverse;
                 playlistTrackIndex = reverse ? playlistTotalTracks - 1 : 0;
                 playlistRequesterId = requester.getUUID();
-                playlistRequesterName = requester.getGameProfile().getName();
+                playlistRequesterName = requester.getGameProfile().name();
                 playlistMode = true;
 
                 MusicPlayerMod.LOGGER.info("歌单模式启动: [{}] ID={}, 共 {} 首{}",
@@ -701,7 +793,7 @@ public final class MusicQueueService {
                                     source.sendFailure(Component.translatable("musicplayer.playlist.last_track_failed"));
                                     return;
                                 }
-                                SearchEntry entry = tracks.get(0);
+                                SearchEntry entry = tracks.getFirst();
                                 resolveTrack(entry.id()).whenComplete((track, rt) -> server.execute(() -> {
                                     if (rt != null || track == null) {
                                         source.sendFailure(Component.translatable("musicplayer.playlist.first_track_load_failed",
@@ -835,7 +927,7 @@ public final class MusicQueueService {
                 playlistTotalTracks = programs.size();
                 playlistTrackIndex = 0;
                 playlistRequesterId = requester.getUUID();
-                playlistRequesterName = requester.getGameProfile().getName();
+                playlistRequesterName = requester.getGameProfile().name();
                 playlistMode = true;
 
                 // Load first program only — remaining are loaded on demand during playback
@@ -966,7 +1058,7 @@ public final class MusicQueueService {
         MusicPlayerMod.netease().playlistTracksPage(playlistId, index, 1)
                 .whenComplete((tracks, t) -> server.execute(() -> {
                     if (t != null || tracks.isEmpty()) return;
-                    SearchEntry entry = tracks.get(0);
+                    SearchEntry entry = tracks.getFirst();
                     int trackNumber = index + 1;
                     resolveTrack(entry.id()).whenComplete((track, rt) -> server.execute(() -> {
                         if (rt != null) {
@@ -1176,7 +1268,7 @@ public final class MusicQueueService {
             return;
         }
         if (currentPlayback == null) {
-            startTrack(server, track, requester.getUUID(), requester.getGameProfile().getName());
+            startTrack(server, track, requester.getUUID(), requester.getGameProfile().name());
             return;
         }
         queue.addLast(new QueuedTrack(
@@ -1185,12 +1277,12 @@ public final class MusicQueueService {
                 track.artist(),
                 track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
                 requester.getUUID(),
-                requester.getGameProfile().getName(),
+                requester.getGameProfile().name(),
                 track.sourceUrls()
         ));
         refreshTrackCache();
         if (MusicPlayerConfigManager.get().announceQueueChanges) {
-            broadcast(server, Component.translatable("musicplayer.queue.requested", requester.getGameProfile().getName()).withStyle(ChatFormatting.GOLD)
+            broadcast(server, Component.translatable("musicplayer.queue.requested", requester.getGameProfile().name()).withStyle(ChatFormatting.GOLD)
                     .append(Messages.clickableCommand(Component.literal(track.title()), Component.translatable("musicplayer.queue.replay_hover"), "/music play song " + track.id(), ChatFormatting.AQUA))
                     .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
                     .append(track.artistId() != null && !track.artistId().isBlank()
@@ -1329,6 +1421,10 @@ public final class MusicQueueService {
         currentPlayback = new CurrentPlayback(track, now, now + timeout, requesterId, requesterName);
         paused = false;
         pausedAtMillis = 0L;
+        // 新曲：等客户端回报 started 之前不推进歌词，并丢掉上一条的位置
+        clientPlaybackStarted = false;
+        clientPositionMillis = -1L;
+        clientPositionTime = 0L;
         voteSkipPlayers.clear();
         refreshTrackCache();
         for (UUID uuid : mutedOncePlayers) {
@@ -1337,7 +1433,7 @@ public final class MusicQueueService {
         mutedOncePlayers.clear();
         server.getPlayerList().getPlayers().stream()
                 .filter(player -> !optedOutPlayers.contains(player.getUUID()))
-                .sorted(Comparator.comparing(player -> player.getGameProfile().getName()))
+                .sorted(Comparator.comparing(player -> player.getGameProfile().name()))
                 .forEach(player -> {
                     sendPlay(player, track, 0L);
                 });
@@ -1370,6 +1466,7 @@ public final class MusicQueueService {
         playerLyricSentText.clear();
         playerLyricRefresh.clear();
         lyricFetchAttempted = false;
+        clientPlaybackStarted = false;
         clientPositionMillis = -1L;
         clientPositionTime = 0L;
         jukeboxLyricsCache.clear();
@@ -1380,7 +1477,7 @@ public final class MusicQueueService {
         Component empty = Component.literal("");
         server.getPlayerList().getPlayers().stream()
                 .filter(p -> !optedOutPlayers.contains(p.getUUID()))
-                .forEach(p -> p.displayClientMessage(empty, true));
+                .forEach(p -> p.sendOverlayMessage(empty));
     }
 
     private int activeListeners(MinecraftServer server) {
@@ -1405,14 +1502,14 @@ public final class MusicQueueService {
     // ── Network ──────────────────────────────────────────────────────
 
     private void sendPlay(ServerPlayer player, TrackInfo track, long offsetMillis) {
-        if (ServerPlayNetworking.canSend(player, MusicControlPayload.ID)) {
-            MusicControlPayload.send(player, MusicControlPayload.play(track.id(), track.sourceUrls(), track.title(), track.artist(), offsetMillis));
+        if (ServerPlayNetworking.canSend(player, MusicControlPayload.TYPE)) {
+            ServerPlayNetworking.send(player, MusicControlPayload.play(track.id(), track.sourceUrls(), track.title(), track.artist(), offsetMillis));
         }
     }
 
     private void sendStop(ServerPlayer player, String reason) {
-        if (ServerPlayNetworking.canSend(player, MusicControlPayload.ID)) {
-            MusicControlPayload.send(player, MusicControlPayload.stop(reason));
+        if (ServerPlayNetworking.canSend(player, MusicControlPayload.TYPE)) {
+            ServerPlayNetworking.send(player, MusicControlPayload.stop(reason));
         }
     }
 
@@ -1454,7 +1551,7 @@ public final class MusicQueueService {
     private static void appendDownloadLink(MutableComponent line, TrackInfo track) {
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
-            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().get(0), ChatFormatting.GREEN));
+            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().getFirst(), ChatFormatting.GREEN));
         }
     }
 
