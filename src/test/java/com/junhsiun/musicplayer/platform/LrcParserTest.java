@@ -161,4 +161,38 @@ class LrcParserTest {
         assertEquals("only", LyricService.findCurrentLine(lines, 10_000L).text());
         assertNull(LyricService.findCurrentLine(lines, 500L));
     }
+
+    // ── 歌词时间轴（加载期不同步）─────────────────────────
+
+    @Test
+    void 客户端还没出声时歌词停在起点() {
+        // 服务端墙钟已经走了 2 秒，但客户端还在下载音频
+        assertEquals(0L, LyricService.resolveElapsedMillis(false, -1L, 0L, 2_000L, 3_000L));
+    }
+
+    @Test
+    void 宽限期过后回退到服务端计时_兼容无模组客户端() {
+        assertEquals(8_000L, LyricService.resolveElapsedMillis(false, -1L, 0L, 8_000L, 3_000L));
+    }
+
+    @Test
+    void 客户端出声后只信客户端位置() {
+        // 服务端墙钟 12 秒（含 10 秒下载），客户端实际只播了 2 秒
+        assertEquals(2_500L, LyricService.resolveElapsedMillis(true, 2_000L, 500L, 12_000L, 3_000L));
+    }
+
+    @Test
+    void 位置回报之间有间隔时按上报时刻外推() {
+        assertEquals(3_000L, LyricService.resolveElapsedMillis(true, 2_000L, 1_000L, 9_999L, 3_000L));
+    }
+
+    @Test
+    void 已出声但还没收到位置时退回服务端计时() {
+        assertEquals(4_000L, LyricService.resolveElapsedMillis(true, -1L, 0L, 4_000L, 3_000L));
+    }
+
+    @Test
+    void 位置不会算出负数() {
+        assertEquals(0L, LyricService.resolveElapsedMillis(true, -5L, -5L, 0L, 3_000L));
+    }
 }
