@@ -30,6 +30,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class JukeboxPlaybackService {
+    /** 等不到客户端真实位置时最多等这么久就按服务端计时继续（兼容无模组客户端）。 */
+    private static final long PLAYBACK_START_GRACE_MILLIS = 3_000L;
+
     private static final double AUDIBLE_RANGE_SQR = 64.0D * 64.0D;
 
     private final Map<Long, ActiveJukebox> activeJukeboxes = new ConcurrentHashMap<>();
@@ -110,7 +113,17 @@ public final class JukeboxPlaybackService {
                 .filter(aj -> trackId.equals(aj.discData().trackId()))
                 .findFirst()
                 .orElse(null);
-        if (active == null || !JukeboxBlockEntity.isInPlaylistMode(level, active.pos())) {
+        if (active == null) {
+            return;
+        }
+        if (!JukeboxBlockEntity.isInPlaylistMode(level, active.pos())) {
+            // 非歌单模式：这张唱片就播这一首，播完应当收尾停止。
+            // 如果只是 return，activeJukeboxes 里会一直留着这个条目，
+            // isPlayerListening 恒为 true，服务端就会每 tick 把最后一句歌词
+            // 重新发到 action bar 上，导致歌词永远不消失。
+            MusicPlayerMod.LOGGER.info("Custom jukebox track finished at {}: trackId={}", active.pos(), trackId);
+            activeJukeboxes.remove(active.key());
+            stopPlayback(level.getServer(), active);
             return;
         }
         BlockEntity blockEntity = level.getBlockEntity(active.pos());
@@ -380,17 +393,28 @@ public final class JukeboxPlaybackService {
                 .orElse("");
     }
 
+    /**
+     * 唱片机当前的播放位置（毫秒），用于对齐歌词。
+     *
+     * <p>语音包发出去时客户端还在下载音频，这段静默期里不能让歌词跑：
+     * 有客户端上报的真实位置就只信它；没有的话在宽限期内返回 0，
+     * 超过宽限期才回退到服务端计时（兼容无模组客户端）。</p>
+     */
     public long getJukeboxElapsedMillisForPlayer(ServerPlayer player) {
         UUID uuid = player.getUUID();
         Long pos = playerPositionMillis.get(uuid);
         Long time = playerPositionTime.get(uuid);
         if (pos != null && time != null) {
+            // 已经收到过真实位置：只信它，别用服务端计时去追
             return pos + (System.currentTimeMillis() - time);
         }
         return activeJukeboxes.values().stream()
                 .filter(aj -> aj.listeners().contains(uuid))
                 .findFirst()
-                .map(aj -> System.currentTimeMillis() - aj.startedAtMillis())
+                .map(aj -> {
+                    long monotonic = System.currentTimeMillis() - aj.startedAtMillis();
+                    return monotonic < PLAYBACK_START_GRACE_MILLIS ? 0L : monotonic;
+                })
                 .orElse(0L);
     }
 

@@ -41,4 +41,15 @@ public record MusicPlaybackReportPayload(String action, String trackId, String m
     public static MusicPlaybackReportPayload jukeboxEnded(String trackId) {
         return new MusicPlaybackReportPayload("jukebox_ended", trackId == null ? "" : trackId, "");
     }
+
+    /**
+     * 客户端<b>真正开始出声</b>的时刻。
+     *
+     * <p>服务端一发出 {@code play} 就开始计时，但客户端还要把整首 MP3 下载完才开始播；
+     * 下载期间歌词会提前跑。这条报文让服务端知道"现在才真正从第 0 毫秒开始"，
+     * 在此之前不推进歌词。</p>
+     */
+    public static MusicPlaybackReportPayload started(String trackId) {
+        return new MusicPlaybackReportPayload("started", trackId == null ? "" : trackId, "");
+    }
 }
