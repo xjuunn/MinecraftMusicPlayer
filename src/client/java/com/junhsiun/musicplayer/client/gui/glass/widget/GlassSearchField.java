@@ -120,7 +120,7 @@ public class GlassSearchField extends EditBox {
     @Override
     public void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
         boolean usable = isActive();
-        hover.tick(isHoveredOrFocused() && usable, GlassTheme.Motion.HOVER);
+        hover.tick((isHovered() || isFocused()) && usable, GlassTheme.Motion.HOVER);
         float lift = hover.eased();
 
         int x0 = getX() - TEXT_OFFSET;

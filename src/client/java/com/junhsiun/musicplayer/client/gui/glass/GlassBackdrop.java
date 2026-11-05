@@ -13,6 +13,7 @@ import com.mojang.renderpearl.api.textures.GpuSampler;
 import com.mojang.renderpearl.api.textures.GpuTexture;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.RenderPassLayouts;
 import net.minecraft.util.Util;
 import org.lwjgl.BufferUtils;
 
@@ -269,9 +270,11 @@ public final class GlassBackdrop {
     private void pass(CommandEncoder encoder, Target destination, GpuTextureView source,
                       float spread, boolean vertical, GpuSampler linear) {
         RenderPass pass = encoder.createRenderPass(
-                () -> "musicplayer glass blur " + destination.name, destination.view, Optional.empty());
+                () -> "musicplayer glass blur " + destination.name, RenderPassLayouts.COLOR_ONLY,
+                destination.view, Optional.empty());
         try {
-            pass.setPipeline(RenderSystem.getCompiledPipeline(GlassPipelines.blur(spread, vertical)));
+            pass.setPipeline(RenderSystem.getCompiledPipeline(GlassPipelines.blur(spread, vertical),
+                    pass.activeSubpass()));
             pass.setUniform("Sampler0", source, linear);
             pass.setVertexBuffer(0, quadBuffer.slice());
             pass.draw(6, 1, 0, 0);

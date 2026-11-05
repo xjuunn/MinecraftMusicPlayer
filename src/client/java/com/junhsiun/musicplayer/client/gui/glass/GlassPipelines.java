@@ -4,11 +4,11 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.renderpearl.api.GpuFormat;
 import com.mojang.renderpearl.api.pipeline.BlendFunction;
 import com.mojang.renderpearl.api.pipeline.ColorTargetState;
 import com.mojang.renderpearl.api.pipeline.DepthStencilState;
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import net.minecraft.client.gui.GuiPipeline;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.resources.Identifier;
 
@@ -46,8 +46,19 @@ public final class GlassPipelines {
     private static final Map<String, RenderPipeline> PANEL_PIPELINES = new HashMap<>();
     private static final Map<String, RenderPipeline> SHADOW_PIPELINES = new HashMap<>();
     private static final Map<String, RenderPipeline> BLUR_PIPELINES = new HashMap<>();
+    private static final Map<RenderPipeline, GuiPipeline> GUI_PIPELINES = new HashMap<>();
 
     private GlassPipelines() {
+    }
+
+    /**
+     * 把渲染管线包成界面管线。
+     *
+     * <p>界面渲染状态（如 {@code BlitRenderState}）只接受 {@link GuiPipeline}，而界面管线在构造时
+     * 分配排序键，因此同一份管线必须复用同一个包装对象，不能每次提交都新建。</p>
+     */
+    public static synchronized GuiPipeline gui(RenderPipeline pipeline) {
+        return GUI_PIPELINES.computeIfAbsent(pipeline, p -> GuiPipeline.of(() -> p));
     }
 
     /**
@@ -146,8 +157,7 @@ public final class GlassPipelines {
                     .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
                     .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
                     .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
-                    .withColorTargetState(new ColorTargetState(Optional.empty(), GpuFormat.RGBA8_UNORM,
-                            ColorTargetState.WRITE_ALL))
+                    .withColorTargetState(new ColorTargetState(Optional.empty(), ColorTargetState.WRITE_ALL))
                     // 离屏颜色目标没有深度附件，管线必须声明"不需要深度"
                     .withDepthStencilState(Optional.<DepthStencilState>empty())
                     .withCull(false)

@@ -64,7 +64,7 @@ public class GlassToggle extends AbstractButton {
     @Override
     protected void extractContents(GuiGraphicsExtractor graphics) {
         boolean usable = isActive();
-        hover.tick(isHoveredOrFocused() && usable, GlassTheme.Motion.HOVER);
+        hover.tick((isHovered() || isFocused()) && usable, GlassTheme.Motion.HOVER);
         press.tickSpring(held && usable, held ? GlassTheme.Motion.PRESS : GlassTheme.Motion.RELEASE);
         // 圆点带回弹滑过去，染色用平滑曲线
         slide.tickSpring(on, GlassTheme.Motion.TOGGLE);

@@ -2,6 +2,7 @@ package com.junhsiun.musicplayer.client.gui.glass.widget;
 
 import com.junhsiun.musicplayer.client.gui.glass.GlassDebug;
 import com.junhsiun.musicplayer.client.gui.glass.GlassPanel;
+import com.junhsiun.musicplayer.client.gui.glass.GlassPipelines;
 import com.junhsiun.musicplayer.client.gui.glass.GlassStyle;
 import com.junhsiun.musicplayer.client.gui.glass.GlassWidgetPipelines;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
@@ -304,7 +305,7 @@ public final class GlassWidgets {
         // 第十三个参数是 scissorArea，渲染器据此真正裁剪；完全靠它遮挡，
         // 不在这里改坐标——改坐标会把圆角/边缘畸变的形状弄歪
         graphics.guiRenderState.addGuiElement(new BlitRenderState(
-                pipeline,
+                GlassPipelines.gui(pipeline),
                 TextureSetup.noTexture(),
                 new Matrix3x2f(graphics.pose()),
                 x0, y0, x1, y1,
