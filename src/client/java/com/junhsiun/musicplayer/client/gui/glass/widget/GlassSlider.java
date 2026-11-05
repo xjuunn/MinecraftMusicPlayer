@@ -70,7 +70,7 @@ public class GlassSlider extends AbstractSliderButton {
     @Override
     public void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
         boolean usable = isActive();
-        hover.tick(isHoveredOrFocused() && usable, GlassTheme.Motion.HOVER);
+        hover.tick((isHovered() || isFocused()) && usable, GlassTheme.Motion.HOVER);
         grab.tickSpring(held && usable, held ? GlassTheme.Motion.PRESS : GlassTheme.Motion.RELEASE);
         float lift = hover.eased();
         float grip = GlassWidgets.clamp01(grab.value());
@@ -103,7 +103,7 @@ public class GlassSlider extends AbstractSliderButton {
                     knobX + radius, centerY + radius, 0xFFFFFF, 0x808080, radius, 0.92F, 1.0F);
         }
 
-        if (valueText != null && isHoveredOrFocused()) {
+        if (valueText != null && (isHovered() || isFocused())) {
             Component label = valueText.textAt(value);
             if (label != null) {
                 GlassWidgets.rightText(graphics, font(), label, getX() + width,

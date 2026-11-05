@@ -10,6 +10,7 @@ import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
+import net.minecraft.client.renderer.RenderPassLayouts;
 import net.minecraft.client.renderer.state.gui.BlitRenderState;
 import org.joml.Matrix3x2f;
 
@@ -126,14 +127,14 @@ public final class GlassPanel {
             return;
         }
         try {
-            RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, look));
+            RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, look), RenderPassLayouts.COLOR_ONLY.subpass(0));
             // 子控件用的是带窗口叠加的变体，一并编译，避免首次画按钮时才编译
-            RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, childLook));
+            RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, childLook), RenderPassLayouts.COLOR_ONLY.subpass(0));
             // 控件材质一次编译完：它们都是固定风格，一次性把 GPU 程序编译掉，
             // 免得界面首帧在渲染中途才开始编译（那会打断当前帧）
             for (GlassStyle control : CONTROL_STYLES) {
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(control, look));
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(control, childLook));
+                RenderSystem.getCompiledPipeline(GlassPipelines.panel(control, look), RenderPassLayouts.COLOR_ONLY.subpass(0));
+                RenderSystem.getCompiledPipeline(GlassPipelines.panel(control, childLook), RenderPassLayouts.COLOR_ONLY.subpass(0));
             }
             prepared = true;
             compileShadowPipeline(style);
@@ -166,8 +167,8 @@ public final class GlassPanel {
         }
         if (!prepared) {
             try {
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, look));
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, childLook));
+                RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, look), RenderPassLayouts.COLOR_ONLY.subpass(0));
+                RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, childLook), RenderPassLayouts.COLOR_ONLY.subpass(0));
                 prepared = true;
             } catch (Throwable throwable) {
                 unavailable = true;
@@ -192,7 +193,7 @@ public final class GlassPanel {
     private static void compileShadowPipeline(GlassStyle style) {
         String key = style.pipelineKey();
         try {
-            RenderSystem.getCompiledPipeline(GlassPipelines.shadow(style));
+            RenderSystem.getCompiledPipeline(GlassPipelines.shadow(style), RenderPassLayouts.COLOR_ONLY.subpass(0));
             compiledShadowKey = key;
         } catch (Throwable throwable) {
             // 投影失败不至于让整个界面不可用，退化成不带投影的面板
@@ -323,7 +324,7 @@ public final class GlassPanel {
             return;
         }
         graphics.guiRenderState.addGuiElement(new BlitRenderState(
-                pipeline,
+                GlassPipelines.gui(pipeline),
                 setup,
                 new Matrix3x2f(graphics.pose()),
                 x0, y0, x1, y1,
