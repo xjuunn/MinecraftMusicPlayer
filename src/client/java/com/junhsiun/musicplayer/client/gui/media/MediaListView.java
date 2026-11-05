@@ -3,6 +3,7 @@ package com.junhsiun.musicplayer.client.gui.media;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassScroll;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
+import com.junhsiun.musicplayer.client.gui.icon.SvgIcons;
 import com.junhsiun.musicplayer.model.MediaItem;
 import com.junhsiun.musicplayer.model.MediaKind;
 import com.junhsiun.musicplayer.model.MediaStat;
@@ -90,6 +91,14 @@ public class MediaListView extends AbstractWidget {
     private static final int INDEX_WIDTH = 12;
     /** 行尾播放按钮的边长与它到箭头的间距。 */
     private static final int PLAY_SIZE = 16;
+    /**
+     * 按钮里图标的边长。
+     *
+     * <p>取 10：图标在 16 像素的按钮里不再顶满。更关键的是缩放后墨迹约占 4×8 像素——
+     * 都是偶数，四边留白才能是整数像素；取 12 时墨迹是 5×9（奇数），留白只能是 5/6、3/4，
+     * 看起来就是"差半个像素没居中"。</p>
+     */
+    private static final int PLAY_ICON_SIZE = 10;
     private static final int PLAY_GAP = 6;
     /** 滚动条宽度与它和内容之间留的间隙；行内容不占这块，免得和滚动条叠在一起。 */
     private static final int SCROLLBAR_WIDTH = 3;
@@ -693,13 +702,18 @@ public class MediaListView extends AbstractWidget {
             if (cursor + chipWidth > x + maxWidth) {
                 return;
             }
+            int chipTop = y - 1;
+            int chipBottom = y + 10;
             // 数据小标签也是液态玻璃：BADGE 是三层里最薄的一档
-            if (!GlassWidgets.glassBackground(graphics, cursor, y - 1, cursor + chipWidth, y + 10,
+            if (!GlassWidgets.glassBackground(graphics, cursor, chipTop, cursor + chipWidth, chipBottom,
                     GlassTheme.BADGE, 0.0F, 0.0F)) {
-                GlassWidgets.roundedFill(graphics, cursor, y - 1, cursor + chipWidth, y + 10,
+                GlassWidgets.roundedFill(graphics, cursor, chipTop, cursor + chipWidth, chipBottom,
                         0xFFFFFF, 0xFFFFFF, 5.0F, 0.09F, 1.0F);
             }
-            GlassWidgets.text(graphics, font, Component.literal(text), cursor + 5, y + 1,
+            // 文字按缩放后的行高居中，不能写死偏移：这里字号是 0.62 倍，行高只有 5.6 像素，
+            // 固定 +1 会让文字整体偏上，看起来"没居中"
+            int textY = chipTop + Math.round((chipBottom - chipTop - font.lineHeight * SUBTITLE_SCALE) * 0.5F);
+            GlassWidgets.text(graphics, font, Component.literal(text), cursor + 5, textY,
                     GlassTheme.TEXT_SECONDARY, SUBTITLE_SCALE);
             cursor += chipWidth + 4;
         }
@@ -794,10 +808,10 @@ public class MediaListView extends AbstractWidget {
     }
 
     /**
-     * 行尾的"加入歌单"按钮：一小块圆玻璃 + 一个手画的加号。
+     * 行尾的"加入播放队列"按钮：一小块圆玻璃 + {@link SvgIcons#QUEUE_ADD}。
      *
-     * <p>加号是两笔 {@code fill} 画的，不用 {@code ＋} 之类的字符——那些码位要靠 unicode
-     * 回退字体，字形在低分辨率下会糊成一团。</p>
+     * <p>图标走统一的 SVG 组件，不再用手画的加号——字形取自 {@code ＋} 之类的码位要靠 unicode
+     * 回退字体，低分辨率下会糊成一团；手画的又和别处图标不是同一套画法。</p>
      *
      * <p>点它发的是 {@code /music play song <id>}：有歌在播时这就是"加入当前播放队列"，
      * 空队列时则是"开始播放"——和聊天栏点播完全是同一条路径。</p>
@@ -810,12 +824,7 @@ public class MediaListView extends AbstractWidget {
                     0xFFFFFF, 0xFFFFFF, PLAY_SIZE / 2.0F, 0.10F + 0.10F * (hovered ? 1.0F : 0.0F), 1.0F);
         }
         int color = GlassWidgets.dim(GlassWidgets.dim(GlassTheme.TEXT, 0.12F), dim);
-        int centerX = x + PLAY_SIZE / 2;
-        int centerY = y + PLAY_SIZE / 2;
-        int arm = 4;
-        int thickness = 1;
-        graphics.fill(centerX - thickness, centerY - arm, centerX + thickness + 1, centerY + arm + 1, color);
-        graphics.fill(centerX - arm, centerY - thickness, centerX + arm + 1, centerY + thickness + 1, color);
+        SvgIcons.QUEUE_ADD.drawCentered(graphics, x, y, PLAY_SIZE, PLAY_ICON_SIZE, color);
     }
 
     private void drawLoadMore(GuiGraphicsExtractor graphics, Font font, double mouseX, double mouseY) {

@@ -48,7 +48,9 @@ public final class DetailPage extends BrowserPage {
 
     @Override
     public EnumSet<PageChrome> chrome() {
-        return EnumSet.noneOf(PageChrome.class);
+        // 详情页是压栈打开的，必须能退回上一页；这里以前返回空集合，于是顶栏（返回按钮 + 标题）
+        // 一直不出现，用户只能按 Esc 把整个窗口关掉。
+        return EnumSet.of(PageChrome.BACK_BAR);
     }
 
     @Override
