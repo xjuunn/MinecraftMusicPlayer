@@ -128,23 +128,22 @@ public class GlassTabs extends AbstractWidget {
 
     @Override
     public void onRelease(MouseButtonEvent event) {
-        int index = pressed;
+        // 只认"在本控件上按下过"的松开；拖动不清 pressed，否则指针抖 1 像素就白点一次
+        boolean armed = pressed >= 0;
         pressed = -1;
-        if (index < 0 || !isMouseOver(event.x(), event.y())) {
+        if (!armed || count() == 0 || !isMouseOver(event.x(), event.y())) {
             return;
         }
+        // 按落点决定切到哪一段：原版只要指针动 1 像素就会派发 drag 事件，
+        // 以前在 onDrag 里清掉 pressed，于是"按下 → 手抖 → 松开"完全不生效，
+        // 表现为要点很多次才切一次。顺带支持按住拖到别的段再松手。
+        int index = indexAt(event.x());
         if (index != selected) {
             selected = index;
             if (onSelect != null) {
                 onSelect.accept(index);
             }
         }
-    }
-
-    @Override
-    protected void onDrag(MouseButtonEvent event, double dragX, double dragY) {
-        // 分段控件不跟手，拖动时取消按压，避免松手误触
-        pressed = -1;
     }
 
     @Override

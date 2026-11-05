@@ -268,14 +268,15 @@ public final class MusicBrowserScreen extends GlassWindowScreen implements Brows
     /** 同步翻页栏：页码文案、两个按钮的可用状态与可见性。 */
     private void updatePager() {
         boolean show = top() == searchPage && searchPage.hasResults();
-        boolean busy = searchPage.loading();
+        // 加载中<b>不</b>把翻页按钮置灰：请求期间这两个按钮会闪一下暗、回来又亮，
+        // 观感上像整条翻页栏被重建了一次。防连点交给 SearchPage#goToPage 的 loading 判断。
         if (prevPageButton != null) {
             prevPageButton.setVisible(show);
-            prevPageButton.active = show && searchPage.page() > 1 && !busy;
+            prevPageButton.active = show && searchPage.page() > 1;
         }
         if (nextPageButton != null) {
             nextPageButton.setVisible(show);
-            nextPageButton.active = show && searchPage.canGoNext() && !busy;
+            nextPageButton.active = show && searchPage.canGoNext();
         }
         if (pageLabelWidget != null) {
             pageLabelWidget.setVisible(show);
