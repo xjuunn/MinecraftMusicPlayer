@@ -30,6 +30,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -112,13 +113,13 @@ public final class MusicPlayerMod implements ModInitializer {
         });
         UseItemCallback.EVENT.register((player, world, hand) -> {
             if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
-                return InteractionResult.PASS;
+                return InteractionResultHolder.pass(player.getItemInHand(hand));
             }
             if (MusicDiscHelper.isPendingDisc(player.getItemInHand(hand))) {
                 LOOT_MUSIC_DISC_SERVICE.useRandomDisc(serverPlayer, hand);
-                return InteractionResult.SUCCESS;
+                return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), world.isClientSide());
             }
-            return InteractionResult.PASS;
+            return InteractionResultHolder.pass(player.getItemInHand(hand));
         });
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
             if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {

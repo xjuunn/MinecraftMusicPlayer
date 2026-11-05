@@ -448,7 +448,7 @@ public final class MusicQueueService {
 
     public void initLyricsState(MinecraftServer server) {
         lyricsPreferenceState = server.overworld().getDataStorage()
-                .computeIfAbsent(LyricsPreferenceState.TYPE);
+                .computeIfAbsent(LyricsPreferenceState.FACTORY, LyricsPreferenceState.storageId());
     }
 
     // ── Player join / leave / report ─────────────────────────────────
@@ -661,7 +661,7 @@ public final class MusicQueueService {
                 playlistReversed = reverse;
                 playlistTrackIndex = reverse ? playlistTotalTracks - 1 : 0;
                 playlistRequesterId = requester.getUUID();
-                playlistRequesterName = requester.getGameProfile().name();
+                playlistRequesterName = requester.getGameProfile().getName();
                 playlistMode = true;
 
                 MusicPlayerMod.LOGGER.info("歌单模式启动: [{}] ID={}, 共 {} 首{}",
@@ -835,7 +835,7 @@ public final class MusicQueueService {
                 playlistTotalTracks = programs.size();
                 playlistTrackIndex = 0;
                 playlistRequesterId = requester.getUUID();
-                playlistRequesterName = requester.getGameProfile().name();
+                playlistRequesterName = requester.getGameProfile().getName();
                 playlistMode = true;
 
                 // Load first program only — remaining are loaded on demand during playback
@@ -1176,7 +1176,7 @@ public final class MusicQueueService {
             return;
         }
         if (currentPlayback == null) {
-            startTrack(server, track, requester.getUUID(), requester.getGameProfile().name());
+            startTrack(server, track, requester.getUUID(), requester.getGameProfile().getName());
             return;
         }
         queue.addLast(new QueuedTrack(
@@ -1185,12 +1185,12 @@ public final class MusicQueueService {
                 track.artist(),
                 track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
                 requester.getUUID(),
-                requester.getGameProfile().name(),
+                requester.getGameProfile().getName(),
                 track.sourceUrls()
         ));
         refreshTrackCache();
         if (MusicPlayerConfigManager.get().announceQueueChanges) {
-            broadcast(server, Component.translatable("musicplayer.queue.requested", requester.getGameProfile().name()).withStyle(ChatFormatting.GOLD)
+            broadcast(server, Component.translatable("musicplayer.queue.requested", requester.getGameProfile().getName()).withStyle(ChatFormatting.GOLD)
                     .append(Messages.clickableCommand(Component.literal(track.title()), Component.translatable("musicplayer.queue.replay_hover"), "/music play song " + track.id(), ChatFormatting.AQUA))
                     .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
                     .append(track.artistId() != null && !track.artistId().isBlank()
@@ -1337,7 +1337,7 @@ public final class MusicQueueService {
         mutedOncePlayers.clear();
         server.getPlayerList().getPlayers().stream()
                 .filter(player -> !optedOutPlayers.contains(player.getUUID()))
-                .sorted(Comparator.comparing(player -> player.getGameProfile().name()))
+                .sorted(Comparator.comparing(player -> player.getGameProfile().getName()))
                 .forEach(player -> {
                     sendPlay(player, track, 0L);
                 });

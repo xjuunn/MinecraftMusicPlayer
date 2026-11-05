@@ -4,10 +4,10 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public record BgmConfigPayload(String playlistId, String baseUrl) implements CustomPacketPayload {
-    public static final Type<BgmConfigPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "bgm_config"));
+    public static final Type<BgmConfigPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "bgm_config"));
     public static final StreamCodec<RegistryFriendlyByteBuf, BgmConfigPayload> CODEC =
             CustomPacketPayload.codec(BgmConfigPayload::write, BgmConfigPayload::new);
 

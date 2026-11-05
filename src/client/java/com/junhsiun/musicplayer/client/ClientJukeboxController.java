@@ -2,8 +2,7 @@ package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
-import com.junhsiun.musicplayer.mixin.client.ClientLevelAccessor;
-import com.junhsiun.musicplayer.mixin.client.LevelEventHandlerAccessor;
+import com.junhsiun.musicplayer.mixin.client.LevelRendererAccessor;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
@@ -15,7 +14,7 @@ import javazoom.jl.player.Player;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.LevelEventHandler;
+import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -442,13 +441,12 @@ public final class ClientJukeboxController {
 
     private void silenceVanillaJukeboxSound(long jukeboxPos, String reason) {
         Minecraft minecraft = Minecraft.getInstance();
-        ClientLevel level = minecraft.level;
-        if (level == null || !(level instanceof ClientLevelAccessor clientLevelAccessor)) {
+        if (minecraft.level == null) {
             return;
         }
 
-        LevelEventHandler levelEventHandler = clientLevelAccessor.musicplayer$getLevelEventHandler();
-        if (!(levelEventHandler instanceof LevelEventHandlerAccessor accessor)) {
+        LevelRenderer levelRenderer = minecraft.levelRenderer;
+        if (!(levelRenderer instanceof LevelRendererAccessor accessor)) {
             return;
         }
 

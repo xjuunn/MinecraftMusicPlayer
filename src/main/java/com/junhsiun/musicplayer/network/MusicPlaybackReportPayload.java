@@ -4,10 +4,10 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public record MusicPlaybackReportPayload(String action, String trackId, String message) implements CustomPacketPayload {
-    public static final Type<MusicPlaybackReportPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_playback_report"));
+    public static final Type<MusicPlaybackReportPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_playback_report"));
     public static final StreamCodec<RegistryFriendlyByteBuf, MusicPlaybackReportPayload> CODEC =
             CustomPacketPayload.codec(MusicPlaybackReportPayload::write, MusicPlaybackReportPayload::new);
 

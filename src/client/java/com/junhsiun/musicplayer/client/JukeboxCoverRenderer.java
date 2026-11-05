@@ -8,18 +8,17 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.rendertype.RenderType;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
 public final class JukeboxCoverRenderer {
-    private static final Identifier BLACK_DISC_TEXTURE = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "dynamic/jukebox_black_disc");
+    private static final ResourceLocation BLACK_DISC_TEXTURE = ResourceLocation.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "dynamic/jukebox_black_disc");
     private static final double SIDE_OFFSET = 0.507D;
     private static final double SIDE_CENTER_Y = 0.02D;
     private static final float OUTER_HALF_SIZE = 0.34F;
@@ -32,13 +31,13 @@ public final class JukeboxCoverRenderer {
 
     public static void render(WorldRenderContext context) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || minecraft.player == null || context.consumers() == null || context.matrices() == null) {
+        if (minecraft.level == null || minecraft.player == null || context.consumers() == null || context.matrixStack() == null) {
             return;
         }
 
         ensureBlackTexture();
-        PoseStack poseStack = context.matrices();
-        Vec3 camera = minecraft.gameRenderer.getMainCamera().position();
+        PoseStack poseStack = context.matrixStack();
+        Vec3 camera = minecraft.gameRenderer.getMainCamera().getPosition();
         long now = System.currentTimeMillis();
 
         for (ClientJukeboxController.JukeboxVisualState state : ClientJukeboxController.getInstance().getVisualStates()) {
@@ -51,7 +50,7 @@ public final class JukeboxCoverRenderer {
                 continue;
             }
 
-            Identifier coverTexture = null;
+            ResourceLocation coverTexture = null;
             if (state.coverUrl() != null && !state.coverUrl().isBlank()) {
                 coverTexture = CoverArtTextureCache.getInstance().getTextureId(state.coverUrl());
                 if (coverTexture == null) {
@@ -63,7 +62,7 @@ public final class JukeboxCoverRenderer {
         }
     }
 
-    private static void renderForJukebox(PoseStack poseStack, Vec3 camera, BlockPos pos, Identifier coverTexture, long now, long startedAtMillis, boolean finished, long finishedAtMillis) {
+    private static void renderForJukebox(PoseStack poseStack, Vec3 camera, BlockPos pos, ResourceLocation coverTexture, long now, long startedAtMillis, boolean finished, long finishedAtMillis) {
         float sideSpin;
         if (finished && now >= finishedAtMillis) {
             sideSpin = 0.0F;
@@ -92,7 +91,7 @@ public final class JukeboxCoverRenderer {
             float spinDegrees,
             float outerHalfSize,
             float innerHalfSize,
-            Identifier coverTexture,
+            ResourceLocation coverTexture,
             int light
     ) {
         poseStack.pushPose();
@@ -107,9 +106,9 @@ public final class JukeboxCoverRenderer {
             poseStack.mulPose(Axis.ZP.rotationDegrees(spinDegrees));
         }
 
-        drawQuad(RenderTypes.entityCutoutNoCull(BLACK_DISC_TEXTURE), poseStack, outerHalfSize, light, 255, 255, 255, 255, 0.0F);
+        drawQuad(RenderType.entityCutoutNoCull(BLACK_DISC_TEXTURE), poseStack, outerHalfSize, light, 255, 255, 255, 255, 0.0F);
         if (coverTexture != null) {
-            drawQuad(RenderTypes.entityCutoutNoCull(coverTexture), poseStack, innerHalfSize, light, 255, 255, 255, 255, 0.003F);
+            drawQuad(RenderType.entityCutoutNoCull(coverTexture), poseStack, innerHalfSize, light, 255, 255, 255, 255, 0.003F);
         }
         poseStack.popPose();
     }
@@ -161,16 +160,16 @@ public final class JukeboxCoverRenderer {
                 float dy = y - center;
                 float distance = (float) Math.sqrt(dx * dx + dy * dy);
                 if (distance > radius + feather || distance < holeRadius) {
-                    image.setPixel(x, y, 0x00000000);
+                    image.setPixelRGBA(x, y, 0x00000000);
                     continue;
                 }
                 float outerFade = clamp((radius - distance) / feather);
                 float innerFade = clamp((distance - holeRadius) / feather);
                 int alpha = Math.round(235.0F * Math.min(outerFade, innerFade));
-                image.setPixel(x, y, (alpha << 24));
+                image.setPixelRGBA(x, y, (alpha << 24));
             }
         }
-        DynamicTexture texture = new DynamicTexture(() -> "musicplayer_black_disc", image);
+        DynamicTexture texture = new DynamicTexture(image);
         texture.upload();
         minecraft.getTextureManager().register(BLACK_DISC_TEXTURE, texture);
         blackTextureRegistered = true;

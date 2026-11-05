@@ -27,7 +27,7 @@ import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ClickEvent;
@@ -35,7 +35,6 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
@@ -99,8 +98,8 @@ public final class MusicCommands {
                 .withStyle(style -> style
                         .withColor(ChatFormatting.WHITE)
                         .withBold(true)
-                        .withClickEvent(new ClickEvent.RunCommand("/music help star"))
-                        .withHoverEvent(new HoverEvent.ShowText(renderRepositoryHover()))));
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/music help star"))
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, renderRepositoryHover()))));
         Messages.sendSuccess(source, title);
         helpEntry(source, "now", Component.translatable("musicplayer.help.desc.now"));
         helpEntry(source, "play", Component.translatable("musicplayer.help.desc.play"));
@@ -138,7 +137,7 @@ public final class MusicCommands {
     }
 
     private static void grantStarAchievement(MinecraftServer server, ServerPlayer player) {
-        Identifier advancementId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "star");
+        ResourceLocation advancementId = ResourceLocation.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "star");
         AdvancementHolder holder = server.getAdvancements().get(advancementId);
         if (holder == null) {
             MusicPlayerMod.LOGGER.warn("未找到成就定义: {}", advancementId);
@@ -303,7 +302,7 @@ public final class MusicCommands {
                 return 1;
             }
         sendHeader(context.getSource());
-        boolean isAdmin = context.getSource().permissions().hasPermission(Permissions.COMMANDS_ADMIN);
+        boolean isAdmin = context.getSource().hasPermission(2);
         boolean isPaused = MusicPlayerMod.queueService().isPaused();
         sendQuickBar(context.getSource(),
                 Messages.clickableCommand(Component.translatable("musicplayer.now.rewind_label"), Component.translatable("musicplayer.now.rewind_hover"), "/music seek -5", ChatFormatting.GRAY),
@@ -343,7 +342,7 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> pause() {
         return Commands.literal("pause")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(source -> source.hasPermission(2))
                 .executes(context -> {
                     CommandSourceStack source = context.getSource();
                     if (MusicPlayerMod.queueService().currentTrack() == null) {
@@ -362,7 +361,7 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> resume() {
         return Commands.literal("resume")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(source -> source.hasPermission(2))
                 .executes(context -> {
                     CommandSourceStack source = context.getSource();
                     if (MusicPlayerMod.queueService().currentTrack() == null) {
@@ -403,7 +402,7 @@ public final class MusicCommands {
                             return showQueue(context.getSource(), 1);
                         })))
                 .then(Commands.literal("clear")
-                        .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                        .requires(source -> source.hasPermission(2))
                         .executes(context -> {
                             MusicPlayerMod.queueService().clearQueue(context.getSource());
                             return showQueue(context.getSource(), 1);
@@ -652,10 +651,10 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> skip() {
         return Commands.literal("skip")
-                .requires(source -> source.getEntity() instanceof ServerPlayer || source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(source -> source.getEntity() instanceof ServerPlayer || source.hasPermission(2))
                 .executes(context -> {
                     MinecraftServer server = context.getSource().getServer();
-                    if (context.getSource().permissions().hasPermission(Permissions.COMMANDS_ADMIN)) {
+                    if (context.getSource().hasPermission(2)) {
                         MusicPlayerMod.queueService().skipNow(server, context.getSource());
                     } else {
                         MusicPlayerMod.queueService().voteSkip(server, context.getSource().getPlayerOrException());
@@ -959,7 +958,7 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> config() {
         return Commands.literal("config")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("reload").executes(context -> {
                     MusicPlayerConfigManager.load();
                     MusicPlayerMod.queueService().clearTrackCache();
@@ -1492,9 +1491,9 @@ public final class MusicCommands {
 
         Messages.sendSuccess(source,  Component.literal("ID: ").withStyle(ChatFormatting.GRAY)
                 .append(Component.literal(track.id()).withStyle(style -> style
-                        .withClickEvent(new ClickEvent.CopyToClipboard(track.id()))
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, track.id()))
                         .withColor(ChatFormatting.WHITE)
-                        .withHoverEvent(new HoverEvent.ShowText(Component.translatable("musicplayer.common.copy_hover"))))));
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable("musicplayer.common.copy_hover"))))));
 
         MutableComponent burnAction = buildBurnAction(source, track.id());
         if (burnAction != null) {
@@ -1797,7 +1796,7 @@ public final class MusicCommands {
     /** 播放状态回显：在线管理员看到带操作按钮的回显；plainForOthers 非空时其他玩家看到纯状态文本。 */
     private static void broadcastState(CommandSourceStack source, MutableComponent adminEcho, Component plainForOthers) {
         for (ServerPlayer player : source.getServer().getPlayerList().getPlayers()) {
-            if (player.createCommandSourceStack().permissions().hasPermission(Permissions.COMMANDS_ADMIN)) {
+            if (player.createCommandSourceStack().hasPermission(2)) {
                 player.sendSystemMessage(adminEcho.copy());
             } else if (plainForOthers != null) {
                 player.sendSystemMessage(plainForOthers.copy());

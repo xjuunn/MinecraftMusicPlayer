@@ -4,10 +4,10 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public record OpenUrlPayload(String url) implements CustomPacketPayload {
-    public static final Type<OpenUrlPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "open_url"));
+    public static final Type<OpenUrlPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "open_url"));
     public static final StreamCodec<RegistryFriendlyByteBuf, OpenUrlPayload> CODEC =
             CustomPacketPayload.codec(OpenUrlPayload::write, OpenUrlPayload::new);
 

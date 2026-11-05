@@ -7,6 +7,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
@@ -39,7 +40,6 @@ public final class MusicDiscHelper {
             Items.MUSIC_DISC_CREATOR,
             Items.MUSIC_DISC_CREATOR_MUSIC_BOX,
             Items.MUSIC_DISC_FAR,
-            Items.MUSIC_DISC_LAVA_CHICKEN,
             Items.MUSIC_DISC_MALL,
             Items.MUSIC_DISC_MELLOHI,
             Items.MUSIC_DISC_STAL,
@@ -51,8 +51,7 @@ public final class MusicDiscHelper {
             Items.MUSIC_DISC_RELIC,
             Items.MUSIC_DISC_5,
             Items.MUSIC_DISC_PIGSTEP,
-            Items.MUSIC_DISC_PRECIPICE,
-            Items.MUSIC_DISC_TEARS
+            Items.MUSIC_DISC_PRECIPICE
     );
 
     private MusicDiscHelper() {
@@ -75,7 +74,7 @@ public final class MusicDiscHelper {
             return false;
         }
         CompoundTag wrapper = customData.copyTag();
-        return wrapper.getBooleanOr(PENDING_KEY, false);
+        return wrapper.getBoolean(PENDING_KEY);
     }
 
     public static String getPendingToken(ItemStack stack) {
@@ -86,7 +85,7 @@ public final class MusicDiscHelper {
         if (customData == null || customData.isEmpty()) {
             return "";
         }
-        return customData.copyTag().getStringOr(PENDING_TOKEN_KEY, "");
+        return customData.copyTag().getString(PENDING_TOKEN_KEY);
     }
 
     public static ItemStack randomBaseDiscStack(RandomSource random) {
@@ -147,30 +146,30 @@ public final class MusicDiscHelper {
         if (!wrapper.contains(ROOT_KEY)) {
             return Optional.empty();
         }
-        CompoundTag root = wrapper.getCompoundOrEmpty(ROOT_KEY);
-        String title = root.getStringOr(TITLE_KEY, "");
-        String artist = root.getStringOr(ARTIST_KEY, "");
+        CompoundTag root = wrapper.getCompound(ROOT_KEY);
+        String title = root.getString(TITLE_KEY);
+        String artist = root.getString(ARTIST_KEY);
         if (title.isBlank() || artist.isBlank()) {
             return Optional.empty();
         }
         List<String> urls = new ArrayList<>();
         if (root.contains(URLS_KEY)) {
-            ListTag listTag = root.getListOrEmpty(URLS_KEY);
+            ListTag listTag = root.getList(URLS_KEY, Tag.TAG_STRING);
             for (int index = 0; index < listTag.size(); index++) {
-                String value = listTag.getStringOr(index, "");
+                String value = listTag.getString(index);
                 if (!value.isBlank()) {
                     urls.add(value);
                 }
             }
         }
         return Optional.of(new DiscTrackData(
-                root.getStringOr(TRACK_ID_KEY, ""),
+                root.getString(TRACK_ID_KEY),
                 title,
                 artist,
-                root.getStringOr(ARTIST_ID_KEY, ""),
-                root.getStringOr(COVER_URL_KEY, ""),
+                root.getString(ARTIST_ID_KEY),
+                root.getString(COVER_URL_KEY),
                 urls,
-                root.getLongOr(DURATION_KEY, 0L)
+                root.getLong(DURATION_KEY)
         ));
     }
 

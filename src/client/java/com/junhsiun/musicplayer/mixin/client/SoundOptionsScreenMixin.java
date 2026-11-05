@@ -7,8 +7,6 @@ import net.minecraft.client.OptionInstance;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.components.OptionsList;
 import net.minecraft.client.gui.screens.options.SoundOptionsScreen;
-import net.minecraft.client.sounds.SoundManager;
-import net.minecraft.client.sounds.SoundPreviewHandler;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
@@ -61,14 +59,8 @@ public abstract class SoundOptionsScreenMixin {
                     MusicPlayerClientConfigManager.get().bgmVolume = musicplayer$clampVolume(value);
                     MusicPlayerClientConfigManager.markDirty();
                     Minecraft minecraft = Minecraft.getInstance();
-                    SoundManager soundManager = minecraft.getSoundManager();
-                    if (minecraft.options.getFinalSoundSourceVolume(SoundSource.MUSIC) > 0.0F) {
-                        minecraft.getMusicManager().showNowPlayingToastIfNeeded();
-                    }
-                    soundManager.refreshCategoryVolume(SoundSource.MUSIC);
-                    if (minecraft.level == null) {
-                        SoundPreviewHandler.preview(soundManager, SoundSource.MUSIC, value.floatValue());
-                    }
+                    float volume = minecraft.options.getSoundSourceVolume(SoundSource.MUSIC);
+                    minecraft.getSoundManager().updateSourceVolume(SoundSource.MUSIC, volume);
                 });
     }
 
