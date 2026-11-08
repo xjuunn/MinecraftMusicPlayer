@@ -58,7 +58,7 @@
   "musicplayer.discmaster.hint": "キーワードを入力して曲を検索",
   "musicplayer.discmaster.search_hint": "曲を検索",
   "musicplayer.discmaster.search": "検索",
-  "musicplayer.discmaster.empty": "検索して「焼く」を押すと、曲をマスターディスクに書き込めます",
+  "musicplayer.discmaster.empty": "検索して、行末のディスクボタンでマスターディスクに書き込めます",
   "musicplayer.discmaster.no_result": "該当する曲が見つかりません",
   "musicplayer.discmaster.loading": "検索中...",
   "musicplayer.discmaster.failed": "検索に失敗しました: %s",
