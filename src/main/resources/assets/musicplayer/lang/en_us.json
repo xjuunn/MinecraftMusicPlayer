@@ -58,7 +58,7 @@
   "musicplayer.discmaster.hint": "Type a keyword to search songs",
   "musicplayer.discmaster.search_hint": "Search songs",
   "musicplayer.discmaster.search": "Search",
-  "musicplayer.discmaster.empty": "Search, then press Burn to write the song onto the disc master",
+  "musicplayer.discmaster.empty": "Search, then tap the disc button on a row to burn it onto the master",
   "musicplayer.discmaster.no_result": "No matching songs",
   "musicplayer.discmaster.loading": "Searching...",
   "musicplayer.discmaster.failed": "Search failed: %s",
