@@ -3,6 +3,7 @@ package com.junhsiun.musicplayer.client.gui.media;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassScroll;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
+import com.junhsiun.musicplayer.client.gui.icon.SvgIcon;
 import com.junhsiun.musicplayer.client.gui.icon.SvgIcons;
 import com.junhsiun.musicplayer.model.MediaItem;
 import com.junhsiun.musicplayer.model.MediaKind;
@@ -47,7 +48,7 @@ public class MediaListView extends AbstractWidget {
         /** 点了一行。 */
         void onItemClick(MediaItem item);
 
-        /** 点了行尾的播放按钮。 */
+        /** 点了行尾的操作按钮（默认是"加入播放队列"，唱片母版界面是"刻录"）。 */
         void onPlay(MediaItem item);
 
         /** 点了列表末尾的"加载更多"。 */
@@ -140,6 +141,16 @@ public class MediaListView extends AbstractWidget {
     private final GlassWidgets.Spring hover = new GlassWidgets.Spring();
     private final GlassWidgets.Spring press = new GlassWidgets.Spring();
 
+    /**
+     * 行尾按钮的图标。
+     *
+     * <p>浏览界面用它表示"加入播放队列"；唱片母版界面复用同一套行样式，但那个按钮的动作是
+     * "刻录到母版"，图标必须跟着换，否则会让人以为点下去是播放。</p>
+     */
+    private SvgIcon actionIcon = SvgIcons.QUEUE_ADD;
+    /** 行尾按钮当前是否可点。刻录请求在途时置 {@code false}，避免连点重复刻录。 */
+    private boolean actionEnabled = true;
+
     private Header header;
     private List<String> descriptionLines = List.of();
     private List<MediaItem> items = List.of();
@@ -201,6 +212,20 @@ public class MediaListView extends AbstractWidget {
     /** 状态文案（空列表时居中显示）。 */
     public void setStatus(Component status) {
         this.status = status == null ? Component.empty() : status;
+    }
+
+    /**
+     * 换行尾按钮的图标（默认 {@link SvgIcons#QUEUE_ADD}）。
+     *
+     * <p>列表行的排布、命中区、悬停高亮都不变，只换按钮里画的那个图标。</p>
+     */
+    public void setActionIcon(SvgIcon icon) {
+        this.actionIcon = icon == null ? SvgIcons.QUEUE_ADD : icon;
+    }
+
+    /** 行尾按钮是否可点。关闭时按钮照常画出来，但点了不触发回调（图标会一起变暗）。 */
+    public void setActionEnabled(boolean enabled) {
+        this.actionEnabled = enabled;
     }
 
     /** 播一次"从某侧滑入"的切换动画。 */
@@ -325,8 +350,11 @@ public class MediaListView extends AbstractWidget {
         return playButtonRight() - PLAY_SIZE;
     }
 
-    /** 鼠标是否落在某一行的播放按钮上。 */
+    /** 鼠标是否落在某一行的操作按钮上。 */
     private int playRowAt(double mouseX, double mouseY) {
+        if (!actionEnabled) {
+            return -1;
+        }
         int index = rowAt(mouseX, mouseY);
         if (index < 0 || !queuable(items.get(index))) {
             return -1;
@@ -774,7 +802,7 @@ public class MediaListView extends AbstractWidget {
 
         if (queuable(item)) {
             int buttonLeft = playButtonLeft();
-            drawQueueButton(graphics, buttonLeft, rowTop + (ROW_HEIGHT - PLAY_SIZE) / 2, queueHovered, dim);
+            drawActionButton(graphics, buttonLeft, rowTop + (ROW_HEIGHT - PLAY_SIZE) / 2, queueHovered, dim);
             textRight = buttonLeft - PLAY_GAP;
         }
 
@@ -808,23 +836,28 @@ public class MediaListView extends AbstractWidget {
     }
 
     /**
-     * 行尾的"加入播放队列"按钮：一小块圆玻璃 + {@link SvgIcons#QUEUE_ADD}。
+     * 行尾的操作按钮：一小块圆玻璃 + {@link #actionIcon}。
      *
      * <p>图标走统一的 SVG 组件，不再用手画的加号——字形取自 {@code ＋} 之类的码位要靠 unicode
      * 回退字体，低分辨率下会糊成一团；手画的又和别处图标不是同一套画法。</p>
      *
-     * <p>点它发的是 {@code /music play song <id>}：有歌在播时这就是"加入当前播放队列"，
-     * 空队列时则是"开始播放"——和聊天栏点播完全是同一条路径。</p>
+     * <p>浏览界面里点它发的是 {@code /music play song <id>}：有歌在播时这就是"加入当前播放队列"，
+     * 空队列时则是"开始播放"——和聊天栏点播完全是同一条路径。唱片母版界面复用同一套行，
+     * 只把图标换成刻录、回调换成发刻录请求（见 {@code DiscMasterScreen}）。</p>
      */
-    private void drawQueueButton(GuiGraphicsExtractor graphics, int x, int y, boolean hovered, float dim) {
+    private void drawActionButton(GuiGraphicsExtractor graphics, int x, int y, boolean hovered, float dim) {
         float lift = hovered ? 1.0F : 0.25F;
         if (!GlassWidgets.glassBackground(graphics, x, y, x + PLAY_SIZE, y + PLAY_SIZE,
                 GlassTheme.BUTTON, lift, 0.0F)) {
             GlassWidgets.roundedFill(graphics, x, y, x + PLAY_SIZE, y + PLAY_SIZE,
                     0xFFFFFF, 0xFFFFFF, PLAY_SIZE / 2.0F, 0.10F + 0.10F * (hovered ? 1.0F : 0.0F), 1.0F);
         }
-        int color = GlassWidgets.dim(GlassWidgets.dim(GlassTheme.TEXT, 0.12F), dim);
-        SvgIcons.QUEUE_ADD.drawCentered(graphics, x, y, PLAY_SIZE, PLAY_ICON_SIZE, color);
+        // 不可点时图标压暗：按钮还在原处，但一眼看得出"现在点不动"
+        int enabledDim = GlassWidgets.dim(GlassTheme.TEXT, 0.12F);
+        int color = actionEnabled
+                ? GlassWidgets.dim(enabledDim, dim)
+                : GlassWidgets.dim(enabledDim, 0.55F);
+        actionIcon.drawCentered(graphics, x, y, PLAY_SIZE, PLAY_ICON_SIZE, color);
     }
 
     private void drawLoadMore(GuiGraphicsExtractor graphics, Font font, double mouseX, double mouseY) {
