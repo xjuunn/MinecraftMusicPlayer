@@ -58,7 +58,7 @@
   "musicplayer.discmaster.hint": "输入关键词搜索歌曲",
   "musicplayer.discmaster.search_hint": "搜索歌曲",
   "musicplayer.discmaster.search": "搜索",
-  "musicplayer.discmaster.empty": "搜索后点击「刻录」把歌曲写入唱片母版",
+  "musicplayer.discmaster.empty": "搜索后点行尾的唱片按钮，把歌曲刻录到母版",
   "musicplayer.discmaster.no_result": "没有找到相关歌曲",
   "musicplayer.discmaster.loading": "正在搜索...",
   "musicplayer.discmaster.failed": "搜索失败: %s",
