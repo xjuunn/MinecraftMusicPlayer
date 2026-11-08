@@ -29,6 +29,19 @@ public final class SvgIcons {
             "M15 11h-2V9h2zm0 4h-2v-2h2zm-2 2h-2v-2h2zm0-8h-2V7h2zm-2-2H9V5h2z"
                     + "M9 21H7V3h2zm6-8h2v-2h-2zm-6 4h2v2H9z");
 
+    /**
+     * 唱片（唱片母版界面的行尾按钮）。
+     *
+     * <p>和 {@link #QUEUE_ADD} 一样是像素画，但读起来是"一张盘"：一圈 2 单位宽的阶梯方框拼出
+     * 盘面边缘，中间一小块是标签孔。母版界面的行尾按钮动的是刻录，不能沿用"列表加号"那个图标
+     * （会让人以为点下去是加入播放队列）。</p>
+     */
+    public static final SvgIcon DISC = SvgIcon.of(
+            "M8 2h8v2H8z M6 4h2v2H6z M16 4h2v2h-2z M4 6h2v2H4z M18 6h2v2h-2z"
+                    + "M2 8h2v8H2z M20 8h2v8h-2z M4 16h2v2H4z M18 16h2v2h-2z"
+                    + "M6 18h2v2H6z M16 18h2v2h-2z M8 20h8v2H8z"
+                    + "M11 11h2v2h-2z");
+
     private SvgIcons() {
     }
 }

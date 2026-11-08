@@ -1,45 +1,48 @@
 package com.junhsiun.musicplayer.client.gui;
 
-import com.junhsiun.musicplayer.client.DiscMasterSearchService;
 import com.junhsiun.musicplayer.client.gui.glass.GlassPanel;
 import com.junhsiun.musicplayer.client.gui.glass.layout.GlassLayout;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassButton;
-import com.junhsiun.musicplayer.client.gui.glass.widget.GlassCard;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassLabel;
-import com.junhsiun.musicplayer.client.gui.glass.widget.GlassListView;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassSearchField;
-import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
+import com.junhsiun.musicplayer.client.gui.icon.SvgIcons;
+import com.junhsiun.musicplayer.client.gui.media.MediaListView;
 import com.junhsiun.musicplayer.client.gui.window.GlassWindow;
 import com.junhsiun.musicplayer.client.gui.window.GlassWindowScreen;
 import com.junhsiun.musicplayer.client.gui.window.WindowAnchor;
 import com.junhsiun.musicplayer.client.gui.window.WindowAnimations;
 import com.junhsiun.musicplayer.client.gui.window.WindowBounds;
 import com.junhsiun.musicplayer.client.gui.window.WindowSize;
+import com.junhsiun.musicplayer.client.media.MediaBrowserService;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
-import com.junhsiun.musicplayer.model.SearchEntry;
+import com.junhsiun.musicplayer.model.MediaItem;
+import com.junhsiun.musicplayer.model.MediaKind;
+import com.junhsiun.musicplayer.model.MediaPage;
 import com.junhsiun.musicplayer.network.DiscMasterBurnPayload;
 import com.junhsiun.musicplayer.network.DiscMasterBurnResultPayload;
-import com.junhsiun.musicplayer.platform.api.MusicApi;
 import com.junhsiun.musicplayer.platform.url.UrlUtil;
 import com.junhsiun.musicplayer.util.Messages;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * 手持唱片母版右键打开的界面：搜索歌曲并刻录到母版。
  *
- * <p>布局自上而下三块：搜索行、结果卡片、底栏（翻页 + 状态）。搜索结果走
- * {@link DiscMasterSearchService} 客户端直连；刻录只把歌曲 ID 发给服务端，
+ * <p>布局自上而下三块：搜索行、结果列表、底栏（翻页 + 状态）。搜索结果走
+ * {@link MediaBrowserService} 客户端直连；刻录只把歌曲 ID 发给服务端，
  * 曲目内容由服务端解析后写入唱片（见 {@code DiscMasterService}）。</p>
+ *
+ * <p><b>列表行为什么不自己画：</b>这里直接用按 M 打开的浏览界面那套
+ * {@link MediaListView}——同一个序号、封面、歌名/歌手、时长、行尾玻璃按钮的排布。
+ * 两个界面里"一列歌"看起来是同一种东西，不必维护两份排版。行尾按钮的动作换成刻录，
+ * 图标也跟着换成唱片（{@link SvgIcons#DISC}），免得让人以为是"加入播放队列"。</p>
  *
  * <p><b>界面状态为什么存在字段里：</b>{@link #buildContent} 会在窗口缩放、
  * {@code rebuildWidgets()} 时重跑，控件每次都是新对象。关键词、结果、页码、状态文案
@@ -49,18 +52,23 @@ import java.util.List;
  * 玩家把母版换走、丢掉时同理。这个判断比等服务端回包更普适，也不会漏掉命令、
  * 其他玩家等外部改动。</p>
  */
-public final class DiscMasterScreen extends GlassWindowScreen {
+public final class DiscMasterScreen extends GlassWindowScreen implements MediaListView.Listener {
 
     /**
      * 窗口内容区尺寸。
      *
-     * <p>宽度按"歌名最多 30 个字"反推：行内文字可用像素是
-     * {@code (宽度 − 卡片内边距×2 − 文字左边距 − 操作按钮 − 间隙) / 0.75}，
-     * 取 300 时约 288 字体像素，正好容下 30 个汉字；更长的歌名由
-     * {@code GlassListView} 截断并补省略号，不需要为了极端长的名字把窗口撑宽。</p>
+     * <p>宽度按列表行的排布反推（序号 + 封面 + 歌名/歌手 + 时长 + 行尾按钮 + 滚动条）：
+     * 扣掉这些固定占位后还剩不到两百像素给文字，取 360 时长歌名和"歌手 · 专辑"都放得下；
+     * 再长的名字由 {@link MediaListView} 截断并补省略号，不为了极端长的名字把窗口撑宽。</p>
      */
-    private static final int WIDTH = 300;
-    private static final int HEIGHT = 280;
+    private static final int WIDTH = 360;
+    /**
+     * 窗口高度。
+     *
+     * <p>按"列表至少整行显示七首"取的：行高 {@link MediaListView#ROW_HEIGHT}（32）乘以 7
+     * 再加上搜索行与底栏。再多就得滚动，而这两个界面本来就都能滚。</p>
+     */
+    private static final int HEIGHT = 300;
     /**
      * 窗口边缘到内容区的内边距。
      *
@@ -77,11 +85,9 @@ public final class DiscMasterScreen extends GlassWindowScreen {
     private static final int GAP = 8;
     private static final int SEARCH_BUTTON_WIDTH = 64;
     private static final int PAGE_BUTTON_WIDTH = 48;
-    /** 结果卡片的内边距。 */
-    private static final int CARD_PADDING = 10;
 
     /** 最近一次搜索的结果。 */
-    private List<SearchEntry> results = List.of();
+    private List<MediaItem> results = List.of();
     /** 最近一次搜索的关键词，翻页时沿用。 */
     private String keyword = "";
     /** 输入框里的当前文本。 */
@@ -96,16 +102,16 @@ public final class DiscMasterScreen extends GlassWindowScreen {
     private int searchToken;
     /** 是否已发出刻录请求、正在等服务端回包。 */
     private boolean burning;
-    /** 底栏状态文案。 */
+    /** 是否正在等搜索结果。 */
+    private boolean loading;
+    /** 底栏状态文案；列表为空时这句也画在列表中间。 */
     private Component status = Component.translatable("musicplayer.discmaster.hint");
 
     private GlassSearchField searchField;
-    private GlassListView listView;
+    private MediaListView listView;
     private GlassLabel statusLabel;
     private GlassButton prevButton;
     private GlassButton nextButton;
-    /** 窗口整体矩形，仅用于让卡片圆角与窗口同心。 */
-    private WindowBounds windowBounds;
 
     public DiscMasterScreen() {
         super(new GlassWindow()
@@ -121,17 +127,14 @@ public final class DiscMasterScreen extends GlassWindowScreen {
         window().style(GlassTheme.windowStyle());
         // 管线编译与离屏贴图创建放在这里（渲染循环之外），避免首帧黑屏
         GlassPanel.prewarm(window().style());
-        // 卡片的圆角要按"到窗口四边的最小距离"反推，因此需要窗口整体矩形
-        windowBounds = new WindowBounds(content.x0() - PADDING, content.y0() - PADDING,
-                content.x1() + PADDING, content.y1() + PADDING);
 
         // 小屏（低分辨率 + 高 GUI 缩放）下窗口会被压扁，列表至少留两行
-        int listHeight = Math.max(GlassListView.ROW_HEIGHT * 2,
+        int listHeight = Math.max(MediaListView.ROW_HEIGHT * 2,
                 content.height() - SEARCH_HEIGHT - FOOTER_HEIGHT - GAP * 2);
 
         GlassLayout.Column column = new GlassLayout.Column().gap(GAP);
         column.fill(SEARCH_HEIGHT, this::buildSearchRow);
-        column.fill(listHeight, this::buildResultCard);
+        column.fill(listHeight, this::buildList);
         column.fill(FOOTER_HEIGHT, this::buildFooter);
         column.layout(content);
 
@@ -165,21 +168,19 @@ public final class DiscMasterScreen extends GlassWindowScreen {
                 .layout(slot.toBounds());
     }
 
-    // ── 结果卡片 ────────────────────────────────────────────────────────
+    // ── 结果列表 ────────────────────────────────────────────────────────
 
-    private void buildResultCard(GlassLayout.Slot slot) {
-        GlassCard card = GlassCard.create().padding(CARD_PADDING);
-        if (windowBounds != null) {
-            // 卡片左右贴着窗口内边距，圆角按同心规则反推（30 − 8 = 22）
-            card.container(windowBounds, GlassTheme.Sizes.WINDOW_RADIUS);
-        }
-        // 顺序不能换：先定位、再注册，基准坐标才是对的
-        card.bounds(slot);
-        addRenderableWidget(card);
-        WindowBounds inner = card.layoutContent();
-
-        listView = addRenderableWidget(new GlassListView(inner.x0(), inner.y0(), inner.width(), inner.height()));
-        refreshRows();
+    /**
+     * 结果列表：和浏览界面同一个控件，行尾按钮换成刻录图标。
+     *
+     * <p>控件每次 {@code buildContent} 都是新的，所以这里必须把当前结果、加载态与
+     * 状态文案一起推回去，否则窗口缩放一次列表就空了。</p>
+     */
+    private void buildList(GlassLayout.Slot slot) {
+        listView = addRenderableWidget(
+                new MediaListView(slot.x(), slot.y(), slot.width(), slot.height(), this));
+        listView.setActionIcon(SvgIcons.DISC);
+        refreshList();
     }
 
     // ── 底栏 ────────────────────────────────────────────────────────────
@@ -207,34 +208,44 @@ public final class DiscMasterScreen extends GlassWindowScreen {
     private void search(int targetPage) {
         String value = (searchField == null ? typed : searchField.getValue()).trim();
         if (value.isEmpty()) {
-            setStatus(Component.translatable("musicplayer.discmaster.hint"));
+            setStatus(Component.translatable("musicplayer.discmaster.empty"));
             return;
         }
         keyword = value;
         page = Math.max(1, targetPage);
         int token = ++searchToken;
+        loading = true;
         setStatus(Component.translatable("musicplayer.discmaster.loading"));
-        DiscMasterSearchService.getInstance().searchSongPage(keyword, page).whenComplete((result, throwable) ->
-                Minecraft.getInstance().execute(() -> applyResults(token, result, throwable)));
+        refreshList();
+        refreshPageButtons();
+        MediaBrowserService.getInstance()
+                .search(MediaKind.SONG, keyword, page, MediaBrowserService.PAGE_SIZE)
+                .whenComplete((result, throwable) ->
+                        Minecraft.getInstance().execute(() -> applyResults(token, result, throwable)));
     }
 
-    private void applyResults(int token, MusicApi.SearchPage result, Throwable throwable) {
+    private void applyResults(int token, MediaPage result, Throwable throwable) {
         // 连点搜索时只认最后一次：旧请求的回包可能后到
         if (token != searchToken) {
             return;
         }
+        loading = false;
         if (throwable != null) {
             results = List.of();
             total = -1;
             setStatus(Component.translatable("musicplayer.discmaster.failed",
                     Messages.textOrTranslatable(UrlUtil.rootMessageKey(throwable))));
         } else {
-            results = result == null ? List.of() : result.entries();
+            results = result == null ? List.of() : result.items();
             // 总数只有数据来源给出时才有意义；拿不到就记 -1，界面不显示"共 N 首"
             total = result == null ? -1 : result.total();
             setStatus(statusComponent());
         }
-        refreshRows();
+        refreshList();
+        // 结果到齐才播一次错峰入场 + 回到顶部（和浏览界面的列表一致）
+        if (listView != null) {
+            listView.resetAndReveal();
+        }
         refreshPageButtons();
     }
 
@@ -258,26 +269,19 @@ public final class DiscMasterScreen extends GlassWindowScreen {
         return Component.empty();
     }
 
-    /** 把当前结果同步到列表；正在刻录时按钮不可点。 */
-    private void refreshRows() {
+    /** 把当前状态同步到列表；正在刻录时行尾按钮不可点。 */
+    private void refreshList() {
         if (listView == null) {
             return;
         }
-        Component action = Component.translatable(burning
-                ? "musicplayer.discmaster.burn_wait"
-                : "musicplayer.discmaster.burn");
-        List<GlassListView.Row> rows = new ArrayList<>(results.size());
-        for (SearchEntry entry : results) {
-            rows.add(new GlassListView.Row(
-                    Component.literal(entry.title()),
-                    entry.hasSubtitle() ? entry.subtitle() : null,
-                    action,
-                    burning ? null : () -> burn(entry)));
-        }
-        listView.setRows(rows);
+        listView.setLoading(loading);
+        listView.setStatus(status);
+        listView.setActionEnabled(!burning);
+        listView.showItems(results, false, false);
     }
 
     private void refreshPageButtons() {
+        int pageSize = MediaBrowserService.PAGE_SIZE;
         if (prevButton != null) {
             prevButton.active = page > 1;
         }
@@ -285,21 +289,21 @@ public final class DiscMasterScreen extends GlassWindowScreen {
             // 有总数就按总数判断，避免"最后一页刚好满"时还能再翻一页空结果；
             // 没有总数只能退回"本页是否满页"的经验判断
             nextButton.active = total > 0
-                    ? (long) page * DiscMasterSearchService.pageSize() < total
-                    : results.size() >= DiscMasterSearchService.pageSize();
+                    ? (long) page * pageSize < total
+                    : results.size() >= pageSize;
         }
     }
 
     // ── 刻录 ────────────────────────────────────────────────────────────
 
-    private void burn(SearchEntry entry) {
-        if (burning || entry.id() == null || entry.id().isBlank()) {
+    private void burn(MediaItem item) {
+        if (burning || item == null || item.id().isBlank()) {
             return;
         }
         burning = true;
         setStatus(Component.translatable("musicplayer.discmaster.burning"));
-        refreshRows();
-        ClientPlayNetworking.send(new DiscMasterBurnPayload(entry.id()));
+        refreshList();
+        ClientPlayNetworking.send(new DiscMasterBurnPayload(item.id()));
     }
 
     /** 服务端刻录结果回包（由客户端网络接收器转发）。 */
@@ -312,7 +316,7 @@ public final class DiscMasterScreen extends GlassWindowScreen {
             return;
         }
         setStatus(Messages.textOrTranslatable(payload.message()));
-        refreshRows();
+        refreshList();
     }
 
     private void setStatus(Component value) {
@@ -320,6 +324,28 @@ public final class DiscMasterScreen extends GlassWindowScreen {
         if (statusLabel != null) {
             statusLabel.setMessage(value);
         }
+        if (listView != null) {
+            // 列表为空时这句话画在列表中间：搜索提示、无结果、失败原因都从这里出
+            listView.setStatus(value);
+        }
+    }
+
+    // ── 列表回调 ────────────────────────────────────────────────────────
+
+    /** 单曲没有详情页，点行本身不做事（列表也不会给歌曲行画箭头或按下反馈）。 */
+    @Override
+    public void onItemClick(MediaItem item) {
+    }
+
+    /** 行尾按钮：把这首歌唱片刻录到手持的母版。 */
+    @Override
+    public void onPlay(MediaItem item) {
+        burn(item);
+    }
+
+    /** 这里是翻页，不是"加载更多"。 */
+    @Override
+    public void onLoadMore() {
     }
 
     // ── 生命周期与输入 ──────────────────────────────────────────────────
@@ -366,29 +392,16 @@ public final class DiscMasterScreen extends GlassWindowScreen {
                 || event.key() == InputConstants.KEY_NUMPADENTER
                 || event.keycode() == InputConstants.KEYCODE_RETURN
                 || event.keycode() == InputConstants.KEYCODE_NUMPADENTER;
-        if (enter && searchField != null && searchField.isFocused()) {
+        boolean typing = searchField != null && searchField.isFocused();
+        if (enter && typing) {
             search(1);
             return true;
         }
-        return super.keyPressed(event);
-    }
-
-    // ── 绘制 ────────────────────────────────────────────────────────────
-
-    /**
-     * 列表为空时在卡片里画一句提示。
-     *
-     * <p>直接用列表控件<b>当前</b>的矩形，和控件取同一套坐标，窗口开场动画期间也不会错位。</p>
-     */
-    @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics) {
-        super.extractRenderState(graphics);
-        if (listView != null && listView.rowCount() == 0) {
-            GlassWidgets.centeredText(graphics, Minecraft.getInstance().font,
-                    Component.translatable("musicplayer.discmaster.empty"),
-                    listView.getX() + listView.getWidth() / 2,
-                    listView.getY() + listView.getHeight() / 2 - 4,
-                    GlassTheme.TEXT_SECONDARY, GlassTheme.Text.LABEL);
+        // 不在输入框里时，方向键 / PgUp / PgDn / Home / End 直接滚列表：
+        // 列表是窗口里唯一可滚的东西，不必先点一下才能用键盘
+        if (!typing && listView != null && listView.keyPressed(event)) {
+            return true;
         }
+        return super.keyPressed(event);
     }
 }
