@@ -22,6 +22,12 @@ public interface BrowserHost {
     /** 按条目类型发送点播命令，效果等同于在聊天栏里敲 {@code /music play ...}。 */
     void play(MediaItem item);
 
+    /** 跳过当前歌曲，等同于在聊天栏执行 {@code /music skip}。 */
+    void skip();
+
+    /** 快进当前歌曲 10 秒，等同于在聊天栏执行 {@code /music seek 10}。 */
+    void seekForward();
+
     /** 让外壳重新按当前页面的 {@link BrowserPage#chrome()} 摆一遍（一般不需要手动调）。 */
     void refreshChrome();
 }

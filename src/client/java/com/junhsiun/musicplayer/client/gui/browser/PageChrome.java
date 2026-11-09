@@ -12,6 +12,9 @@ public enum PageChrome {
     /** 固定顶栏：返回按钮 + 页面标题。 */
     BACK_BAR,
 
+    /** 只有标题的顶栏（侧边栏根页面用，不需要返回按钮）。 */
+    TITLE_BAR,
+
     /** 搜索行：输入框 + 搜索按钮。 */
     SEARCH_BAR,
 
