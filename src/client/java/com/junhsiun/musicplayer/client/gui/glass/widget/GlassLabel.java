@@ -14,6 +14,7 @@ public class GlassLabel extends AbstractWidget {
     private final float scale;
     private final int color;
     private boolean centered;
+    private boolean rightAligned;
 
     public GlassLabel(int x, int y, int width, int height, Component text, float scale) {
         this(x, y, width, height, text, scale, GlassTheme.TEXT);
@@ -38,6 +39,12 @@ public class GlassLabel extends AbstractWidget {
         return this;
     }
 
+    /** 改成在控件宽度内右对齐（默认左对齐）。 */
+    public GlassLabel rightAligned() {
+        this.rightAligned = true;
+        return this;
+    }
+
     /**
      * 超宽就截断。
      *
@@ -57,8 +64,12 @@ public class GlassLabel extends AbstractWidget {
                     Math.max(0, available - font.width(ellipsis))) + ellipsis;
             text = Component.literal(plain);
         }
-        GlassWidgets.text(graphics, font, text,
-                centered ? getX() + Math.round((width - font.width(text) * scale) * 0.5F) : getX(),
+        int textX = centered
+                ? getX() + Math.round((width - font.width(text) * scale) * 0.5F)
+                : rightAligned
+                        ? getX() + width - Math.round(font.width(text) * scale)
+                        : getX();
+        GlassWidgets.text(graphics, font, text, textX,
                 getY() + Math.round((height - 8 * scale) / 2.0F),
                 color, scale);
     }

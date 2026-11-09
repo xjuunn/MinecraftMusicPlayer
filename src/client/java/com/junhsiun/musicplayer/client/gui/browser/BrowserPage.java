@@ -30,6 +30,13 @@ public abstract class BrowserPage implements MediaListView.Listener {
     /** 由 {@link BrowserHost#push(BrowserPage)} 注入，页面里可以直接用。 */
     protected BrowserHost host;
 
+    protected BrowserPage() {
+        // 浏览窗口内部全部走扁平视觉：整个窗口只有最外层是液态玻璃。
+        view.setMinimal(true);
+        // 所有条目都可以点开详情页：歌曲有自己的居中详情页，其余进通用详情页。
+        view.setSongsClickable(true);
+    }
+
     /** 本页的列表控件。布局由界面负责，页面只往里塞数据。 */
     public final MediaListView view() {
         return view;
@@ -58,10 +65,10 @@ public abstract class BrowserPage implements MediaListView.Listener {
     }
 
     /**
-     * 列表行被点击：默认打开这一条的详情页。
+     * 列表行被点击：打开这一条的详情页。
      *
-     * <p>单曲没有详情页——点开只有一个封面和一行时长，不如直接不给入口（列表那边也不会给
-     * 它画右箭头、不会给按下反馈）。要把它加入队列请用行尾的加号。</p>
+     * <p>单曲打开专属的 {@link SongDetailPage}（居中信息 + 正在播放时显示歌词）；
+     * 歌单 / 歌手 / 用户 / 播客打开通用 {@link DetailPage}。点击只负责"看"，不会重新点播。</p>
      */
     @Override
     public void onItemClick(MediaItem item) {
@@ -69,6 +76,7 @@ public abstract class BrowserPage implements MediaListView.Listener {
             return;
         }
         if (item.kind() == MediaKind.SONG) {
+            host.push(new SongDetailPage(item));
             return;
         }
         host.push(new DetailPage(item.kind(), item.id()));
