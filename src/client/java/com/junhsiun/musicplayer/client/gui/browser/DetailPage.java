@@ -10,18 +10,18 @@ import com.junhsiun.musicplayer.util.Messages;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 
 /**
  * 详情页：歌单 / 歌手 / 用户 / 播客 / 单曲。
  *
- * <p>外壳只有顶栏（返回按钮 + 标题）：<b>没有搜索框、没有标签栏、没有翻页栏</b>。封面、标题、
- * 简介、数据标签都在列表的头部区块里，跟着列表一起滚动——固定在顶上的话，能滚的区域只剩
- * 中间一小条，翻起来很难受。</p>
+ * <p>外壳只有顶栏（返回按钮 + 标题）：<b>没有搜索框、没有标签栏、没有独立翻页栏</b>。
+ * 封面、标题、简介、数据标签都在列表的头部区块里，跟着列表一起滚动——固定在顶上的话，
+ * 能滚的区域只剩中间一小条，翻起来很难受。</p>
  *
- * <p>条目是"加载更多"，不是分页：详情页的条目可能上千条，用页码翻会让用户失去位置感。</p>
+ * <p>条目和搜索页一样按页加载：最后一条 item 后面直接跟着上一页 / 下一页 / 页码，
+ * 不出现独立的"加载更多"。每次翻页都会回到列表顶部。</p>
  */
 public final class DetailPage extends BrowserPage {
 
@@ -30,15 +30,31 @@ public final class DetailPage extends BrowserPage {
 
     private MediaDetail detail;
     private List<MediaItem> entries = List.of();
-    private boolean hasMore;
+    private int page = 1;
+    /** 下级条目总数；{@code <= 0} 表示数据来源没给。 */
+    private int totalEntries;
     private boolean loading = true;
     private boolean loadingEntries;
-    private boolean loadingMore;
     private Component status = Component.empty();
 
     public DetailPage(MediaKind kind, String id) {
         this.kind = kind == null ? MediaKind.SONG : kind;
         this.id = id == null ? "" : id;
+    }
+
+    /** 条目类型：界面据此决定要不要显示"收藏歌单"按钮。 */
+    public MediaKind kind() {
+        return kind;
+    }
+
+    /** 平台 ID。 */
+    public String id() {
+        return id;
+    }
+
+    /** 已经加载到的元数据；还没回来时为 {@code null}。 */
+    public MediaDetail detail() {
+        return detail;
     }
 
     @Override
@@ -66,7 +82,24 @@ public final class DetailPage extends BrowserPage {
                 kind == MediaKind.PLAYLIST));
         view().setLoading(loading);
         view().setStatus(status);
-        view().showItems(entries, hasMore, loadingMore);
+        view().showItems(entries, false, false);
+        view().setPagination(page, totalPages(), canGoNext());
+    }
+
+    /** 还有没有下一页；条目总数未知时按"本页是否满页"判断。 */
+    private boolean canGoNext() {
+        if (totalEntries > 0) {
+            return page < totalPages();
+        }
+        return entries.size() >= SearchPage.PAGE_SIZE;
+    }
+
+    /** 总页数；条目总数未知时返回 {@code -1}，页脚只显示当前页。 */
+    private int totalPages() {
+        if (totalEntries > 0) {
+            return (totalEntries + SearchPage.PAGE_SIZE - 1) / SearchPage.PAGE_SIZE;
+        }
+        return entries.isEmpty() ? 1 : -1;
     }
 
     @Override
@@ -83,12 +116,10 @@ public final class DetailPage extends BrowserPage {
         loadDetail();
     }
 
+    /** 列表末尾的分页页脚。 */
     @Override
-    public void onLoadMore() {
-        if (!hasMore || loadingEntries) {
-            return;
-        }
-        loadEntries(entries.size(), true);
+    public void onPageChange(int delta) {
+        goToPage(delta);
     }
 
     // ── 数据 ────────────────────────────────────────────────────────────
@@ -111,6 +142,7 @@ public final class DetailPage extends BrowserPage {
                                 return;
                             }
                             detail = loaded;
+                            totalEntries = loaded.totalEntries();
                             if (kind == MediaKind.SONG) {
                                 // 单曲没有下级列表，拉到元数据就算完
                                 loading = false;
@@ -119,49 +151,60 @@ public final class DetailPage extends BrowserPage {
                                 return;
                             }
                             // 元数据到了，条目还在路上：继续显示加载动画
-                            apply();
-                            loadEntries(0, false);
+                            loadEntries(1);
                         }));
     }
 
-    private void loadEntries(int offset, boolean append) {
+    private void goToPage(int delta) {
+        if (loading || loadingEntries) {
+            return;
+        }
+        int target = page + delta;
+        if (target < 1) {
+            return;
+        }
+        if (totalEntries > 0 && target > totalPages()) {
+            return;
+        }
+        if (delta > 0 && totalEntries <= 0 && entries.size() < SearchPage.PAGE_SIZE) {
+            // 总数未知时，本页没满就说明到底了
+            return;
+        }
+        loadEntries(target);
+    }
+
+    private void loadEntries(int targetPage) {
         if (loadingEntries) {
             return;
         }
         loadingEntries = true;
-        if (append) {
-            loadingMore = true;
-            apply();
-        }
+        page = Math.max(1, targetPage);
+        loading = true;
+        status = Component.empty();
+        apply();
+        int offset = (page - 1) * SearchPage.PAGE_SIZE;
         MediaBrowserService.getInstance().entries(kind, id, offset, SearchPage.PAGE_SIZE)
                 .whenComplete((items, throwable) ->
                         Minecraft.getInstance().execute(() -> {
                             loadingEntries = false;
-                            loadingMore = false;
+                            loading = false;
                             if (throwable != null) {
-                                loading = false;
                                 status = failed(throwable);
                                 apply();
                                 return;
                             }
                             List<MediaItem> received = items == null ? List.of() : items;
-                            if (append) {
-                                List<MediaItem> merged = new ArrayList<>(entries.size() + received.size());
-                                merged.addAll(entries);
-                                merged.addAll(received);
-                                entries = merged;
-                            } else {
-                                entries = received;
+                            entries = received;
+                            if (received.size() < SearchPage.PAGE_SIZE) {
+                                // 这一页没满 = 最后一页，顺便把总数定下来
+                                totalEntries = offset + received.size();
                             }
-                            hasMore = received.size() >= SearchPage.PAGE_SIZE;
-                            loading = false;
                             if (entries.isEmpty() && status.getString().isBlank()) {
                                 status = Component.translatable("musicplayer.browser.no_result");
                             }
                             apply();
-                            if (!append) {
-                                view().resetAndReveal();
-                            }
+                            // 翻页后回到顶部，用户不会停在上一页的滚动位置
+                            view().resetAndReveal();
                         }));
     }
 

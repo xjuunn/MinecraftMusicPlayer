@@ -4,6 +4,8 @@ import com.junhsiun.musicplayer.model.MediaDetail;
 import com.junhsiun.musicplayer.model.MediaItem;
 import com.junhsiun.musicplayer.model.MediaKind;
 import com.junhsiun.musicplayer.model.MediaPage;
+import com.junhsiun.musicplayer.model.LyricLine;
+import com.junhsiun.musicplayer.platform.LyricService;
 import com.junhsiun.musicplayer.platform.NeteaseApiClient;
 import com.junhsiun.musicplayer.platform.api.DirectMusicApi;
 import com.junhsiun.musicplayer.platform.api.MusicApi;
@@ -29,6 +31,7 @@ public final class MediaBrowserService {
     private static final MediaBrowserService INSTANCE = new MediaBrowserService();
 
     private volatile MusicApi api;
+    private final LyricService lyricService = new LyricService();
 
     private MediaBrowserService() {
     }
@@ -53,6 +56,14 @@ public final class MediaBrowserService {
     /** 详情页内的条目分页。 */
     public CompletableFuture<List<MediaItem>> entries(MediaKind kind, String id, int offset, int limit) {
         return api().mediaEntries(kind, id, offset, limit);
+    }
+
+    /** 单曲歌词（LRC 时间轴）。取不到时以空列表完成，界面显示"暂无歌词"。 */
+    public CompletableFuture<List<LyricLine>> lyrics(String songId) {
+        if (songId == null || songId.isBlank()) {
+            return CompletableFuture.completedFuture(List.of());
+        }
+        return lyricService.fetchLyrics(songId);
     }
 
     private MusicApi api() {
