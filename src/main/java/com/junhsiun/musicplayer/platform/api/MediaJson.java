@@ -200,7 +200,8 @@ public final class MediaJson {
                         stat("musicplayer.browser.stat.tracks", trackCount),
                         stat("musicplayer.browser.stat.play", ApiJson.lng(playlist, "playCount")),
                         stat("musicplayer.browser.stat.subscribed", ApiJson.lng(playlist, "subscribedCount"))
-                ));
+                ),
+                trackCount);
     }
 
     /** 歌手详情（{@code {artist: {...}}}）。 */
@@ -219,7 +220,8 @@ public final class MediaJson {
                 stats(
                         stat("musicplayer.browser.stat.songs", ApiJson.intVal(artist, "musicSize")),
                         stat("musicplayer.browser.stat.albums", ApiJson.intVal(artist, "albumSize"))
-                ));
+                ),
+                ApiJson.intVal(artist, "musicSize"));
     }
 
     /**
@@ -242,7 +244,8 @@ public final class MediaJson {
                             stat("musicplayer.browser.stat.playlists", ApiJson.intVal(profile, "playlistCount")),
                             stat("musicplayer.browser.stat.follows", ApiJson.intVal(profile, "follows")),
                             stat("musicplayer.browser.stat.followers", ApiJson.intVal(profile, "followeds"))
-                    ));
+                    ),
+                    ApiJson.intVal(profile, "playlistCount"));
         }
         JsonArray playlists = ApiJson.arr(root, "playlist");
         JsonObject creator = null;
@@ -269,7 +272,8 @@ public final class MediaJson {
                 null,
                 creator == null ? "" : ApiJson.firstNonBlank(creator, "avatarUrl", "avatar"),
                 creator == null ? "" : ApiJson.str(creator, "signature"),
-                stats(stat("musicplayer.browser.stat.playlists", count)));
+                stats(stat("musicplayer.browser.stat.playlists", count)),
+                count);
     }
 
     /** 播客详情（{@code {data: {...}}}）。 */
@@ -293,7 +297,8 @@ public final class MediaJson {
                         stat("musicplayer.browser.stat.programs", ApiJson.intVal(data, "programCount")),
                         stat("musicplayer.browser.stat.subscribed", ApiJson.intVal(data, "subCount")),
                         stat("musicplayer.browser.stat.play", ApiJson.lng(data, "playCount"))
-                ));
+                ),
+                ApiJson.intVal(data, "programCount"));
     }
 
     /** 单曲详情（{@code {songs: [...]}}）。 */
@@ -309,7 +314,8 @@ public final class MediaJson {
                 artistOf(song),
                 coverOf(song),
                 albumNameOf(song),
-                stats(new MediaStat(Component.empty(), formatDuration(durationOf(song)))));
+                stats(new MediaStat(Component.empty(), formatDuration(durationOf(song)))),
+                0);
     }
 
     // ── 详情内的条目分页 ─────────────────────────────────────────────────
