@@ -15,9 +15,10 @@ import java.util.List;
  * @param coverUrl    封面或头像，可为空串
  * @param description 简介，可为空串
  * @param stats       数据小标签，可为空列表
+ * @param totalEntries 下级条目的精确总数；{@code <= 0} 表示数据来源没有提供
  */
 public record MediaDetail(String id, MediaKind kind, String title, String subtitle, String coverUrl,
-                          String description, List<MediaStat> stats) {
+                          String description, List<MediaStat> stats, int totalEntries) {
 
     public MediaDetail {
         id = id == null ? "" : id;
@@ -29,9 +30,20 @@ public record MediaDetail(String id, MediaKind kind, String title, String subtit
         stats = stats == null ? List.of() : List.copyOf(stats);
     }
 
+    /** 兼容旧调用：不知条目总数的详情。 */
+    public MediaDetail(String id, MediaKind kind, String title, String subtitle, String coverUrl,
+                       String description, List<MediaStat> stats) {
+        this(id, kind, title, subtitle, coverUrl, description, stats, 0);
+    }
+
     /** 数据来源什么都没给时的占位，界面据此显示"查无此项"而不是空白页。 */
     public static MediaDetail empty(MediaKind kind, String id) {
-        return new MediaDetail(id, kind, "", null, "", "", List.of());
+        return new MediaDetail(id, kind, "", null, "", "", List.of(), 0);
+    }
+
+    /** 条目总数是否已知。 */
+    public boolean hasTotalEntries() {
+        return totalEntries > 0;
     }
 
     public boolean hasCover() {

@@ -1,6 +1,7 @@
 ﻿package com.junhsiun.musicplayer;
 
 import com.junhsiun.musicplayer.client.ClientBgmController;
+import com.junhsiun.musicplayer.client.ClientMusicUiState;
 import com.junhsiun.musicplayer.client.CoverArtTextureCache;
 import com.junhsiun.musicplayer.client.ClientJukeboxController;
 import com.junhsiun.musicplayer.client.ClientMusicController;
@@ -17,7 +18,11 @@ import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.network.BgmConfigPayload;
 import com.junhsiun.musicplayer.network.DiscMasterBurnResultPayload;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
+import com.junhsiun.musicplayer.network.MusicConfigSnapshotPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
+import com.junhsiun.musicplayer.network.MusicQueuePayload;
+import com.junhsiun.musicplayer.network.MusicRecentPayload;
+import com.junhsiun.musicplayer.network.MusicUiStatePayload;
 import com.junhsiun.musicplayer.network.OpenUrlPayload;
 import com.mojang.blaze3d.Blaze3D;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -91,6 +96,18 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
                 context.client().execute(() -> ClientBgmController.getInstance()
                         .configureServer(payload.playlistId(), payload.baseUrl()))
         );
+        ClientPlayNetworking.registerGlobalReceiver(MusicUiStatePayload.TYPE, (payload, context) ->
+                context.client().execute(() -> ClientMusicUiState.getInstance().update(payload))
+        );
+        ClientPlayNetworking.registerGlobalReceiver(MusicRecentPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> ClientMusicUiState.getInstance().updateRecent(payload))
+        );
+        ClientPlayNetworking.registerGlobalReceiver(MusicQueuePayload.TYPE, (payload, context) ->
+                context.client().execute(() -> ClientMusicUiState.getInstance().updateQueue(payload))
+        );
+        ClientPlayNetworking.registerGlobalReceiver(MusicConfigSnapshotPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> ClientMusicUiState.getInstance().updateConfig(payload))
+        );
         ClientPlayNetworking.registerGlobalReceiver(DiscMasterBurnResultPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> {
                     if (context.client().gui.screen() instanceof DiscMasterScreen screen) {
@@ -148,6 +165,8 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             ClientBgmController.getInstance().configureLocal(MusicPlayerConfigManager.get().bgmPlaylistId);
             ClientJukeboxController.getInstance().stopAll("Disconnected.");
             CoverArtTextureCache.getInstance().clear();
+            // 服务端同步下来的播放状态 / 最近播放 / 配置快照只属于本次连接
+            ClientMusicUiState.getInstance().clear();
             // 浏览界面的缩略图纹理同理：退出世界就放掉，别把上一局的封面带进下一局
             MediaThumbnails.getInstance().clear();
         });
