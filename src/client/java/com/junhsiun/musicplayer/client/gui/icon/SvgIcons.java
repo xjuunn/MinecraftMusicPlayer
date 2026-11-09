@@ -42,6 +42,72 @@ public final class SvgIcons {
                     + "M6 18h2v2H6z M16 18h2v2h-2z M8 20h8v2H8z"
                     + "M11 11h2v2h-2z");
 
+    /** 我的歌单：列表。 */
+    public static final SvgIcon PLAYLIST = SvgIcon.of(
+            "M3 5h2v2H3z M7 5h14v2H7z M3 11h2v2H3z M7 11h14v2H7z M3 17h2v2H3z M7 17h10v2H7z");
+
+    /** 当前队列：三条待播条目 + 右侧播放三角。 */
+    public static final SvgIcon QUEUE = SvgIcon.of(
+            "M3 5h11v2H3z M3 11h11v2H3z M3 17h11v2H3z"
+                    + " M17 6h2v12h-2z M19 8h2v8h-2z M21 10h2v4h-2z");
+
+    /** 最近播放：时钟。 */
+    public static final SvgIcon HISTORY = SvgIcon.of(
+            "M8 2h8v2H8z M6 4h2v2H6z M16 4h2v2h-2z M4 6h2v2H4z M18 6h2v2h-2z"
+                    + " M2 8h2v8H2z M20 8h2v8h-2z M4 16h2v2H4z M18 16h2v2h-2z"
+                    + " M6 18h2v2H6z M16 18h2v2h-2z M8 20h8v2H8z"
+                    + " M11 7h2v6h-2z M11 11h5v2h-5z");
+
+    /** 设置：三条带滑块的横线。 */
+    public static final SvgIcon SETTINGS = SvgIcon.of(
+            "M3 5h18v2H3z M3 11h18v2H3z M3 17h18v2H3z"
+                    + " M7 3h3v6H7z M14 9h3v6h-3z M9 15h3v6H9z");
+
+    /** 播放：右向三角。 */
+    public static final SvgIcon PLAY = SvgIcon.of(
+            "M7 4h2v16H7z M9 6h2v12H9z M11 8h2v8h-2z M13 10h2v4h-2z M15 11h2v2h-2z");
+
+    /** 暂停：两条竖线。 */
+    public static final SvgIcon PAUSE = SvgIcon.of(
+            "M7 5h3v14H7z M14 5h3v14h-3z");
+
+    /** 后退：左向三角 + 竖线。 */
+    public static final SvgIcon REWIND = SvgIcon.of(
+            "M4 5h2v14H4z M18 5h2v14h-2z M16 7h2v10h-2z M14 9h2v6h-2z M12 11h2v2h-2z");
+
+    /** 前进：竖线 + 右向三角。 */
+    public static final SvgIcon FORWARD = SvgIcon.of(
+            "M6 5h2v14H6z M8 7h2v10H8z M10 9h2v6h-2z M12 11h2v2h-2z M18 5h2v14h-2z");
+
+    /** 快进：连着的两个右向三角（双击箭头）。 */
+    public static final SvgIcon FAST_FORWARD = SvgIcon.of(
+            "M3 5h2v14H3z M5 7h2v10H5z M7 9h2v6H7z M9 11h2v2H9z"
+                    + " M13 5h2v14h-2z M15 7h2v10h-2z M17 9h2v6h-2z M19 11h2v2h-2z");
+
+    /** 跳过：右向三角 + 竖线。 */
+    public static final SvgIcon SKIP = SvgIcon.of(
+            "M4 5h2v14H4z M6 7h2v10H6z M8 9h2v6H8z M10 11h2v2h-2z M15 5h3v14h-3z");
+
+    /** 收藏：像素心形。 */
+    public static final SvgIcon HEART = SvgIcon.of(
+            "M4 4h4v2H4z M16 4h4v2h-4z M2 6h2v4H2z M20 6h2v4h-2z"
+                    + " M4 6h4v2H4z M16 6h4v2h-4z M6 8h12v2H6z M4 10h16v2H4z"
+                    + " M6 12h12v2H6z M8 14h8v2H8z M10 16h4v2h-4z M12 18h2v2h-2z");
+
+    /**
+     * 收藏歌单：像素描边星形。
+     *
+     * <p>绘制层只支持轴对齐矩形，所以把图标源文件里的 L 形子路径逐格拆成了纯矩形块：
+     * 五个尖角与中间的空心一起保留，形状和原 SVG 完全一致。</p>
+     */
+    public static final SvgIcon STAR = SvgIcon.of(
+            "M11 1h2v2H11z M9 3h2v4H9z M13 3h2v4H13z"
+                    + " M1 7h8v2H1z M15 7h8v2H15z M1 9h2v2H1z"
+                    + " M21 9h2v2H21z M3 11h2v2H3z M19 11h2v2H19z"
+                    + " M5 13h2v3H5z M17 13h2v3H17z M3 16h2v6H3z"
+                    + " M10 16h4v2H10z M19 16h2v6H19z M8 18h2v2H8z"
+                    + " M14 18h2v2H14z M5 20h3v2H5z M16 20h3v2H16z");
+
     private SvgIcons() {
     }
 }
