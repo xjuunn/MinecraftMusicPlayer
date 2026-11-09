@@ -13,6 +13,8 @@ public class GlassLabel extends AbstractWidget {
 
     private final float scale;
     private final int color;
+    private boolean centered;
+    private boolean rightAligned;
 
     public GlassLabel(int x, int y, int width, int height, Component text, float scale) {
         this(x, y, width, height, text, scale, GlassTheme.TEXT);
@@ -24,6 +26,23 @@ public class GlassLabel extends AbstractWidget {
         this.scale = scale;
         this.color = color;
         this.active = false;
+    }
+
+    /**
+     * 改成在控件宽度内居中（默认左对齐）。
+     *
+     * <p>给"两侧是按钮、中间一行说明文字"的排版用（例如翻页栏的页码）。文字宽度随内容变化，
+     * 靠调用方每次重算 x 会把控件坐标和动画变换搅在一起，交给控件自己居中更省事。</p>
+     */
+    public GlassLabel centered() {
+        this.centered = true;
+        return this;
+    }
+
+    /** 改成在控件宽度内右对齐（默认左对齐）。 */
+    public GlassLabel rightAligned() {
+        this.rightAligned = true;
+        return this;
     }
 
     /**
@@ -45,8 +64,13 @@ public class GlassLabel extends AbstractWidget {
                     Math.max(0, available - font.width(ellipsis))) + ellipsis;
             text = Component.literal(plain);
         }
-        GlassWidgets.text(graphics, font, text,
-                getX(), getY() + Math.round((height - 8 * scale) / 2.0F),
+        int textX = centered
+                ? getX() + Math.round((width - font.width(text) * scale) * 0.5F)
+                : rightAligned
+                        ? getX() + width - Math.round(font.width(text) * scale)
+                        : getX();
+        GlassWidgets.text(graphics, font, text, textX,
+                getY() + Math.round((height - 8 * scale) / 2.0F),
                 color, scale);
     }
 

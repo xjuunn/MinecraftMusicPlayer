@@ -1,6 +1,8 @@
 package com.junhsiun.musicplayer.client.gui.glass.widget;
 
+import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
+import com.junhsiun.musicplayer.client.gui.icon.SvgIcons;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -42,30 +44,8 @@ public class GlassSearchField extends EditBox {
     /** 文字起点相对胶囊左边缘的偏移量。 */
     private static final int TEXT_OFFSET = INSET + ICON_SIZE + GAP;
 
-    /** SVG 视口边长。 */
-    private static final float VIEW_BOX = 24.0F;
-    /**
-     * 放大镜的矩形表，取自 SVG 路径 {@code {x0, y0, x1, y1}}，单位为 viewBox。
-     *
-     * <p>这是像素画风图标：全部由 2×2 的实心方块拼成，没有描边也没有曲线，
-     * 所以不需要抗锯齿——按矩形原样画出来就是它该有的样子。
-     * 顺序：镜片顶边、四个角、左右两条边、底边，再加斜柄的三级台阶。</p>
-     */
-    private static final int[][] ICON_RECTS = {
-            {6, 2, 14, 4},     // 顶边
-            {4, 4, 6, 6},      // 左上角
-            {14, 4, 16, 6},    // 右上角
-            {2, 6, 4, 14},     // 左边
-            {16, 6, 18, 14},   // 右边
-            {4, 14, 6, 16},    // 左下角
-            {14, 14, 16, 16},  // 右下角
-            {6, 16, 14, 18},   // 底边
-            {16, 16, 18, 18},  // 斜柄（三级台阶，接在右下角外侧）
-            {18, 18, 20, 20},
-            {20, 20, 22, 22}
-    };
-
     private final GlassWidgets.Spring hover = new GlassWidgets.Spring();
+    private boolean flat;
 
     public GlassSearchField(int x, int y, int width, int height, Component hint, Consumer<String> responder) {
         super(Minecraft.getInstance().font, x + TEXT_OFFSET, y, width - TEXT_OFFSET, height, Component.empty());
@@ -80,6 +60,12 @@ public class GlassSearchField extends EditBox {
     public static GlassSearchField create(int x, int y, int width, int height, Component hint,
                                           Consumer<String> responder) {
         return new GlassSearchField(x, y, width, height, hint, responder);
+    }
+
+    /** 改成扁平样式：不再叠玻璃层。 */
+    public GlassSearchField flat() {
+        this.flat = true;
+        return this;
     }
 
     @Override
@@ -120,7 +106,7 @@ public class GlassSearchField extends EditBox {
     @Override
     public void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
         boolean usable = isActive();
-        hover.tick(isHoveredOrFocused() && usable, GlassTheme.Motion.HOVER);
+        hover.tick((isHovered() || isFocused()) && usable, GlassTheme.Motion.HOVER);
         float lift = hover.eased();
 
         int x0 = getX() - TEXT_OFFSET;
@@ -131,44 +117,25 @@ public class GlassSearchField extends EditBox {
         // 否则胶囊外面会多出一层小圆角矩形
         float radius = height / 2.0F;
 
-        if (!GlassWidgets.glassBackground(graphics, x0, y0, x1, y1, GlassTheme.FIELD, lift, 0.0F)) {
-            GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, 0xFFFFFF, 0x000000, radius, 0.35F, 1.0F);
+        if (flat) {
+            FlatTheme.field(graphics, x0, y0, x1, y1, radius, lift, isFocused());
+        } else {
+            if (!GlassWidgets.glassBackground(graphics, x0, y0, x1, y1, GlassTheme.FIELD, lift, 0.0F)) {
+                GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, 0xFFFFFF, 0x000000, radius, 0.35F, 1.0F);
+            }
+            // 叠一层很淡的暗底：搜索框要在窗口表面上有明确边界，否则和卡片底色糊在一起
+            GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, 0x000000, 0x000000, radius, 0.10F, 1.0F);
         }
-        // 叠一层很淡的暗底：搜索框要在窗口表面上有明确边界，否则和卡片底色糊在一起
-        GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, 0x000000, 0x000000, radius, 0.10F, 1.0F);
 
-        drawMagnifier(graphics, x0 + INSET, (y0 + y1) / 2 - ICON_SIZE / 2,
-                getValue().isEmpty() && !isFocused() ? GlassTheme.TEXT_SECONDARY : GlassTheme.TEXT);
+        SvgIcons.SEARCH.draw(graphics, x0 + INSET, (y0 + y1) / 2 - ICON_SIZE / 2, ICON_SIZE,
+                getValue().isEmpty() && !isFocused()
+                        ? (flat ? FlatTheme.TEXT_TERTIARY : GlassTheme.TEXT_SECONDARY)
+                        : (flat ? FlatTheme.TEXT : GlassTheme.TEXT));
 
         // 文字垂直居中：EditBox 关掉边框后文字画在 getY()，把画笔整体下移即可
         graphics.pose().pushMatrix();
         graphics.pose().translate(0, Math.round((height - 8) / 2.0F));
         super.extractWidgetRenderState(graphics);
-        graphics.pose().popMatrix();
-    }
-
-    /**
-     * 放大镜图标。
-     *
-     * <p>按给定的像素画 SVG 绘制：{@code viewBox 0 0 24 24}，形状是 {@link #ICON_RECTS}
-     * 里那 11 个 2×2 的实心方块（圆角方形镜片 + 45° 阶梯斜柄）。坐标都是 viewBox 整数，
-     * 所以直接用一个缩放位姿把 viewBox 映射到 {@link #ICON_SIZE} 见方，再按矩形填充——
-     * 顶点按设备分辨率光栅化，小尺寸下依然是硬边，正是像素画该有的效果。</p>
-     */
-    private static void drawMagnifier(GuiGraphicsExtractor graphics, int left, int top, int color) {
-        int alpha = (color >>> 24) & 0xFF;
-        int rgb = color & 0xFFFFFF;
-        if (alpha <= 0) {
-            return;
-        }
-        int argb = alpha << 24 | rgb;
-        float scale = ICON_SIZE / VIEW_BOX;
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(left, top);
-        graphics.pose().scale(scale, scale);
-        for (int[] rect : ICON_RECTS) {
-            graphics.fill(rect[0], rect[1], rect[2], rect[3], argb);
-        }
         graphics.pose().popMatrix();
     }
 }

@@ -9,8 +9,6 @@ import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 /** 控件配色、尺寸、材质与动效参数。 */
 public final class GlassTheme {
 
-    /** 强调蓝。 */
-    public static final int ACCENT = 0xFF007AFF;
     /** 主文字：永远是白色，不随背景变。 */
     public static final int TEXT = 0xFFFFFFFF;
     /** 次级文字：略带透明度的白，保证层次又不失对比。 */
