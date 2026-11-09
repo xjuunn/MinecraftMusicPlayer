@@ -7,10 +7,15 @@ import com.junhsiun.musicplayer.model.LyricLine;
 import com.junhsiun.musicplayer.model.PlayOrder;
 import com.junhsiun.musicplayer.model.ProgramInfo;
 import com.junhsiun.musicplayer.model.QueuedTrack;
+import com.junhsiun.musicplayer.model.QueueEntry;
+import com.junhsiun.musicplayer.model.RecentTrack;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
+import com.junhsiun.musicplayer.network.MusicQueuePayload;
+import com.junhsiun.musicplayer.network.MusicRecentPayload;
+import com.junhsiun.musicplayer.network.MusicUiStatePayload;
 import com.junhsiun.musicplayer.platform.LyricService;
 import com.junhsiun.musicplayer.util.Messages;
 import com.junhsiun.musicplayer.util.PlayerSongLimiter;
@@ -32,6 +37,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
@@ -93,6 +99,9 @@ public final class MusicQueueService {
     private final Map<UUID, Boolean> lyricsPreference = new HashMap<>();
     private final Map<UUID, String> playerLastOverlay = new HashMap<>();
     private LyricsPreferenceState lyricsPreferenceState;
+    private RecentPlaybackState recentState;
+    /** UI 状态广播节流计数（tick）。 */
+    private int uiStateTicks;
 
     private String playlistId = "";
     private int playlistTrackIndex = 0;
@@ -173,6 +182,7 @@ public final class MusicQueueService {
         long now = System.currentTimeMillis();
         if (paused) {
             pausedAtMillis = newElapsed;
+            broadcastUiState(server);
             return;
         }
         long timeout = Math.min(currentPlayback.expectedEndAt() - currentPlayback.startedAt() + now - newElapsed, duration + 60_000L);
@@ -184,6 +194,7 @@ public final class MusicQueueService {
         server.getPlayerList().getPlayers().stream()
                 .filter(p -> !optedOutPlayers.contains(p.getUUID()))
                 .forEach(p -> sendPlay(p, currentPlayback.track(), newElapsed));
+        broadcastUiState(server);
     }
 
     public void pause(MinecraftServer server) {
@@ -193,6 +204,7 @@ public final class MusicQueueService {
         server.getPlayerList().getPlayers().stream()
                 .filter(p -> !optedOutPlayers.contains(p.getUUID()))
                 .forEach(p -> sendStop(p, "musicplayer.stop.paused"));
+        broadcastUiState(server);
     }
 
     public void resume(MinecraftServer server) {
@@ -213,6 +225,7 @@ public final class MusicQueueService {
         server.getPlayerList().getPlayers().stream()
                 .filter(p -> !optedOutPlayers.contains(p.getUUID()))
                 .forEach(p -> sendPlay(p, currentPlayback.track(), offset));
+        broadcastUiState(server);
     }
 
     public String currentRequesterName() {
@@ -262,6 +275,26 @@ public final class MusicQueueService {
                 .toList();
     }
 
+    /**
+     * 当前队列快照：单点队列在前，正在预载的歌单队列在后。
+     *
+     * <p>歌单模式下真正还没加载进来的曲目不在任何队列里，只通过
+     * {@link #playlistRemainingCount()} 报一个剩余数，界面用一行提示说明即可。</p>
+     */
+    public MusicQueuePayload queueSnapshot() {
+        List<QueueEntry> entries = new ArrayList<>(queue.size() + playlistQueue.size());
+        appendQueueEntries(entries, queue);
+        appendQueueEntries(entries, playlistQueue);
+        return new MusicQueuePayload(entries, playlistRemainingCount(), playlistMode);
+    }
+
+    private static void appendQueueEntries(List<QueueEntry> entries, Deque<QueuedTrack> source) {
+        for (QueuedTrack track : source) {
+            entries.add(new QueueEntry(track.songId(), track.title(), track.artist(),
+                    track.requesterName(), track.coverUrl()));
+        }
+    }
+
     // ── Tick / lifecycle ───────────────────────────────────────────────
 
     public void tick(MinecraftServer server) {
@@ -275,6 +308,16 @@ public final class MusicQueueService {
     private void tickInner(MinecraftServer server) {
         MusicPlayerConfig config = MusicPlayerConfigManager.get();
         long now = System.currentTimeMillis();
+
+        if (currentPlayback != null) {
+            // 每两秒校准一次底部播放栏：客户端自己按真实时间推进进度，这里只做纠偏
+            if (++uiStateTicks >= 40) {
+                uiStateTicks = 0;
+                broadcastUiState(server);
+            }
+        } else {
+            uiStateTicks = 0;
+        }
 
         if (currentPlayback != null) {
             if (!paused && config.autoAdvance && now >= currentPlayback.expectedEndAt()) {
@@ -523,6 +566,19 @@ public final class MusicQueueService {
     public void initLyricsState(MinecraftServer server) {
         lyricsPreferenceState = server.overworld().getDataStorage()
                 .computeIfAbsent(LyricsPreferenceState.TYPE);
+        recentState = server.overworld().getDataStorage()
+                .computeIfAbsent(RecentPlaybackState.TYPE);
+    }
+
+    private void ensureRecentState(ServerPlayer player) {
+        if (recentState != null || player == null) {
+            return;
+        }
+        MinecraftServer server = player.level().getServer();
+        if (server != null) {
+            recentState = server.overworld().getDataStorage()
+                    .computeIfAbsent(RecentPlaybackState.TYPE);
+        }
     }
 
     // ── Player join / leave / report ─────────────────────────────────
@@ -531,6 +587,9 @@ public final class MusicQueueService {
         if (lyricsPreferenceState != null && lyricsPreferenceState.isEnabled(player.getUUID())) {
             lyricsPreference.put(player.getUUID(), true);
         }
+        ensureRecentState(player);
+        sendUiState(player);
+        sendRecent(player);
         if (currentPlayback != null && !optedOutPlayers.contains(player.getUUID())) {
             long offset = Math.max(0L, System.currentTimeMillis() - currentPlayback.startedAt());
             sendPlay(player, currentPlayback.track(), offset);
@@ -804,7 +863,7 @@ public final class MusicQueueService {
                                             track.id(), track.title(), track.artist(),
                                             track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
                                             playlistRequesterId, playlistRequesterName,
-                                            track.sourceUrls()
+                                            track.sourceUrls(), track.coverUrl()
                                     ));
                                     playlistTrackIndex = lastIndex - 1;
                                     loadAndStart.run();
@@ -858,7 +917,7 @@ public final class MusicQueueService {
                                             track.id(), track.title(), track.artist(),
                                             track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
                                             playlistRequesterId, playlistRequesterName,
-                                            track.sourceUrls()
+                                            track.sourceUrls(), track.coverUrl()
                                     )));
                                     MusicPlayerMod.LOGGER.debug("歌单加载: {}/{} - {} - {}",
                                             trackNumber, playlistTotalTracks, track.title(), track.artist());
@@ -998,7 +1057,7 @@ public final class MusicQueueService {
                                 playlistQueue.addLast(new QueuedTrack(
                                         programTrack.id(), programTrack.title(), programTrack.artist(),
                                         "", playlistRequesterId, playlistRequesterName,
-                                        programTrack.sourceUrls()));
+                                        programTrack.sourceUrls(), programTrack.coverUrl()));
                                 playlistTrackIndex++;
                             }
                             if (currentPlayback == null && source == null) {
@@ -1070,7 +1129,7 @@ public final class MusicQueueService {
                                 track.id(), track.title(), track.artist(),
                                 track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
                                 playlistRequesterId, playlistRequesterName,
-                                track.sourceUrls()
+                                track.sourceUrls(), track.coverUrl()
                         ));
                         MusicPlayerMod.LOGGER.debug("歌单预载: {}/{} - {} - {}",
                                 trackNumber, playlistTotalTracks, track.title(), track.artist());
@@ -1136,6 +1195,7 @@ public final class MusicQueueService {
         refreshTrackCache();
         String payload = payloadReason(reason);
         server.getPlayerList().getPlayers().forEach(player -> sendStop(player, payload));
+        broadcastUiState(server);
         if (reason != null && !reason.getString().isBlank()) {
             broadcast(server, reason.copy().withStyle(ChatFormatting.YELLOW));
         }
@@ -1205,6 +1265,7 @@ public final class MusicQueueService {
         resetPlaylistState();
         refreshTrackCache();
         server.getPlayerList().getPlayers().forEach(player -> sendStop(player, "musicplayer.playlist.stopped"));
+        broadcastUiState(server);
         return true;
     }
 
@@ -1278,7 +1339,8 @@ public final class MusicQueueService {
                 track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
                 requester.getUUID(),
                 requester.getGameProfile().name(),
-                track.sourceUrls()
+                track.sourceUrls(),
+                track.coverUrl()
         ));
         refreshTrackCache();
         if (MusicPlayerConfigManager.get().announceQueueChanges) {
@@ -1438,6 +1500,8 @@ public final class MusicQueueService {
                     sendPlay(player, track, 0L);
                 });
         broadcast(server, renderNowPlayingBroadcast(track));
+        recordRecent(server, track);
+        broadcastUiState(server);
 
         currentLyrics = List.of();
         playerLyricLastText.clear();
@@ -1511,6 +1575,88 @@ public final class MusicQueueService {
         if (ServerPlayNetworking.canSend(player, MusicControlPayload.TYPE)) {
             ServerPlayNetworking.send(player, MusicControlPayload.stop(reason));
         }
+    }
+
+    // ── UI state / recent ────────────────────────────────────────────
+
+    /** 底部播放栏的实时状态快照。 */
+    private MusicUiStatePayload uiState() {
+        TrackInfo track = currentTrack();
+        return new MusicUiStatePayload(
+                track != null,
+                paused,
+                track == null ? "" : track.id(),
+                track == null ? "" : track.title(),
+                track == null ? "" : track.artist(),
+                track == null ? "" : track.coverUrl(),
+                playbackElapsedMillis(),
+                playbackDurationMillis(),
+                currentRequesterName(),
+                playOrder.name().toLowerCase(Locale.ROOT),
+                queue.size(),
+                playlistRemainingCount());
+    }
+
+    public void sendUiState(ServerPlayer player) {
+        if (player == null || !ServerPlayNetworking.canSend(player, MusicUiStatePayload.TYPE)) {
+            return;
+        }
+        ServerPlayNetworking.send(player, uiState());
+    }
+
+    public void broadcastUiState(MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            sendUiState(player);
+        }
+    }
+
+    /** 把当前队列快照发给单个玩家（队列页打开 / 刷新时按需调用）。 */
+    public void sendQueue(ServerPlayer player) {
+        if (player == null || !ServerPlayNetworking.canSend(player, MusicQueuePayload.TYPE)) {
+            return;
+        }
+        ServerPlayNetworking.send(player, queueSnapshot());
+    }
+
+    public void sendRecent(ServerPlayer player) {
+        if (player == null || !ServerPlayNetworking.canSend(player, MusicRecentPayload.TYPE)) {
+            return;
+        }
+        ensureRecentState(player);
+        List<RecentTrack> entries = recentState == null ? List.of() : recentState.entries(player.getUUID());
+        ServerPlayNetworking.send(player, new MusicRecentPayload(entries));
+    }
+
+    private void broadcastRecent(MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            sendRecent(player);
+        }
+    }
+
+    /**
+     * 记录当前曲目到所有在线听众的「最近播放」。
+     *
+     * <p>服务端只存展示字段，重新播放仍然走正常的歌曲解析链路；历史按玩家分开保存，
+     * 换客户端或换设备后仍然能看到同一份记录。</p>
+     */
+    private void recordRecent(MinecraftServer server, TrackInfo track) {
+        if (recentState == null || server == null || track == null || track.id().isBlank()) {
+            return;
+        }
+        RecentTrack entry = new RecentTrack(track.id(), track.title(), track.artist(),
+                track.coverUrl(), System.currentTimeMillis(), track.durationMillis());
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!optedOutPlayers.contains(player.getUUID())) {
+                recentState.record(player.getUUID(), entry);
+            }
+        }
+        broadcastRecent(server);
     }
 
     private void broadcast(MinecraftServer server, Component message) {
