@@ -46,7 +46,7 @@ public final class SearchPage extends BrowserPage {
 
     @Override
     public EnumSet<PageChrome> chrome() {
-        return EnumSet.of(PageChrome.SEARCH_BAR, PageChrome.TABS, PageChrome.PAGER);
+        return EnumSet.of(PageChrome.SEARCH_BAR, PageChrome.TABS);
     }
 
     @Override
@@ -55,6 +55,16 @@ public final class SearchPage extends BrowserPage {
         view().setLoading(loading);
         view().setStatus(status);
         view().showItems(results, false, false);
+        // 总数未知时用 canGoNext() 判断下一页，最后一页不会留下点了没反应的箭头
+        view().setPagination(page, totalPages(), canGoNext());
+    }
+
+    /** 总页数；数据来源没给总数时返回 {@code -1}（页脚只显示当前页）。 */
+    private int totalPages() {
+        if (total > 0) {
+            return (total + PAGE_SIZE - 1) / PAGE_SIZE;
+        }
+        return results.isEmpty() ? 1 : -1;
     }
 
     // ── 状态读取（界面摆外壳时要用） ────────────────────────────────────
@@ -167,6 +177,12 @@ public final class SearchPage extends BrowserPage {
             return;
         }
         search(target);
+    }
+
+    /** 列表末尾的分页页脚。 */
+    @Override
+    public void onPageChange(int delta) {
+        goToPage(delta);
     }
 
     private void search(int targetPage) {

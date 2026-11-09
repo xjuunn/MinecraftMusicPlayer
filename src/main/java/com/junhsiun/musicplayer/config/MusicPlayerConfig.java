@@ -1,5 +1,7 @@
 package com.junhsiun.musicplayer.config;
 
+import java.util.Locale;
+
 /**
  * 模组统一配置模型：<b>客户端与服务端共用一个文件</b>。
  *
@@ -119,6 +121,8 @@ public class MusicPlayerConfig {
         public static final double DEFAULT_OPACITY = 0.0D;
         public static final double DEFAULT_BLUR = 0.20D;
         public static final boolean DEFAULT_SHADOW = false;
+        /** 主题色（6 位十六进制，不带 {@code #}）。 */
+        public static final String DEFAULT_THEME_COLOR = "0A84FF";
         /** 折射幅度（GUI 像素）。 */
         public static final float DEFAULT_REFRACTION = 30.0F;
         public static final float DEFAULT_DISPERSION = 0.65F;
@@ -135,6 +139,9 @@ public class MusicPlayerConfig {
         public double blur = DEFAULT_BLUR;
         /** 是否绘制窗口的底部投影。 */
         public boolean shadow = DEFAULT_SHADOW;
+
+        /** 主题色：侧边栏选中、Tab 选中、滑块与进度等强调元素的颜色。 */
+        public String themeColor = DEFAULT_THEME_COLOR;
 
         /** 边缘畸变幅度。 */
         public float refraction = DEFAULT_REFRACTION;
@@ -153,6 +160,7 @@ public class MusicPlayerConfig {
         public void normalize() {
             opacity = clamp01(opacity);
             blur = clamp01(blur);
+            themeColor = normalizeThemeColor(themeColor);
             refraction = clampNonNegative(refraction, DEFAULT_REFRACTION);
             dispersion = (float) clamp01(dispersion);
             centerDispersion = clampNonNegative(centerDispersion, DEFAULT_CENTER_DISPERSION);
@@ -166,12 +174,43 @@ public class MusicPlayerConfig {
             opacity = DEFAULT_OPACITY;
             blur = DEFAULT_BLUR;
             shadow = DEFAULT_SHADOW;
+            themeColor = DEFAULT_THEME_COLOR;
             refraction = DEFAULT_REFRACTION;
             dispersion = DEFAULT_DISPERSION;
             centerDispersion = DEFAULT_CENTER_DISPERSION;
             aDistance = DEFAULT_A_DISTANCE;
             contraRatio = DEFAULT_CONTRA_RATIO;
             shrink = DEFAULT_SHRINK;
+        }
+
+        /** 当前主题色的 RGB（不含 alpha）。非法值回退到默认色。 */
+        public int themeColorRgb() {
+            return parseThemeColor(themeColor);
+        }
+
+        /** 把任意输入规范成 6 位大写十六进制；非法输入回退默认色。 */
+        public static String normalizeThemeColor(String raw) {
+            if (raw == null) {
+                return DEFAULT_THEME_COLOR;
+            }
+            String value = raw.trim();
+            if (value.startsWith("#")) {
+                value = value.substring(1);
+            }
+            if (value.length() != 6) {
+                return DEFAULT_THEME_COLOR;
+            }
+            for (int index = 0; index < value.length(); index++) {
+                if (Character.digit(value.charAt(index), 16) < 0) {
+                    return DEFAULT_THEME_COLOR;
+                }
+            }
+            return value.toUpperCase(Locale.ROOT);
+        }
+
+        /** 解析主题色为 RGB 整数。 */
+        public static int parseThemeColor(String raw) {
+            return Integer.parseInt(normalizeThemeColor(raw), 16) & 0xFFFFFF;
         }
 
         private static double clamp01(double value) {
@@ -187,6 +226,41 @@ public class MusicPlayerConfig {
             }
             return value;
         }
+    }
+
+    /**
+     * 把<b>根上的服务端字段</b>恢复默认值。
+     *
+     * <p>设置页的「管理」标签只应重置它自己那一页的内容，客户端与外观分节必须保持用户
+     * 当前的选择。这里通过新建一份默认配置并逐字段拷贝，避免默认值与构造函数里的字面量
+     * 各写一份、以后改了默认值却漏掉一处。</p>
+     */
+    public void resetServerToDefaults() {
+        MusicPlayerConfig defaults = new MusicPlayerConfig();
+        neteaseBaseUrl = defaults.neteaseBaseUrl;
+        apiMode = defaults.apiMode;
+        bgmPlaylistId = defaults.bgmPlaylistId;
+        proxy = defaults.proxy;
+        useSystemProxy = defaults.useSystemProxy;
+        preferIpv4 = defaults.preferIpv4;
+        allowCustomServer = defaults.allowCustomServer;
+        allowSongRequest = defaults.allowSongRequest;
+        allowPlaylistRequest = defaults.allowPlaylistRequest;
+        autoAdvance = defaults.autoAdvance;
+        announceQueueChanges = defaults.announceQueueChanges;
+        showLoadingHints = defaults.showLoadingHints;
+        showLyrics = defaults.showLyrics;
+        connectTimeoutSeconds = defaults.connectTimeoutSeconds;
+        readTimeoutSeconds = defaults.readTimeoutSeconds;
+        searchLimit = defaults.searchLimit;
+        maxQueueSize = defaults.maxQueueSize;
+        maxSongsPerPlayer = defaults.maxSongsPerPlayer;
+        playlistQueueLimit = defaults.playlistQueueLimit;
+        queueCacheSize = defaults.queueCacheSize;
+        voteSkipPercent = defaults.voteSkipPercent;
+        enableLootMusicDiscs = defaults.enableLootMusicDiscs;
+        lootMusicDiscChance = defaults.lootMusicDiscChance;
+        lootMusicDiscCount = defaults.lootMusicDiscCount;
     }
 
     /**

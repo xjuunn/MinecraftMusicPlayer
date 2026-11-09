@@ -9,7 +9,14 @@ import com.junhsiun.musicplayer.network.DiscMasterBurnResultPayload;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
+import com.junhsiun.musicplayer.network.MusicConfigSnapshotPayload;
+import com.junhsiun.musicplayer.network.MusicConfigUpdatePayload;
+import com.junhsiun.musicplayer.network.MusicQueuePayload;
+import com.junhsiun.musicplayer.network.MusicRecentPayload;
+import com.junhsiun.musicplayer.network.MusicUiRequestPayload;
+import com.junhsiun.musicplayer.network.MusicUiStatePayload;
 import com.junhsiun.musicplayer.network.OpenUrlPayload;
+import com.junhsiun.musicplayer.service.ServerConfigSync;
 import com.junhsiun.musicplayer.platform.NeteaseApiClient;
 import com.junhsiun.musicplayer.platform.api.DirectMusicApi;
 import com.junhsiun.musicplayer.platform.api.MusicApi;
@@ -82,6 +89,19 @@ public final class MusicPlayerMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(DiscMasterBurnResultPayload.TYPE, DiscMasterBurnResultPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(DiscMasterBurnPayload.TYPE, DiscMasterBurnPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(MusicControlPayload.TYPE, MusicControlPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(JukeboxMusicPayload.TYPE, JukeboxMusicPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(OpenUrlPayload.TYPE, OpenUrlPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(BgmConfigPayload.TYPE, BgmConfigPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(DiscMasterBurnResultPayload.TYPE, DiscMasterBurnResultPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(MusicUiStatePayload.TYPE, MusicUiStatePayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(MusicRecentPayload.TYPE, MusicRecentPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(MusicQueuePayload.TYPE, MusicQueuePayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(MusicConfigSnapshotPayload.TYPE, MusicConfigSnapshotPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(DiscMasterBurnPayload.TYPE, DiscMasterBurnPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(MusicUiRequestPayload.TYPE, MusicUiRequestPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(MusicConfigUpdatePayload.TYPE, MusicConfigUpdatePayload.CODEC);
 
         CommandRegistrationCallback.EVENT.register(MusicCommands::register);
         ServerTickEvents.END_SERVER_TICK.register(JUKEBOX_PLAYBACK_SERVICE::tick);
@@ -154,9 +174,31 @@ public final class MusicPlayerMod implements ModInitializer {
                 context.server().execute(() ->
                         DiscMasterService.burn(context.server(), context.player(), payload.songId()))
         );
+        ServerPlayNetworking.registerGlobalReceiver(MusicUiRequestPayload.TYPE, (payload, context) ->
+                context.server().execute(() -> {
+                    String action = payload.action();
+                    if ("recent".equals(action)) {
+                        MUSIC_QUEUE_SERVICE.sendRecent(context.player());
+                        return;
+                    }
+                    if ("queue".equals(action)) {
+                        MUSIC_QUEUE_SERVICE.sendQueue(context.player());
+                        return;
+                    }
+                    MUSIC_QUEUE_SERVICE.sendUiState(context.player());
+                    MUSIC_QUEUE_SERVICE.sendRecent(context.player());
+                    MUSIC_QUEUE_SERVICE.sendQueue(context.player());
+                    ServerConfigSync.send(context.player());
+                })
+        );
+        ServerPlayNetworking.registerGlobalReceiver(MusicConfigUpdatePayload.TYPE, (payload, context) ->
+                context.server().execute(() ->
+                        ServerConfigSync.apply(context.player(), payload.key(), payload.value()))
+        );
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             MUSIC_QUEUE_SERVICE.handleJoin(handler.player);
             sendBgmConfig(handler.player);
+            ServerConfigSync.send(handler.player);
         });
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> MUSIC_QUEUE_SERVICE.handleDisconnect(handler.player));
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
