@@ -16,7 +16,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -98,17 +101,53 @@ public final class MusicApiRouter implements MusicApi {
             return fallBack(mode, proxyCall, new MusicApiException("musicplayer.error.api_request_failed"));
         }
         if (!mode.fallsBackToProxy()) {
-            // 仅直连模式：不静默回退，但仍记录健康状态
-            return direct.whenComplete((result, throwable) -> markHealth(throwable));
+            // 仅直连模式：不静默回退，但仍记录健康状态（主动取消不算失败）
+            return direct.whenComplete((result, throwable) -> {
+                if (!isCancelled(throwable)) {
+                    markHealth(throwable);
+                }
+            });
         }
         return direct.handle((result, throwable) -> {
             if (throwable == null) {
                 markHealth(null);
                 return CompletableFuture.completedFuture(result);
             }
+            if (isCancelled(throwable)) {
+                // 用户已经切页，旧请求被主动取消：既不回退后端，也不计入直连健康状态。
+                return CompletableFuture.<T>failedFuture(unwrap(throwable));
+            }
             markHealth(throwable);
             return retryProxy(proxyCall, throwable);
         }).thenCompose(Function.identity());
+    }
+
+    /** 追到最内层原因，判断是不是「切页取消」。 */
+    private static boolean isCancelled(Throwable throwable) {
+        Throwable cause = throwable;
+        while (cause != null) {
+            if (cause instanceof CancellationException) {
+                return true;
+            }
+            Throwable next = cause.getCause();
+            if (next == null || next == cause) {
+                break;
+            }
+            cause = next;
+        }
+        return false;
+    }
+
+    private static Throwable unwrap(Throwable throwable) {
+        Throwable cause = throwable;
+        while (cause instanceof CompletionException || cause instanceof ExecutionException) {
+            Throwable next = cause.getCause();
+            if (next == null || next == cause) {
+                break;
+            }
+            cause = next;
+        }
+        return cause;
     }
 
     private <T> CompletableFuture<T> fallBack(MusicApiMode mode,

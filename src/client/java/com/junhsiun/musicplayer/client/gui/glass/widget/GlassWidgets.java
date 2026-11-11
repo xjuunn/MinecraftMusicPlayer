@@ -30,7 +30,18 @@ public final class GlassWidgets {
      * <p>GUI 渲染是单线程的，静态字段在这里是安全的；用栈是为了支持嵌套（列表里再套一层
      * 滚动区），语义与 {@code GuiGraphicsExtractor} 的 scissor 栈一致。</p>
      */
-    private static final Deque<ScreenRectangle> CLIP_STACK = new ArrayDeque<>();
+    private static final Deque<Clip> CLIP_STACK = new ArrayDeque<>();
+
+    /**
+     * 一层裁剪的三个矩形。
+     *
+     * @param glass       给手写玻璃方块用的裁剪区，退化时 submit 直接跳过
+     * @param scissor     原版剪刀框在经过位姿变换后的实际可见区
+     * @param scissorPushed 这一层是否真的调用过 {@code enableScissor}；
+     *                      {@link #endClip} 必须按它决定要不要 {@code disableScissor}
+     */
+    private record Clip(ScreenRectangle glass, ScreenRectangle scissor, boolean scissorPushed) {
+    }
 
     private static final Set<String> FAILED = ConcurrentHashMap.newKeySet();
     private static final Set<String> CHECKED = ConcurrentHashMap.newKeySet();
@@ -79,6 +90,7 @@ public final class GlassWidgets {
         public void snap(float target) {
             value = target;
             velocity = 0.0F;
+            lastMillis = -1L;
         }
 
         public float value() {
@@ -262,11 +274,73 @@ public final class GlassWidgets {
      * <p>必须与 {@link #endClip} 成对使用；嵌套时取交集，与 {@code enableScissor} 一致。</p>
      */
     public static void beginClip(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1) {
-        graphics.enableScissor(x0, y0, x1, y1);
-        ScreenRectangle rect = new ScreenRectangle(x0, y0,
-                Math.max(0, x1 - x0), Math.max(0, y1 - y0));
-        ScreenRectangle parent = CLIP_STACK.peek();
-        CLIP_STACK.push(parent == null ? rect : parent.intersection(rect));
+        if (x1 <= x0 || y1 <= y0) {
+            // 退化矩形（宽或高为 0）：内容本来就不存在。压一个不可见层，
+            // 让 endClip 保持配对，同时不往原版剪刀栈里塞任何东西。
+            CLIP_STACK.push(new Clip(ScreenRectangle.empty(), ScreenRectangle.empty(), false));
+            return;
+        }
+        int screenWidth = Math.max(1, graphics.guiWidth());
+        int screenHeight = Math.max(1, graphics.guiHeight());
+        Clip parent = CLIP_STACK.peek();
+
+        // ── 玻璃方块用的裁剪区（GUI 坐标，不做位姿变换）───────────────
+        // 必须先和屏幕求交。渲染器拿到 scissorArea 后会把坐标乘以 guiScale 并夹进窗口，
+        // 一个整个落在屏幕外的矩形会算出 0 高，FrontendRenderPass 同样抛
+        // "Scissor size must be >0" —— 和原版剪刀栈那条路径是同一个异常。
+        ScreenRectangle screen = new ScreenRectangle(0, 0, screenWidth, screenHeight);
+        ScreenRectangle raw = new ScreenRectangle(x0, y0, x1 - x0, y1 - y0);
+        ScreenRectangle onScreen = raw.intersection(screen);
+
+        ScreenRectangle glass;
+        if (onScreen == null || isDegenerate(onScreen)) {
+            glass = ScreenRectangle.empty();
+        } else if (parent == null) {
+            glass = onScreen;
+        } else if (isDegenerate(parent.glass())) {
+            glass = ScreenRectangle.empty();
+        } else {
+            ScreenRectangle combined = parent.glass().intersection(onScreen);
+            glass = combined == null ? ScreenRectangle.empty() : combined;
+        }
+
+        // ── 原版剪刀框 ──────────────────────────────────────────────────
+        // 原版 ScissorStack.push 会先按位姿变换、再和上一级（首帧是整屏）求交集，
+        // 无交集时压入 0×0 的 ScreenRectangle；之后任何一次普通绘制（文字、fill、blit）
+        // 都带着这个 0×0 当 scissorArea，渲染器 enableScissor 会直接抛
+        // "Scissor size must be >0, was Wx0" 把游戏炸掉。
+        //
+        // 真实触发场景：窗口开场 / 关闭动画会把整窗控件平移到屏幕外，列表的裁剪框整体
+        // 落在屏幕下方——宽是正常的（415 GUI 像素 × scale 3 = 1245），高被夹成 0。
+        // 所以这里自己先在屏幕空间算一遍，退化就完全不调用 enableScissor。
+        //
+        // 跳过是安全的：不可见的区域里面本来就什么都画不出来，而且父级剪刀框同样挡着它。
+        ScreenRectangle parentScissor;
+        if (parent == null) {
+            parentScissor = new ScreenRectangle(0, 0, screenWidth, screenHeight);
+        } else if (!parent.scissorPushed()) {
+            parentScissor = null;
+        } else {
+            parentScissor = parent.scissor();
+        }
+
+        ScreenRectangle visible = null;
+        if (parentScissor != null) {
+            ScreenRectangle transformed = raw.transformAxisAligned(new Matrix3x2f(graphics.pose()));
+            visible = transformed.intersection(parentScissor);
+        }
+        boolean pushed = visible != null && visible.width() > 0 && visible.height() > 0;
+
+        if (pushed) {
+            graphics.enableScissor(x0, y0, x1, y1);
+            CLIP_STACK.push(new Clip(glass, visible, true));
+        } else {
+            CLIP_STACK.push(new Clip(ScreenRectangle.empty(), ScreenRectangle.empty(), false));
+        }
+    }
+
+    private static boolean isDegenerate(ScreenRectangle rect) {
+        return rect == null || rect.width() <= 0 || rect.height() <= 0;
     }
 
     /** 清空裁剪区。每帧开头调一次，防止某个控件漏掉 {@link #endClip} 之后一直影响后续绘制。 */
@@ -276,10 +350,11 @@ public final class GlassWidgets {
 
     /** 结束一段裁剪，与 {@link #beginClip} 成对使用。 */
     public static void endClip(GuiGraphicsExtractor graphics) {
-        if (!CLIP_STACK.isEmpty()) {
-            CLIP_STACK.pop();
+        Clip clip = CLIP_STACK.poll();
+        // 只有真的往原版栈里压过，才需要弹一次；否则会破坏原版 scissor 栈的配对。
+        if (clip != null && clip.scissorPushed()) {
+            graphics.disableScissor();
         }
-        graphics.disableScissor();
     }
 
     /**
@@ -290,12 +365,18 @@ public final class GlassWidgets {
      * 播放按钮）会绕过滚动区的边界画到外面去。</p>
      */
     public static ScreenRectangle clipRectangle() {
-        return CLIP_STACK.peek();
+        Clip clip = CLIP_STACK.peek();
+        return clip == null ? null : clip.glass();
     }
 
     private static void submit(GuiGraphicsExtractor graphics, RenderPipeline pipeline,
                                int x0, int y0, int x1, int y1, int color) {
         ScreenRectangle clip = clipRectangle();
+        if (clip != null && (clip.width() <= 0 || clip.height() <= 0)) {
+            // 裁剪区退化成一条线/一个点：任何 glass 都无法被有效裁剪。若照常提交，
+            // scissorArea 宽或高为 0，渲染器 enableScissor 会抛 "Scissor size must be >0" 直接崩游戏。
+            return;
+        }
         if (clip != null
                 && (x1 <= clip.left() || x0 >= clip.right() || y1 <= clip.top() || y0 >= clip.bottom())) {
             // 完全在裁剪区外：连渲染状态都不用提交
