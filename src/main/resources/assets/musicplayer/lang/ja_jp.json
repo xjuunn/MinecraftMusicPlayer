@@ -430,6 +430,7 @@
   "musicplayer.song.no_source": "リクエストに失敗しました: 再生可能な音楽リンクを取得できませんでした。",
   "musicplayer.song.request_failed": "リクエストに失敗しました: %s",
   "musicplayer.song.now_playing": "再生中",
+  "musicplayer.song.play": "再生",
   "musicplayer.song.lyrics_loading": "歌詞を読み込み中...",
   "musicplayer.song.lyrics_empty": "歌詞がありません",
   "musicplayer.stop.all_done": "再生がすべて完了しました。",
