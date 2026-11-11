@@ -48,7 +48,10 @@ public class GlassSearchField extends EditBox {
     private boolean flat;
 
     public GlassSearchField(int x, int y, int width, int height, Component hint, Consumer<String> responder) {
-        super(Minecraft.getInstance().font, x + TEXT_OFFSET, y, width - TEXT_OFFSET, height, Component.empty());
+        // 宽度至少留 1 像素：窗口被压到极窄时 width - TEXT_OFFSET 会变成负数，
+        // EditBox 自己的文本裁剪会带着负宽进原版剪刀栈（宽度 <= 0 直接抛异常）。
+        super(Minecraft.getInstance().font, x + TEXT_OFFSET, y, Math.max(1, width - TEXT_OFFSET),
+                height, Component.empty());
         setBordered(false);
         setMaxLength(64);
         setTextColor(GlassTheme.TEXT);
@@ -124,7 +127,8 @@ public class GlassSearchField extends EditBox {
                 GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, 0xFFFFFF, 0x000000, radius, 0.35F, 1.0F);
             }
             // 叠一层很淡的暗底：搜索框要在窗口表面上有明确边界，否则和卡片底色糊在一起
-            GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, 0x000000, 0x000000, radius, 0.10F, 1.0F);
+            // （不透明度压得很低，保持小组件的清澈观感）
+            GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, 0x000000, 0x000000, radius, 0.06F, 1.0F);
         }
 
         SvgIcons.SEARCH.draw(graphics, x0 + INSET, (y0 + y1) / 2 - ICON_SIZE / 2, ICON_SIZE,
