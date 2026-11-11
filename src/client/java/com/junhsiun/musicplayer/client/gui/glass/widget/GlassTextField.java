@@ -12,9 +12,10 @@ import net.minecraft.network.chat.Component;
 import java.util.function.Consumer;
 
 /**
- * 扁平文本输入框。
+ * 液态玻璃文本输入框。
  *
- * <p>关掉原版底图，自己画一层压暗的圆角底 + 1 像素浅描边；聚焦时底部多一条强调色细线。
+ * <p>关掉原版底图，自己画一块折射玻璃底（和搜索框同一套 {@link GlassTheme#FIELD} 材质），
+ * 再叠一层很淡的暗底让它在窗口表面上有明确边界；聚焦时同样保持玻璃观感。
  * 用于设置页里的服务地址、代理、歌单 ID 这类单行文本。</p>
  */
 public class GlassTextField extends EditBox {
@@ -90,9 +91,14 @@ public class GlassTextField extends EditBox {
         int y0 = getY();
         int x1 = x0 + getWidth() + INSET * 2;
         int y1 = y0 + height;
-        float radius = Math.min(FlatTheme.RADIUS_FIELD, height / 2.0F);
+        float radius = Math.min(GlassTheme.FIELD.radius(), height / 2.0F);
 
-        FlatTheme.field(graphics, x0, y0, x1, y1, radius, lift, isFocused());
+        // 液态玻璃底：和搜索框同一套 FIELD 材质（圆角由着色器夹到半径/半高）。
+        if (!GlassWidgets.glassBackground(graphics, x0, y0, x1, y1, GlassTheme.FIELD, lift, 0.0F)) {
+            GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, 0xFFFFFF, 0x000000, radius, 0.35F, 1.0F);
+        }
+        // 极淡的暗底：输入框要在窗口表面上有明确边界，否则和卡片底色糊在一起（不透明度压得很低，保持清澈）。
+        GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, 0x000000, 0x000000, radius, 0.06F, 1.0F);
 
         graphics.pose().pushMatrix();
         graphics.pose().translate(0, Math.round((height - 8) / 2.0F));
