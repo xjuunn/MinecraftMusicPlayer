@@ -430,6 +430,7 @@
   "musicplayer.song.no_source": "Request failed: no playable music link could be obtained.",
   "musicplayer.song.request_failed": "Request failed: %s",
   "musicplayer.song.now_playing": "Now playing",
+  "musicplayer.song.play": "Play",
   "musicplayer.song.lyrics_loading": "Loading lyrics...",
   "musicplayer.song.lyrics_empty": "No lyrics available",
   "musicplayer.stop.all_done": "Playback finished.",

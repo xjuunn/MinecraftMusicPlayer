@@ -15,6 +15,7 @@ import com.junhsiun.musicplayer.platform.api.ProxyMusicApi;
 import com.junhsiun.musicplayer.client.ClientBgmController;
 
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -31,6 +32,8 @@ public final class MediaBrowserService {
     private static final MediaBrowserService INSTANCE = new MediaBrowserService();
 
     private volatile MusicApi api;
+    /** 直连实现：浏览请求取消要靠它作废旧代号的在途请求。 */
+    private volatile DirectMusicApi directApi;
     private final LyricService lyricService = new LyricService();
 
     private MediaBrowserService() {
@@ -66,6 +69,34 @@ public final class MediaBrowserService {
         return lyricService.fetchLyrics(songId);
     }
 
+    /**
+     * 通知取数层「页面已经切走」：取消上一页还在排队/执行的浏览请求。
+     *
+     * <p>详见 {@link DirectMusicApi#beginNavigation()}。界面在压栈、返回、切换分区时调用。</p>
+     */
+    public void beginNavigation() {
+        DirectMusicApi direct = directApi;
+        if (direct != null) {
+            direct.beginNavigation();
+        }
+    }
+
+    /** 判断失败原因是不是「用户切页、请求被主动取消」——这种结果应该安静地忽略。 */
+    public static boolean isCancelled(Throwable throwable) {
+        Throwable cause = throwable;
+        while (cause != null) {
+            if (cause instanceof CancellationException) {
+                return true;
+            }
+            Throwable next = cause.getCause();
+            if (next == null || next == cause) {
+                break;
+            }
+            cause = next;
+        }
+        return false;
+    }
+
     private MusicApi api() {
         MusicApi current = api;
         if (current == null) {
@@ -80,8 +111,9 @@ public final class MediaBrowserService {
         return current;
     }
 
-    private static MusicApi createApi() {
+    private MusicApi createApi() {
         DirectMusicApi direct = new DirectMusicApi();
+        directApi = direct;
         ProxyMusicApi proxy = new ProxyMusicApi(
                 new NeteaseApiClient(() -> ClientBgmController.getInstance().currentApiBaseUrl()));
         return new MusicApiRouter(() -> direct, proxy, MusicApiMode::current);

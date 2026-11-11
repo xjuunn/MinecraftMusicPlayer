@@ -430,6 +430,7 @@
   "musicplayer.song.no_source": "点播失败: 无法获取可播放的音乐链接",
   "musicplayer.song.request_failed": "点播失败: %s",
   "musicplayer.song.now_playing": "正在播放",
+  "musicplayer.song.play": "播放",
   "musicplayer.song.lyrics_loading": "歌词加载中…",
   "musicplayer.song.lyrics_empty": "暂无歌词",
   "musicplayer.stop.all_done": "播放已全部完成。",

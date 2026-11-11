@@ -323,7 +323,9 @@ public final class ClientMusicController {
             updateVolume();
             if (seekPositionMillis > 0L) {
                 float sampleRate = audioFormat.getSampleRate();
-                int channels = audioFormat.getChannels();
+                // 声道数兜底为 1：解码器正常只会给 1/2，但这里一旦为 0 就是除零，
+                // 而这段跑在音频线程上，异常会让整条播放线程直接死掉。
+                int channels = Math.max(1, audioFormat.getChannels());
                 float frameMillis = (float) (len / channels) / sampleRate * 1000.0f;
                 decodedMillis += (long) frameMillis;
                 if (decodedMillis < seekPositionMillis) {

@@ -1,5 +1,7 @@
 package com.junhsiun.musicplayer.client.gui.media;
 
+import com.junhsiun.musicplayer.client.gui.animation.HeroElement;
+import com.junhsiun.musicplayer.client.gui.animation.SharedElementTransition;
 import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassScroll;
@@ -48,6 +50,16 @@ public class MediaListView extends AbstractWidget {
     public interface Listener {
         /** 点了一行。 */
         void onItemClick(MediaItem item);
+
+        /**
+         * 点了一行，并带上这一行在屏幕上的封面/标题几何。
+         *
+         * <p>{@code origin} 用于共享元素过渡：界面可以拿它和详情页的目标位置做 FLIP 动画。
+         * 默认实现直接退回 {@link #onItemClick(MediaItem)}，不认识这个信息的宿主无需改动。</p>
+         */
+        default void onItemClick(MediaItem item, HeroElement origin) {
+            onItemClick(item);
+        }
 
         /** 点了行尾的操作按钮（默认是"加入播放队列"，唱片母版界面是"刻录"）。 */
         void onPlay(MediaItem item);
@@ -202,6 +214,36 @@ public class MediaListView extends AbstractWidget {
     /** 按下的是不是第二个操作按钮（快进），松开时据此决定回调。 */
     private boolean pressedSecondary;
     private boolean pressActive;
+
+    /** 按下时锁定的目标：松手时据此决定回调，不受中途刷新/滚动影响。 */
+    private PressTarget pressTarget = PressTarget.NONE;
+    /**
+     * 按下时锁定的条目。
+     *
+     * <p>队列页会在按下与松手之间因轮询刷新整份列表（{@link #showItems} 会把行号清掉），
+     * 如果松手时再按几何重新命中，常常对不上同一条，于是出现"有按下音效却没反应"。
+     * 锁定按下那一刻的条目，松手时直接用它触发回调就不会丢。</p>
+     */
+    private MediaItem pressedItem;
+    private double pressX;
+    private double pressY;
+    /** 按下后累计的拖拽位移，超过 {@link #CLICK_TOLERANCE} 就当作拖拽而非点击。 */
+    private double pressDragDistance;
+
+    /** 按下锁定的目标类型。 */
+    private enum PressTarget {
+        NONE, ROW, PLAY, SECONDARY
+    }
+
+    /**
+     * 点击与拖拽的分界（GUI 像素）。
+     *
+     * <p>原版 {@code MouseHandler.handleAccumulatedMovement} 只要鼠标在按住期间移动了一个
+     * 像素就会派发 {@code mouseDragged}，而旧实现一收到 onDrag 就清掉按下状态——于是任何一点
+     * 手抖都会把点击吞掉，只剩按下音效。给一个容差即可把"手抖"与"真的拖动"区分开。
+     * 真正拖动时松手点也会离按下点很远，{@link #onRelease} 里还有一道位移判断兜底。</p>
+     */
+    private static final double CLICK_TOLERANCE = 4.0D;
     /** 分页页脚：当前页 / 总页数（{@code <= 0} 表示总数未知）。 */
     private boolean paginationVisible;
     private int pageNumber = 1;
@@ -220,9 +262,52 @@ public class MediaListView extends AbstractWidget {
     private long transitionStartMillis = -1L;
     private boolean transitionForward = true;
 
+    /** 共享元素过渡：飞行期间隐藏本列表里对应的封面/标题，避免和目标端重影。 */
+    private SharedElementTransition hero;
+    /** 反向返回时要隐藏的那一行（按条目 ID 匹配）；{@code null} 表示不隐藏行。 */
+    private String heroRowId;
+    /** 是否隐藏头部区块的封面与标题（歌单详情 → 列表的反向/正向过渡）。 */
+    private boolean heroHeader;
+    /** 头部封面从小图切到高清大图时的平滑衔接（详情头部 44px 也吃高清图）。 */
+    private final CoverFade headerCoverFade = new CoverFade();
+    /** 上一帧头部是否处于共享元素飞行状态：用于落地那一帧交接封面状态。 */
+    private boolean headerHeroWasActive;
+
     public MediaListView(int x, int y, int width, int height, Listener listener) {
         super(x, y, width, height, Component.empty());
         this.listener = listener;
+    }
+
+    // ── 共享元素配合 ────────────────────────────────────────────────────
+
+    /** 隐藏某一行的封面/标题，交给最上层 overlay 绘制；过渡结束自动恢复。 */
+    public void setRowHero(String itemId, SharedElementTransition hero) {
+        this.hero = hero;
+        this.heroRowId = itemId;
+        this.heroHeader = false;
+    }
+
+    /** 隐藏头部区块的封面/标题（歌单详情页作为过渡目标时用）。 */
+    public void setHeaderHero(SharedElementTransition hero) {
+        this.hero = hero;
+        this.heroRowId = null;
+        this.heroHeader = true;
+    }
+
+    /** 清掉本列表上的共享元素隐藏状态。 */
+    public void clearHero() {
+        this.hero = null;
+        this.heroRowId = null;
+        this.heroHeader = false;
+    }
+
+    private boolean heroActive() {
+        return hero != null && hero.isActive();
+    }
+
+    /** 立即结束本列表的滑入/滑出动画，让内容停在最终位置（共享元素动画期间用）。 */
+    public void finishTransition() {
+        this.transitionStartMillis = -1L;
     }
 
     // ── 外部喂数据 ──────────────────────────────────────────────────────
@@ -447,6 +532,165 @@ public class MediaListView extends AbstractWidget {
         return getY() + headerHeight() + index * ROW_HEIGHT - scroll.offset();
     }
 
+    /**
+     * 算出某一行封面与标题在屏幕上的位置，交给共享元素过渡做端点。
+     *
+     * <p>这里刻意重复一遍 {@link #drawRow} 的布局算式，而不是从绘制过程中收集：
+     * 点击发生在事件阶段，那一帧还没有走绘制；按同一套常量重算才能保证动画端点与
+     * 用户眼睛看到的行完全重合。两边任何一处改了间距，请一起改。</p>
+     *
+     * @param includeShift 是否叠加页面切换的横向平移。正向点击时列表正停在最终位置，
+     *                     加上更精确；反向返回时目标列表的滑入动画会被跳过，取 0 更稳。
+     * @return {@code null} 表示这一行当前没有可用的屏幕位置（越界、不可导航、滚出可见区）
+     */
+    private HeroElement heroElement(int index, MediaItem item, boolean includeShift) {
+        if (index < 0 || index >= items.size() || !navigable(item) || width <= 0) {
+            return null;
+        }
+        int top = rowTop(index);
+        // 行完全滚出可见区时不做共享元素：起点/落点在屏幕外，动画会从画面边缘飞入。
+        if (top + ROW_HEIGHT <= getY() || top >= listBottom()) {
+            return null;
+        }
+        Font font = Minecraft.getInstance().font;
+        // 行入场动画会把内容从下方 6px 处推上来；点击时通常已经落定，但仍按当前
+        // reveal 偏移算一次，避免在入场动画里手快点击时起点偏下。
+        float reveal = revealProgress(Util.getMillis(), index);
+        top += Math.round((1.0F - reveal) * 6.0F);
+        // 整个列表在页面切换时还会横向平移，起点必须跟着走。
+        int shift = 0;
+        if (includeShift) {
+            float transition = transitionProgress();
+            shift = Math.round(transitionForward
+                    ? (1.0F - transition) * TRANSITION_TRAVEL
+                    : -(1.0F - transition) * TRANSITION_TRAVEL);
+        }
+
+        int coverLeft = getX() + INDEX_WIDTH + 4 + shift;
+        int coverTop = top + (ROW_HEIGHT - COVER_SIZE) / 2;
+        int textLeft = coverLeft + COVER_SIZE + TEXT_GAP;
+        int textRight = contentRight() + shift - ROW_RIGHT_PADDING - 9;
+
+        int lineY = top + (ROW_HEIGHT - 8) / 2;
+
+        // 与 drawRow 相同的可写宽度收窄顺序：行尾按钮 → 补充信息。
+        if (queuable(item) && rowActionsVisible && actionRowAllowed(item)) {
+            textRight = playButtonLeft() + shift - PLAY_GAP;
+            if (secondaryActionVisible(item)) {
+                textRight = secondaryButtonLeft() + shift - PLAY_GAP;
+            }
+        }
+        // 行尾补充信息（时长、播放量）：右对齐在按钮左侧，终点是详情页对应的那一行。
+        HeroElement.HeroText meta = null;
+        if (item.meta() != null) {
+            int metaWidth = Math.round(font.width(item.meta()) * META_SCALE);
+            int metaLeft = textRight - metaWidth;
+            if (metaLeft > textLeft + 12) {
+                int metaColor = minimal
+                        ? FlatTheme.TEXT_TERTIARY
+                        : GlassWidgets.dim(GlassTheme.TEXT_SECONDARY, 0.22F);
+                meta = new HeroElement.HeroText(
+                        item.meta(), textRight - metaWidth * 0.5F, lineY, META_SCALE, metaColor);
+                textRight = metaLeft - 6;
+            }
+        }
+
+        int textWidth = Math.max(1, textRight - textLeft);
+        String shown = ellipsize(font, item.title(), textWidth, TITLE_SCALE);
+        float titleCenterX = textLeft + font.width(shown) * TITLE_SCALE * 0.5F;
+        int titleTopY = item.subtitle() == null
+                ? lineY
+                : top + 8;
+        int titleColor = minimal ? FlatTheme.TEXT : GlassTheme.TEXT;
+        // 副标题（歌曲是「歌手 · 专辑」，歌单是「创建者 · N 首」）：详情页同样有这一段时一起飞。
+        // 歌曲的专辑部分单独拆出来，终点是详情页的专辑行——这样列表里的一整段副标题
+        // 会分成两行落进详情页，而不是只飞歌手、专辑凭空淡入。
+        HeroElement.HeroText subtitle = null;
+        HeroElement.HeroText album = null;
+        if (item.subtitle() != null) {
+            String subShown = ellipsize(font, item.subtitle(), textWidth, SUBTITLE_SCALE);
+            int subColor = minimal
+                    ? FlatTheme.TEXT_SECONDARY
+                    : GlassWidgets.dim(GlassTheme.TEXT_SECONDARY, 0.35F);
+            // 只有歌曲的副标题是「歌手 · 专辑」，才拆出专辑部分飞向详情页的专辑行；
+            // 歌单的「创建者 · N 首」等其它类型保持整段，不硬拆成两段。
+            int separator = item.kind() == MediaKind.SONG ? subShown.indexOf(" · ") : -1;
+            if (separator > 0) {
+                String artistPart = subShown.substring(0, separator);
+                String albumPart = subShown.substring(separator + 3);
+                float artistCenterX = textLeft + font.width(artistPart) * SUBTITLE_SCALE * 0.5F;
+                float albumLeft = textLeft
+                        + (font.width(artistPart) + font.width(" · ")) * SUBTITLE_SCALE;
+                subtitle = new HeroElement.HeroText(
+                        artistPart, artistCenterX, top + 19, SUBTITLE_SCALE, subColor);
+                if (!albumPart.isBlank()) {
+                    float albumCenterX = albumLeft + font.width(albumPart) * SUBTITLE_SCALE * 0.5F;
+                    album = new HeroElement.HeroText(
+                            albumPart, albumCenterX, top + 19, SUBTITLE_SCALE, subColor);
+                }
+            } else {
+                float subCenterX = textLeft + font.width(subShown) * SUBTITLE_SCALE * 0.5F;
+                subtitle = new HeroElement.HeroText(
+                        subShown, subCenterX, top + 19, SUBTITLE_SCALE, subColor);
+            }
+        }
+        return new HeroElement(
+                coverLeft, coverTop, coverLeft + COVER_SIZE, coverTop + COVER_SIZE,
+                titleCenterX, titleTopY, TITLE_SCALE, titleColor,
+                shown, item.coverUrl(), item.id(), subtitle, album, meta);
+    }
+
+    /** 按条目 ID 找可见行并算出它的共享元素端点；找不到/不在可见区返回 {@code null}。 */
+    public HeroElement heroElementForId(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return null;
+        }
+        for (int index = 0; index < items.size(); index++) {
+            MediaItem item = items.get(index);
+            if (itemId.equals(item.id())) {
+                return heroElement(index, item, false);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 头部区块封面与标题的共享元素端点（歌单/歌手/专辑详情的列表头部）。
+     *
+     * <p>头部跟着列表滚动，完全滚出可见区时返回 {@code null}，避免从屏幕外飞入。</p>
+     */
+    public HeroElement headerHeroElement(String itemId) {
+        if (header == null) {
+            return null;
+        }
+        int top = contentTop() + 4;
+        if (top + HEADER_COVER <= getY() || top >= listBottom()) {
+            return null;
+        }
+        Font font = Minecraft.getInstance().font;
+        int left = getX();
+        int right = contentRight();
+        int textLeft = left + HEADER_COVER + 8;
+        int textWidth = Math.max(1, right - textLeft);
+        String title = ellipsize(font, text(header.title()), textWidth, GlassTheme.Text.LABEL);
+        float titleCenterX = textLeft + font.width(title) * GlassTheme.Text.LABEL * 0.5F;
+        int titleColor = minimal ? FlatTheme.TEXT : GlassTheme.TEXT;
+        // 头部副标题（歌单创建者 / 歌手别名 / 播客分类）：与列表行的副标题同槽位，一起飞。
+        HeroElement.HeroText subtitle = null;
+        if (header.subtitle() != null && !header.subtitle().getString().isBlank()) {
+            String sub = ellipsize(font, header.subtitle().getString(), textWidth, SUBTITLE_SCALE);
+            float subCenterX = textLeft + font.width(sub) * SUBTITLE_SCALE * 0.5F;
+            int subColor = minimal
+                    ? FlatTheme.TEXT_SECONDARY
+                    : GlassWidgets.dim(GlassTheme.TEXT_SECONDARY, 0.30F);
+            subtitle = new HeroElement.HeroText(sub, subCenterX, top + 14, SUBTITLE_SCALE, subColor);
+        }
+        return new HeroElement(
+                left, top, left + HEADER_COVER, top + HEADER_COVER,
+                titleCenterX, top + 2, GlassTheme.Text.LABEL, titleColor,
+                title, header.coverUrl(), itemId, subtitle, null, null);
+    }
+
     /** 列表内容的起点（头部上沿）。 */
     private int contentTop() {
         return getY() - scroll.offset();
@@ -618,6 +862,10 @@ public class MediaListView extends AbstractWidget {
 
     @Override
     public void onClick(MouseButtonEvent event, boolean doubled) {
+        // 每次按下先把上一次的按压状态清干净，避免残留的捕获在松手时误触发。
+        clearPress();
+        pressX = event.x();
+        pressY = event.y();
         if (overHeaderAction(event.x(), event.y())) {
             pressActive = true;
             return;
@@ -635,7 +883,8 @@ public class MediaListView extends AbstractWidget {
         int queueIndex = playRowAt(event.x(), event.y());
         if (queueIndex >= 0) {
             pressedRow = queueIndex;
-            pressedSecondary = false;
+            pressTarget = PressTarget.PLAY;
+            pressedItem = items.get(queueIndex);
             pressActive = true;
             return;
         }
@@ -643,6 +892,8 @@ public class MediaListView extends AbstractWidget {
         if (secondaryIndex >= 0) {
             pressedRow = secondaryIndex;
             pressedSecondary = true;
+            pressTarget = PressTarget.SECONDARY;
+            pressedItem = items.get(secondaryIndex);
             pressActive = true;
             return;
         }
@@ -653,21 +904,25 @@ public class MediaListView extends AbstractWidget {
             return;
         }
         pressedRow = index;
-        pressedSecondary = false;
+        pressTarget = PressTarget.ROW;
+        pressedItem = items.get(index);
         pressActive = true;
     }
 
     @Override
     public void onRelease(MouseButtonEvent event) {
-        int index = pressedRow;
-        boolean secondary = pressedSecondary;
+        // 用按下时"锁定"的目标来判断，而不是重新按几何命中：队列页会在按下与松手之间
+        // 因轮询刷新整份列表（showItems 会把行号清掉），重新命中常常对不上同一条，
+        // 于是出现"有按下音效却没反应"。锁定按下时的条目就能稳定触发。
+        PressTarget target = pressTarget;
+        MediaItem item = pressedItem;
+        int clickedRow = pressedRow;
         boolean prevPage = pressedPrevPage;
         boolean nextPage = pressedNextPage;
-        pressedRow = -1;
-        pressedSecondary = false;
-        pressedPrevPage = false;
-        pressedNextPage = false;
-        pressActive = false;
+        double dragDistance = pressDragDistance;
+        double movedX = Math.abs(event.x() - pressX);
+        double movedY = Math.abs(event.y() - pressY);
+        clearPress();
         if (overHeaderAction(event.x(), event.y())) {
             listener.onPlayAll();
             return;
@@ -680,32 +935,51 @@ public class MediaListView extends AbstractWidget {
             listener.onPageChange(1);
             return;
         }
-        if (index < 0) {
+        if (target == PressTarget.NONE || item == null) {
             return;
         }
-        if (secondary) {
-            if (secondaryRowAt(event.x(), event.y()) == index) {
-                listener.onSecondaryPlay(items.get(index));
+        // 只有"在原地点击"才触发：指针移出控件、或明显拖动过，都按取消处理。
+        if (!isMouseOver(event.x(), event.y())) {
+            return;
+        }
+        if (dragDistance > CLICK_TOLERANCE || movedX > CLICK_TOLERANCE || movedY > CLICK_TOLERANCE) {
+            return;
+        }
+        switch (target) {
+            case PLAY -> listener.onPlay(item);
+            case SECONDARY -> listener.onSecondaryPlay(item);
+            // 源几何必须在 clearPress() 之前取：pressedRow 一清就不知道是哪一行了。
+            // 取不到也照样跳转，只是不做共享元素动画。
+            case ROW -> listener.onItemClick(item, heroElement(clickedRow, item, true));
+            default -> {
             }
-            return;
         }
-        if (playRowAt(event.x(), event.y()) == index) {
-            listener.onPlay(items.get(index));
-            return;
-        }
-        if (rowAt(event.x(), event.y()) != index) {
-            return;
-        }
-        listener.onItemClick(items.get(index));
     }
 
-    @Override
-    protected void onDrag(MouseButtonEvent event, double dragX, double dragY) {
+    /** 清掉按下相关的全部状态（视觉与逻辑）。 */
+    private void clearPress() {
         pressedRow = -1;
         pressedSecondary = false;
         pressedPrevPage = false;
         pressedNextPage = false;
         pressActive = false;
+        pressTarget = PressTarget.NONE;
+        pressedItem = null;
+        pressDragDistance = 0.0D;
+    }
+
+    @Override
+    protected void onDrag(MouseButtonEvent event, double dragX, double dragY) {
+        // 只有真正拖动（累计位移超过容差）才取消这次点击。以前任何一点鼠标抖动都会走到
+        // 这里把按下状态清掉，结果"按下有音效、松手却没反应"——大多数正常点击都带一两个
+        // 像素的抖动，正好被误判成拖拽。
+        if (pressTarget == PressTarget.NONE) {
+            return;
+        }
+        pressDragDistance += Math.hypot(dragX, dragY);
+        if (pressDragDistance > CLICK_TOLERANCE) {
+            clearPress();
+        }
     }
 
     /**
@@ -848,9 +1122,15 @@ public class MediaListView extends AbstractWidget {
                 continue;
             }
             float hoverAmount = index == hoverIndex ? hover.eased() : 0.0F;
-            float pressAmount = index == pressedRow ? GlassWidgets.clamp01(press.value()) : 0.0F;
+            // 按下效果只落在"被按中的那个目标"上：点行 → 行底浮一层；点行内播放/次按钮 →
+            // 只有那颗按钮有按下回弹，行本身不能跟着一起压下去（否则像整行被点了）。
+            float pressValue = index == pressedRow ? GlassWidgets.clamp01(press.value()) : 0.0F;
+            float rowPress = pressTarget == PressTarget.ROW ? pressValue : 0.0F;
+            float playPress = pressTarget == PressTarget.PLAY ? pressValue : 0.0F;
+            float secondaryPress = pressTarget == PressTarget.SECONDARY ? pressValue : 0.0F;
             drawRow(graphics, font, items.get(index), index, top, revealProgress(now, index),
-                    hoverAmount, pressAmount, index == hoverPlay, index == hoverSecondary);
+                    hoverAmount, rowPress, playPress, secondaryPress,
+                    index == hoverPlay, index == hoverSecondary);
         }
         drawPagination(graphics, font, mouseX, mouseY);
         drawScrollbar(graphics);
@@ -895,39 +1175,67 @@ public class MediaListView extends AbstractWidget {
         int top = contentTop() + 4;
         // 头部整体跟着滚动：滚出上边界就整块被裁掉（scissor 已经在外面套好了）
 
-        drawCover(graphics, left, top, HEADER_COVER, header.coverUrl(), text(header.title()));
+        // 歌单详情作为共享元素目标时，封面与标题先交给 overlay；副信息跟着 reveal 淡入。
+        boolean suppressHero = heroHeader && heroActive();
+        // 飞行结束的那一帧：把飞行图层最后一帧的封面档位交给淡入状态，
+        // 已经是大图就直接画，不再从小图淡入一遍。
+        if (headerHeroWasActive && !suppressHero && hero != null) {
+            headerCoverFade.handoff(hero.coverThumb());
+        }
+        headerHeroWasActive = suppressHero;
+        float reveal = suppressHero ? hero.contentReveal() : 1.0F;
+        // 副标题如果也有对应元素，飞行期间同样交给 overlay，避免落点前后出现两份。
+        boolean subtitleFlying = suppressHero && hero.subtitleActive();
+
+        if (!suppressHero
+                && !headerCoverFade.draw(graphics, header.coverUrl(),
+                left, top, left + HEADER_COVER, top + HEADER_COVER)) {
+            drawCoverPlaceholder(graphics, left, top, HEADER_COVER);
+        }
         int textLeft = left + HEADER_COVER + 8;
         int textWidth = Math.max(1, right - textLeft);
         int titleColor = minimal ? FlatTheme.TEXT : GlassTheme.TEXT;
         int subtitleColor = minimal
                 ? FlatTheme.TEXT_SECONDARY
                 : GlassWidgets.dim(GlassTheme.TEXT_SECONDARY, 0.30F);
-        GlassWidgets.text(graphics, font,
-                Component.literal(ellipsize(font, text(header.title()), textWidth, GlassTheme.Text.LABEL)),
-                textLeft, top + 2, titleColor, GlassTheme.Text.LABEL);
-        if (header.subtitle() != null && !header.subtitle().getString().isBlank()) {
+        if (!suppressHero) {
+            GlassWidgets.text(graphics, font,
+                    Component.literal(ellipsize(font, text(header.title()), textWidth, GlassTheme.Text.LABEL)),
+                    textLeft, top + 2, titleColor, GlassTheme.Text.LABEL);
+        }
+        if (!subtitleFlying && reveal > 0.01F
+                && header.subtitle() != null && !header.subtitle().getString().isBlank()) {
             GlassWidgets.text(graphics, font,
                     Component.literal(ellipsize(font, header.subtitle().getString(), textWidth, SUBTITLE_SCALE)),
-                    textLeft, top + 14, subtitleColor, SUBTITLE_SCALE);
+                    textLeft, top + 14, fade(subtitleColor, reveal), SUBTITLE_SCALE);
         }
         // 有"播放全部"时给小标签让出右侧那一段，避免两者叠在一起
         int statsWidth = header.playAll() ? Math.max(1, textWidth - HEADER_ACTION_WIDTH - 6) : textWidth;
-        drawStats(graphics, font, header.stats(), textLeft, top + 25, statsWidth);
+        if (reveal > 0.15F) {
+            drawStats(graphics, font, header.stats(), textLeft, top + 25, statsWidth);
+        }
         if (header.playAll()) {
             drawHeaderAction(graphics, font);
         }
 
-        if (!descriptionLines.isEmpty()) {
+        if (reveal > 0.01F && !descriptionLines.isEmpty()) {
             int y = top + HEADER_COVER + 3;
             int descriptionColor = minimal
                     ? FlatTheme.TEXT_TERTIARY
                     : GlassWidgets.dim(GlassTheme.TEXT_SECONDARY, 0.42F);
             for (String line : descriptionLines) {
                 GlassWidgets.text(graphics, font, Component.literal(line), left, y,
-                        descriptionColor, SUBTITLE_SCALE);
+                        fade(descriptionColor, reveal), SUBTITLE_SCALE);
                 y += 8;
             }
         }
+    }
+
+    /** 保留 RGB，只把 alpha 乘上淡入系数。 */
+    private static int fade(int argb, float amount) {
+        float clamped = Math.max(0.0F, Math.min(1.0F, amount));
+        int alpha = Math.round(((argb >>> 24) & 0xFF) * clamped);
+        return (alpha << 24) | (argb & 0xFFFFFF);
     }
 
     private static String text(Component component) {
@@ -963,23 +1271,22 @@ public class MediaListView extends AbstractWidget {
         int bottom = top + HEADER_ACTION_HEIGHT;
         boolean hovered = isMouseOver(graphics.mouseX(), graphics.mouseY())
                 && overHeaderAction(graphics.mouseX(), graphics.mouseY());
-        int textColor;
-        if (minimal) {
-            FlatTheme.fill(graphics, left, top, right, bottom, HEADER_ACTION_HEIGHT / 2.0F,
-                    FlatTheme.alpha(FlatTheme.accent(), hovered ? 1.0F : 0.88F));
-            textColor = FlatTheme.TEXT;
-        } else {
-            if (!GlassWidgets.glassBackground(graphics, left, top, right, bottom,
-                    GlassTheme.BADGE, hovered ? 1.0F : 0.35F, 0.0F)) {
-                GlassWidgets.roundedFill(graphics, left, top, right, bottom,
-                        0xFFFFFF, 0xFFFFFF, HEADER_ACTION_HEIGHT / 2.0F,
-                        hovered ? 0.18F : 0.10F, 1.0F);
-            }
-            textColor = hovered ? GlassTheme.TEXT : GlassWidgets.dim(GlassTheme.TEXT, 0.18F);
+        float lift = hovered ? 1.0F : 0.30F;
+        // 液态玻璃胶囊：和别处的玻璃按钮走同一套材质，悬停时提亮、边缘折射更明显。
+        if (!GlassWidgets.glassBackground(graphics, left, top, right, bottom,
+                GlassTheme.BUTTON, lift, 0.0F)) {
+            GlassWidgets.roundedFill(graphics, left, top, right, bottom,
+                    0xFFFFFF, 0xFFFFFF, HEADER_ACTION_HEIGHT / 2.0F,
+                    hovered ? 0.20F : 0.12F, 1.0F);
         }
+        int textColor = hovered ? GlassTheme.TEXT : GlassWidgets.dim(GlassTheme.TEXT, 0.14F);
+        // 文字按字体真实行高（乘缩放）垂直居中，别用写死的 8：LABEL 缩放下行高只有 7.2，
+        // 用 8 会把文字顶高半个像素。
+        int textHeight = Math.round(font.lineHeight * GlassTheme.Text.LABEL);
+        int textY = top + Math.round((HEADER_ACTION_HEIGHT - textHeight) / 2.0F);
         GlassWidgets.centeredText(graphics, font,
                 Component.translatable("musicplayer.browser.play_all"),
-                (left + right) / 2, top + (HEADER_ACTION_HEIGHT - 8) / 2,
+                (left + right) / 2, textY,
                 textColor, GlassTheme.Text.LABEL);
     }
 
@@ -1028,8 +1335,8 @@ public class MediaListView extends AbstractWidget {
      * 补充信息和播放按钮；数据源没给就不画那一段，不会留空位。</p>
      */
     private void drawRow(GuiGraphicsExtractor graphics, Font font, MediaItem item, int index, int top,
-                         float reveal, float hoverAmount, float pressAmount, boolean queueHovered,
-                         boolean secondaryHovered) {
+                         float reveal, float hoverAmount, float pressAmount, float playPress,
+                         float secondaryPress, boolean queueHovered, boolean secondaryHovered) {
         if (reveal <= 0.0F) {
             return;
         }
@@ -1038,26 +1345,15 @@ public class MediaListView extends AbstractWidget {
         int rowTop = top + Math.round((1.0F - reveal) * 6.0F);
         int rowBottom = rowTop + ROW_HEIGHT;
 
-        // 每一行自己就是一小块液态玻璃（不是"悬停时才亮一下的纯色块"）。
-        //
-        // 只在入场动画早期不画（玻璃没有 alpha 参数，硬画会"啪"地出现一块）。
-        // 滚出可见区的那部分不在这里夹几何：整块内容在 extractWidgetRenderState 里
-        // 已经开了裁剪，玻璃会作为 scissorArea 一起被裁掉，形状不受影响。
+        // 列表 item 不用液态玻璃：整行只保留"悬停/按下时浮一层极淡纯色"的反馈，
+        // 否则一列玻璃胶囊叠在窗口上方会糊成一片、也压住封面和文字。
+        // 行尾的按钮、徽标等小块组件仍然是液态玻璃（见各处 GlassTheme.BUTTON/BADGE）。
+        // 只在入场动画早期不画，避免"啪"地出现一块。
         if (reveal > 0.35F) {
-            if (minimal) {
-                float fill = 0.08F * hoverAmount + 0.05F * pressAmount;
-                if (fill > 0.01F) {
-                    FlatTheme.fill(graphics, left + 2, rowTop + 1, right, rowBottom - 1,
-                            6.0F, FlatTheme.alpha(0xFFFFFF, fill));
-                }
-            } else {
-                float lift = 0.18F + 0.82F * hoverAmount;
-                if (!GlassWidgets.glassBackground(graphics, left + 2, rowTop + 1, right, rowBottom - 1,
-                        GlassTheme.ROW, lift, pressAmount)) {
-                    GlassWidgets.roundedFill(graphics, left + 2, rowTop + 1, right, rowBottom - 1,
-                            0xFFFFFF, 0xFFFFFF, 6.0F,
-                            0.05F + 0.09F * hoverAmount + 0.06F * pressAmount, 1.0F);
-                }
+            float fill = 0.08F * hoverAmount + 0.05F * pressAmount;
+            if (fill > 0.01F) {
+                FlatTheme.fill(graphics, left + 2, rowTop + 1, right, rowBottom - 1,
+                        6.0F, FlatTheme.alpha(0xFFFFFF, fill));
             }
         }
 
@@ -1087,6 +1383,13 @@ public class MediaListView extends AbstractWidget {
             }
         }
 
+        // 共享元素反向落点：正在飞的那几个元素先不画，避免和目标端重影；
+        // 没有参与飞行（没有对应元素）的序号、按钮、箭头仍然照常显示。
+        // 过渡结束后 heroActive() 自动为 false，下一帧飞回来的元素原地出现，落点严丝合缝。
+        boolean heroRow = heroActive() && heroRowId != null && heroRowId.equals(item.id());
+        boolean hideSubtitle = heroRow && (hero.subtitleActive() || hero.albumActive());
+        boolean hideMeta = heroRow && hero.metaActive();
+
         float dim = (1.0F - reveal) * 0.6F;
         int lineY = rowTop + (ROW_HEIGHT - 8) / 2;
 
@@ -1099,10 +1402,13 @@ public class MediaListView extends AbstractWidget {
 
         int coverTop = rowTop + (ROW_HEIGHT - COVER_SIZE) / 2;
         int coverLeft = left + INDEX_WIDTH + 4;
-        drawCover(graphics, coverLeft, coverTop, COVER_SIZE, item.coverUrl(), item.title());
+        if (!heroRow) {
+            drawCover(graphics, coverLeft, coverTop, COVER_SIZE, item.coverUrl(), item.title());
+        }
 
         int textLeft = coverLeft + COVER_SIZE + TEXT_GAP;
-        // 右侧从外到内：内边距 → 箭头 → 播放按钮 → 补充信息 → 标题可用宽度
+        // 右侧从外到内：内边距 → 播放按钮 → 补充信息 → 标题可用宽度
+        // （有播放按钮的行不再画右箭头——两者占同一列，箭头会压在按钮上）
         int chevronRight = right - ROW_RIGHT_PADDING;
         int textRight = chevronRight - 9;
         int titleColor = minimal
@@ -1112,14 +1418,15 @@ public class MediaListView extends AbstractWidget {
                 ? GlassWidgets.dim(FlatTheme.TEXT_SECONDARY, dim)
                 : GlassWidgets.dim(GlassWidgets.dim(GlassTheme.TEXT_SECONDARY, 0.35F), dim);
 
-        if (queuable(item) && rowActionsVisible && actionRowAllowed(item)) {
+        boolean showAction = queuable(item) && rowActionsVisible && actionRowAllowed(item);
+        if (showAction) {
             int buttonLeft = playButtonLeft();
             drawActionButton(graphics, buttonLeft, rowTop + (ROW_HEIGHT - PLAY_SIZE) / 2,
-                    queueHovered, dim, actionIcon, actionEnabled);
+                    queueHovered, playPress, dim, actionIcon, actionEnabled);
             textRight = buttonLeft - PLAY_GAP;
             if (secondaryActionVisible(item)) {
                 drawActionButton(graphics, secondaryButtonLeft(), rowTop + (ROW_HEIGHT - PLAY_SIZE) / 2,
-                        secondaryHovered, dim, secondaryActionIcon, secondaryActionEnabled);
+                        secondaryHovered, secondaryPress, dim, secondaryActionIcon, secondaryActionEnabled);
                 textRight = secondaryButtonLeft() - PLAY_GAP;
             }
         }
@@ -1128,28 +1435,33 @@ public class MediaListView extends AbstractWidget {
             int metaWidth = Math.round(font.width(item.meta()) * META_SCALE);
             int metaLeft = textRight - metaWidth;
             if (metaLeft > textLeft + 12) {
-                int metaColor = minimal
-                        ? GlassWidgets.dim(FlatTheme.TEXT_TERTIARY, dim)
-                        : GlassWidgets.dim(GlassWidgets.dim(GlassTheme.TEXT_SECONDARY, 0.22F), dim);
-                GlassWidgets.rightText(graphics, font, Component.literal(item.meta()), textRight, lineY,
-                        metaColor, META_SCALE);
+                if (!hideMeta) {
+                    int metaColor = minimal
+                            ? GlassWidgets.dim(FlatTheme.TEXT_TERTIARY, dim)
+                            : GlassWidgets.dim(GlassWidgets.dim(GlassTheme.TEXT_SECONDARY, 0.22F), dim);
+                    GlassWidgets.rightText(graphics, font, Component.literal(item.meta()), textRight, lineY,
+                            metaColor, META_SCALE);
+                }
                 textRight = metaLeft - 6;
             }
         }
         int textWidth = Math.max(1, textRight - textLeft);
 
         int titleY = item.subtitle() == null ? lineY : rowTop + 8;
-        GlassWidgets.text(graphics, font,
-                Component.literal(ellipsize(font, item.title(), textWidth, TITLE_SCALE)),
-                textLeft, titleY, titleColor, TITLE_SCALE);
-        if (item.subtitle() != null) {
+        if (!heroRow) {
+            GlassWidgets.text(graphics, font,
+                    Component.literal(ellipsize(font, item.title(), textWidth, TITLE_SCALE)),
+                    textLeft, titleY, titleColor, TITLE_SCALE);
+        }
+        if (item.subtitle() != null && !hideSubtitle) {
             GlassWidgets.text(graphics, font,
                     Component.literal(ellipsize(font, item.subtitle(), textWidth, SUBTITLE_SCALE)),
                     textLeft, rowTop + 19, subtitleColor, SUBTITLE_SCALE);
         }
 
-        // 右箭头：所有条目都能点开详情页
-        if (navigable(item)) {
+        // 右箭头：能点开详情页、且这一行没有播放按钮时才画（播放按钮已占同一列，
+        // 再叠箭头会糊在一起；有按钮的行本身就有可点反馈，不必再加箭头）。
+        if (navigable(item) && !showAction) {
             int arrowColor = minimal
                     ? GlassWidgets.dim(FlatTheme.TEXT_TERTIARY, dim)
                     : GlassWidgets.dim(GlassWidgets.dim(GlassTheme.TEXT_SECONDARY, 0.55F), dim);
@@ -1169,24 +1481,27 @@ public class MediaListView extends AbstractWidget {
      * 只把图标换成刻录、回调换成发刻录请求（见 {@code DiscMasterScreen}）。</p>
      */
     private void drawActionButton(GuiGraphicsExtractor graphics, int x, int y, boolean hovered,
-                                  float dim, SvgIcon icon, boolean enabled) {
+                                  float press, float dim, SvgIcon icon, boolean enabled) {
+        float pressAmount = GlassWidgets.clamp01(press);
         int color;
         if (minimal) {
-            if (hovered) {
+            // 悬停淡提亮；按下时再叠一层更明显的填充，形成"被按下去"的反馈。
+            float fill = (hovered ? 0.10F : 0.0F) + 0.16F * pressAmount;
+            if (fill > 0.01F) {
                 FlatTheme.fill(graphics, x, y, x + PLAY_SIZE, y + PLAY_SIZE,
-                        PLAY_SIZE / 2.0F, FlatTheme.alpha(0xFFFFFF, 0.10F));
+                        PLAY_SIZE / 2.0F, FlatTheme.alpha(0xFFFFFF, fill));
             }
             int base = enabled
-                    ? (hovered ? FlatTheme.TEXT : FlatTheme.TEXT_SECONDARY)
+                    ? (hovered || pressAmount > 0.01F ? FlatTheme.TEXT : FlatTheme.TEXT_SECONDARY)
                     : FlatTheme.TEXT_FAINT;
             color = GlassWidgets.dim(base, dim);
         } else {
-            float lift = hovered ? 1.0F : 0.25F;
+            float lift = (hovered ? 1.0F : 0.25F) * (1.0F - 0.35F * pressAmount);
             if (!GlassWidgets.glassBackground(graphics, x, y, x + PLAY_SIZE, y + PLAY_SIZE,
-                    GlassTheme.BUTTON, lift, 0.0F)) {
+                    GlassTheme.BUTTON, lift, pressAmount)) {
                 GlassWidgets.roundedFill(graphics, x, y, x + PLAY_SIZE, y + PLAY_SIZE,
                         0xFFFFFF, 0xFFFFFF, PLAY_SIZE / 2.0F,
-                        0.10F + 0.10F * (hovered ? 1.0F : 0.0F), 1.0F);
+                        0.10F + 0.10F * (hovered ? 1.0F : 0.0F) + 0.12F * pressAmount, 1.0F);
             }
             int enabledDim = GlassWidgets.dim(GlassTheme.TEXT, 0.12F);
             color = enabled
@@ -1210,8 +1525,8 @@ public class MediaListView extends AbstractWidget {
         if (!prev && !next) {
             return;
         }
-        drawPageButton(graphics, font, prevPageLeft(), buttonTop, "‹", prev, prevHover);
-        drawPageButton(graphics, font, nextPageLeft(), buttonTop, "›", next, nextHover);
+        drawPageButton(graphics, prevPageLeft(), buttonTop, SvgIcons.CHEVRON_LEFT, prev, prevHover);
+        drawPageButton(graphics, nextPageLeft(), buttonTop, SvgIcons.CHEVRON_RIGHT, next, nextHover);
 
         Component label = totalPages > 0
                 ? Component.translatable("musicplayer.browser.page_indicator", pageNumber, totalPages)
@@ -1221,8 +1536,8 @@ public class MediaListView extends AbstractWidget {
                 top + (PAGE_FOOTER_HEIGHT - 8) / 2, labelColor, GlassTheme.Text.LABEL);
     }
 
-    private void drawPageButton(GuiGraphicsExtractor graphics, Font font, int x, int y,
-                                String glyph, boolean enabled, boolean hovered) {
+    private void drawPageButton(GuiGraphicsExtractor graphics, int x, int y,
+                                SvgIcon icon, boolean enabled, boolean hovered) {
         int color;
         if (minimal) {
             if (enabled && hovered) {
@@ -1242,8 +1557,10 @@ public class MediaListView extends AbstractWidget {
             }
             color = enabled ? GlassTheme.TEXT : GlassWidgets.dim(GlassTheme.TEXT, 0.55F);
         }
-        GlassWidgets.centeredText(graphics, font, Component.literal(glyph),
-                x + PAGE_ARROW_SIZE / 2, y + (PAGE_ARROW_SIZE - 8) / 2, color, GlassTheme.Text.LABEL);
+        // 图标按墨迹在方框里水平垂直居中（drawCentered 用图标真实墨迹中心，不按 viewBox，
+        // 避免每个图标四周留白不同导致视觉偏移）。
+        int iconSize = Math.max(6, Math.round(PAGE_ARROW_SIZE * 0.55F));
+        icon.drawCentered(graphics, x, y, PAGE_ARROW_SIZE, iconSize, color);
     }
 
     /**
@@ -1259,6 +1576,11 @@ public class MediaListView extends AbstractWidget {
             MediaThumbnails.draw(graphics, thumb, x, y, size);
             return;
         }
+        drawCoverPlaceholder(graphics, x, y, size);
+    }
+
+    /** 封面还没就绪时的占位：圆角底 + 中间一小块更亮的形状。 */
+    private void drawCoverPlaceholder(GuiGraphicsExtractor graphics, int x, int y, int size) {
         // 占位：圆角底 + 中间一小块更亮的形状，视觉上像"封面位置"而不是空缺
         float radius = size * 0.22F;
         float baseAlpha = minimal ? 0.10F : 0.14F;

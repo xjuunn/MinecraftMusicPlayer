@@ -108,6 +108,22 @@ public final class SvgIcons {
                     + " M10 16h4v2H10z M19 16h2v6H19z M8 18h2v2H8z"
                     + " M14 18h2v2H14z M5 20h3v2H5z M16 20h3v2H16z");
 
+    /**
+     * 上一页：像素左尖括号。
+     *
+     * <p>用真正的 SVG 图标替代原来的文字字符 {@code ‹}：字符在行框里天然偏上，
+     * 又带字距侧边空白，很难在圆形按钮里真正做到水平垂直居中；换成图标后交给
+     * {@link SvgIcon#drawCentered} 按墨迹居中，稳定对齐。厚度 2、每级错开 2 个单位。</p>
+     */
+    public static final SvgIcon CHEVRON_LEFT = SvgIcon.of(
+            "M14 4h2v2h-2z M12 6h2v2h-2z M10 8h2v2h-2z M8 10h2v2H8z"
+                    + " M8 12h2v2H8z M10 14h2v2h-2z M12 16h2v2h-2z M14 18h2v2h-2z");
+
+    /** 下一页：像素右尖括号（{@link #CHEVRON_LEFT} 的镜像）。 */
+    public static final SvgIcon CHEVRON_RIGHT = SvgIcon.of(
+            "M8 4h2v2H8z M10 6h2v2h-2z M12 8h2v2h-2z M14 10h2v2h-2z"
+                    + " M14 12h2v2h-2z M12 14h2v2h-2z M10 16h2v2h-2z M8 18h2v2H8z");
+
     private SvgIcons() {
     }
 }

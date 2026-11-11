@@ -69,7 +69,7 @@ public final class GlassTheme {
             1.35F,
             GlassShadow.NONE,
             0xF2FFFFFF,
-            1.0F,
+            0.60F,
             2.0F, 1.10F, 3.5F,
             0.50F);
 
@@ -88,7 +88,7 @@ public final class GlassTheme {
             1.20F,
             GlassShadow.NONE,
             0xF2FFFFFF,
-            1.0F,
+            0.55F,
             2.0F, 1.00F, 3.0F,
             0.46F);
 
@@ -100,7 +100,7 @@ public final class GlassTheme {
             1.30F,
             GlassShadow.NONE,
             0xF2FFFFFF,
-            1.0F,
+            0.72F,
             2.0F, 1.10F, 3.0F,
             0.48F);
 
@@ -112,7 +112,7 @@ public final class GlassTheme {
             1.55F,
             GlassShadow.NONE,
             0xF2FFFFFF,
-            1.0F,
+            0.80F,
             1.5F, 1.05F, 2.5F,
             0.58F);
 
@@ -136,7 +136,7 @@ public final class GlassTheme {
             0.95F,
             GlassShadow.NONE,
             0xE6F2F3F7,
-            1.0F,
+            0.92F,
             3.0F, 0.75F, 4.0F,
             0.30F);
 
@@ -155,7 +155,7 @@ public final class GlassTheme {
             0.72F,
             GlassShadow.NONE,
             0xE6F2F3F7,
-            1.0F,
+            0.70F,
             2.5F, 0.70F, 2.6F,
             0.26F);
 
@@ -173,7 +173,7 @@ public final class GlassTheme {
             1.00F,
             GlassShadow.NONE,
             0xF2F3F7,
-            1.0F,
+            0.66F,
             2.0F, 0.65F, 1.6F,
             0.34F);
 
@@ -192,7 +192,7 @@ public final class GlassTheme {
             0.62F,
             GlassShadow.NONE,
             0xE6F2F3F7,
-            1.0F,
+            0.45F,
             2.0F, 0.70F, 1.4F,
             0.22F);
 
@@ -205,7 +205,7 @@ public final class GlassTheme {
             0.56F,
             GlassShadow.NONE,
             0xE6F2F3F7,
-            1.0F,
+            0.50F,
             1.5F, 0.70F, 0.9F,
             0.18F);
 

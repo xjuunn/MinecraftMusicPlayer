@@ -29,8 +29,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 网易云直连实现：直接访问 {@code music.163.com} 的网页版明文接口。
@@ -66,6 +69,13 @@ public final class DirectMusicApi implements MusicApi {
 
     private final SongUrlResolver urlResolver;
     private final Map<String, CachedTrackIds> trackIdsCache = new ConcurrentHashMap<>();
+    /**
+     * 浏览请求代号：客户端切页时通过 {@link #beginNavigation()} 递增，
+     * 旧代号的请求会被取消，避免快速连点后旧页面的请求占住线程池。
+     */
+    private final AtomicLong browseEpoch = new AtomicLong();
+    /** 已提交、还没结束的浏览请求令牌。 */
+    private final Set<RequestToken> browseTokens = ConcurrentHashMap.newKeySet();
 
     /**
      * 音源顺序：Qijieya → Byfuns → 网易云官方直连 → Mycelis（保底）。
@@ -85,6 +95,25 @@ public final class DirectMusicApi implements MusicApi {
     /** 允许外部注入音源解析器，便于测试与自定义音源顺序。 */
     public DirectMusicApi(SongUrlResolver urlResolver) {
         this.urlResolver = urlResolver;
+    }
+
+    /**
+     * 开始一轮新的浏览导航：作废并取消上一轮还没完成的请求。
+     *
+     * <p>快速连续打开多个歌单时，旧页面的「歌单详情 + 全量 trackIds + 批量歌曲详情」
+     * 可能还在队列里，新页面的请求只能排在后面。切页时取消旧请求后，新页面的列表能
+     * 立刻拿到空闲线程，不会再出现「点了很久列表才出来」。</p>
+     *
+     * <p>只影响浏览请求（{@link #async} 提交的任务），不会动播放、下载等其它链路。</p>
+     */
+    public void beginNavigation() {
+        long next = browseEpoch.incrementAndGet();
+        for (RequestToken token : browseTokens) {
+            if (token.epoch() < next) {
+                token.cancel();
+                browseTokens.remove(token);
+            }
+        }
     }
 
     /** 歌单 trackIds 缓存项，{@code expiresAt} 为 0 表示不过期。 */
@@ -859,14 +888,22 @@ public final class DirectMusicApi implements MusicApi {
     // ── 内部工具 ────────────────────────────────────────────────────
 
     /** 把阻塞的同步逻辑放到业务线程池执行。 */
-    private static <T> CompletableFuture<T> async(ThrowingSupplier<T> supplier) {
+    private <T> CompletableFuture<T> async(ThrowingSupplier<T> supplier) {
+        // 提交时就把当前代号记下来：之后即便界面切页，也不会影响新页面自己发起的请求。
+        RequestToken token = new RequestToken(browseEpoch.get());
+        browseTokens.add(token);
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return supplier.get();
+                return token.run(supplier::get);
+            } catch (CancellationException exception) {
+                // 切页取消不是网络失败，原样传出，让上层忽略即可。
+                throw exception;
             } catch (MusicApiException exception) {
                 throw exception;
             } catch (Exception exception) {
                 throw new MusicApiException("musicplayer.error.api_request_failed", exception);
+            } finally {
+                browseTokens.remove(token);
             }
         }, NeteaseApiClient.executor());
     }

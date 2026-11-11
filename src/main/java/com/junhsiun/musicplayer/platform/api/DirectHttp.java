@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
 import com.junhsiun.musicplayer.util.Messages;
+import okhttp3.Call;
 import okhttp3.FormBody;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
@@ -15,6 +16,7 @@ import okhttp3.Response;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CancellationException;
 
 /**
  * 网易云网页版（明文）接口的最小 HTTP 传输层。
@@ -69,7 +71,16 @@ final class DirectHttp {
 
     private static JsonObject execute(Request request) throws IOException {
         OkHttpClient client = HttpClientFactory.createApiClient();
-        try (Response response = client.newCall(request).execute()) {
+        RequestToken token = RequestToken.current();
+        if (token != null && token.isCancelled()) {
+            // 页面已经切走：还没发出去的请求直接作废，不占线程、也不再触发后端回退。
+            throw new CancellationException("browse request cancelled");
+        }
+        Call call = client.newCall(request);
+        if (token != null) {
+            token.attach(call);
+        }
+        try (Response response = call.execute()) {
             if (!response.isSuccessful()) {
                 throw new MusicApiException("HTTP " + response.code());
             }
@@ -84,11 +95,20 @@ final class DirectHttp {
         } catch (MusicApiException exception) {
             throw exception;
         } catch (Exception exception) {
+            if (token != null && token.isCancelled()) {
+                // Call.cancel() 会让阻塞中的 execute() 抛 IOException；这不是网络失败，
+                // 不要触发熔断或后端回退。
+                throw new CancellationException("browse request cancelled");
+            }
             // 逐次失败由 {@link MusicApiRouter} 统计并在熔断时告警，这里保持 debug 级别避免刷屏
             MusicPlayerMod.LOGGER.debug("直连音乐接口失败: {} - {} ({})", request.method(),
                     Messages.sanitizeForLog(request.url().toString()), exception.getMessage());
             MusicPlayerMod.LOGGER.trace("直连音乐接口失败详情", exception);
             throw new IOException(exception);
+        } finally {
+            if (token != null) {
+                token.detach(call);
+            }
         }
     }
 }
