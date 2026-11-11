@@ -28,6 +28,11 @@ public final class DetailPage extends BrowserPage {
     private final MediaKind kind;
     private final String id;
 
+    /** 从列表点进来时带的条目快照：详情接口回来前先用它搭头部，共享元素动画不必等网络。 */
+    private final String fallbackTitle;
+    private final String fallbackSubtitle;
+    private final String fallbackCover;
+
     private MediaDetail detail;
     private List<MediaItem> entries = List.of();
     private int page = 1;
@@ -38,8 +43,33 @@ public final class DetailPage extends BrowserPage {
     private Component status = Component.empty();
 
     public DetailPage(MediaKind kind, String id) {
+        this(kind, id, null);
+    }
+
+    /** 带列表条目快照的构造：点歌单/歌手等行进入详情时用，可直接开始共享元素过渡。 */
+    public DetailPage(MediaItem item) {
+        this(item == null ? MediaKind.SONG : item.kind(),
+                item == null ? "" : item.id(), item);
+    }
+
+    private DetailPage(MediaKind kind, String id, MediaItem fallback) {
         this.kind = kind == null ? MediaKind.SONG : kind;
         this.id = id == null ? "" : id;
+        this.fallbackTitle = fallback == null || fallback.title() == null ? "" : fallback.title();
+        String subtitle = fallback == null || fallback.subtitle() == null ? "" : fallback.subtitle();
+        // 列表行的副标题比详情头部多带了一段统计（歌单是「创建者 · N 首」，用户是签名）。
+        // 头部只显示真正的副标题，这里先按同一语义裁掉多余部分，避免详情回来时文字突然变化；
+        // 用户详情本身没有副标题，直接留空，也就不会做一段并不存在的过渡。
+        if (this.kind == MediaKind.PLAYLIST) {
+            int separator = subtitle.indexOf(" · ");
+            if (separator > 0) {
+                subtitle = subtitle.substring(0, separator);
+            }
+        } else if (this.kind == MediaKind.USER) {
+            subtitle = "";
+        }
+        this.fallbackSubtitle = subtitle;
+        this.fallbackCover = fallback == null || fallback.coverUrl() == null ? "" : fallback.coverUrl();
     }
 
     /** 条目类型：界面据此决定要不要显示"收藏歌单"按钮。 */
@@ -59,7 +89,10 @@ public final class DetailPage extends BrowserPage {
 
     @Override
     public Component title() {
-        return detail == null ? Component.empty() : Component.literal(detail.title());
+        if (detail != null) {
+            return Component.literal(detail.title());
+        }
+        return Component.literal(fallbackTitle);
     }
 
     @Override
@@ -72,14 +105,21 @@ public final class DetailPage extends BrowserPage {
     @Override
     public void apply() {
         MediaDetail current = detail;
-        view().setHeader(current == null ? null : new MediaListView.Header(
-                current.coverUrl(),
-                Component.literal(current.title()),
-                current.subtitle() == null ? null : Component.literal(current.subtitle()),
-                current.stats(),
-                current.description(),
-                // 只有歌单能"整个播"：/music play playlist <id>
-                kind == MediaKind.PLAYLIST));
+        String title = current == null ? fallbackTitle : current.title();
+        String cover = current == null ? fallbackCover : current.coverUrl();
+        String subtitle = current == null ? fallbackSubtitle : current.subtitle();
+        // 有详情就用详情；详情还没回来但列表带了标题/封面时，也先搭一个头部，
+        // 这样共享元素动画可以直接开始，网络结果回来后再原地补全其余字段。
+        boolean hasHeader = current != null || !fallbackTitle.isBlank() || !fallbackCover.isBlank();
+        view().setHeader(hasHeader ? new MediaListView.Header(
+                cover,
+                Component.literal(title == null ? "" : title),
+                subtitle == null || subtitle.isBlank() ? null : Component.literal(subtitle),
+                current == null ? List.of() : current.stats(),
+                current == null ? null : current.description(),
+                // 只有歌单能"整个播"：/music play playlist <id>。详情没回来时按钮先不出现，
+                // 避免出现一个点了没反应的"播放全部"。
+                current != null && kind == MediaKind.PLAYLIST) : null);
         view().setLoading(loading);
         view().setStatus(status);
         view().showItems(entries, false, false);
@@ -113,6 +153,11 @@ public final class DetailPage extends BrowserPage {
 
     @Override
     public void onEnter(BrowserHost host) {
+        // 详情元数据与下级条目互不依赖：并行发起。歌单尤其明显——条目还要再拉一次
+        // 全量 trackIds，串行等于让列表白等一次网络往返。
+        if (kind != MediaKind.SONG) {
+            loadEntries(1);
+        }
         loadDetail();
     }
 
@@ -122,13 +167,40 @@ public final class DetailPage extends BrowserPage {
         goToPage(delta);
     }
 
+    /**
+     * 返回本页时补齐缺失的数据。
+     *
+     * <p>本页还在栈里时，压栈打开下级页面会取消它的在途请求；如果那时详情或条目还没回来，
+     * 返回后需要重新发起，否则会一直停在加载/空壳状态。</p>
+     */
+    @Override
+    public void onResume(BrowserHost host) {
+        if (detail == null) {
+            loadDetail();
+        }
+        if (kind != MediaKind.SONG && entries.isEmpty() && !loadingEntries) {
+            loadEntries(page);
+        }
+        super.onResume(host);
+    }
+
     // ── 数据 ────────────────────────────────────────────────────────────
 
     private void loadDetail() {
         MediaBrowserService.getInstance().detail(kind, id)
                 .whenComplete((loaded, throwable) ->
                         Minecraft.getInstance().execute(() -> {
+                            // 页面已经切走：结果直接丢弃，不覆盖任何状态。
+                            if (MediaBrowserService.isCancelled(throwable)) {
+                                // 条目可能还在跑：保持加载态；本页若仍在栈里，返回时 onResume 会补拉。
+                                loading = loadingEntries;
+                                return;
+                            }
                             if (throwable != null) {
+                                // 条目请求还在跑时先别用元数据失败覆盖列表；等条目结果说话。
+                                if (loadingEntries) {
+                                    return;
+                                }
                                 loading = false;
                                 status = failed(throwable);
                                 apply();
@@ -136,6 +208,9 @@ public final class DetailPage extends BrowserPage {
                             }
                             if (loaded == null || loaded.isEmpty()) {
                                 // 接口回包认不出来（被风控、换了字段）：别留一个空壳页面
+                                if (loadingEntries) {
+                                    return;
+                                }
                                 loading = false;
                                 status = Component.translatable("musicplayer.browser.detail_empty");
                                 apply();
@@ -150,8 +225,8 @@ public final class DetailPage extends BrowserPage {
                                 view().resetAndReveal();
                                 return;
                             }
-                            // 元数据到了，条目还在路上：继续显示加载动画
-                            loadEntries(1);
+                            // 元数据到了：只补头部；loading 由并行中的条目请求负责收尾。
+                            apply();
                         }));
     }
 
@@ -186,6 +261,11 @@ public final class DetailPage extends BrowserPage {
         MediaBrowserService.getInstance().entries(kind, id, offset, SearchPage.PAGE_SIZE)
                 .whenComplete((items, throwable) ->
                         Minecraft.getInstance().execute(() -> {
+                            if (MediaBrowserService.isCancelled(throwable)) {
+                                loadingEntries = false;
+                                loading = false;
+                                return;
+                            }
                             loadingEntries = false;
                             loading = false;
                             if (throwable != null) {

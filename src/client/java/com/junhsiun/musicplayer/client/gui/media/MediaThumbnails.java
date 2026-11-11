@@ -9,6 +9,7 @@ import com.mojang.renderpearl.api.textures.GpuSampler;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiPipeline;
 import net.minecraft.client.renderer.texture.TextureResources;
 import net.minecraft.resources.Identifier;
 import okhttp3.OkHttpClient;
@@ -61,14 +62,29 @@ public final class MediaThumbnails {
      * 2×2 个像素。纹理比显示尺寸大得越多，一次采样覆盖到的源面积比例越小，缩小后的高频细节
      * 就越容易闪。列表封面画 22px、详情页头部 44px，64 对应 2.9× 与 1.45×，都还在双线性能
      * 干净处理的范围内；换成 128 反而会让 22px 那档变成 5.8× 抽点，看起来更脏。</p>
+     *
+     * <p>详情页那张大封面（{@code SongDetailView} 画到 ~84px）另有高分辨率档位，见
+     * {@link #TEXTURE_SIZE_LARGE}——小缩略图追求不闪，大封面追求清晰，两者诉求相反，
+     * 所以分成两套纹理缓存而不是硬用一个尺寸。</p>
      */
     public static final int TEXTURE_SIZE = 64;
+
+    /**
+     * 大封面（详情页）纹理长边（像素）。
+     *
+     * <p>详情页那张封面画到 ~84px，按 GUI 缩放（2~3 倍）实际占 168~252 设备像素；64px 纹理
+     * 上去一定是糊的。这里单独用 256 的纹理，配合线性采样，在常见的 2~3 倍缩放下接近 1:1，
+     * 清晰度足够。小缩略图仍然走 {@link #TEXTURE_SIZE}，两者各用一份缓存互不影响。</p>
+     */
+    public static final int TEXTURE_SIZE_LARGE = 256;
     /** 圆角半径占短边的比例（iOS 风格的大圆角）。 */
     private static final float RADIUS_RATIO = 0.22F;
     /** 最多缓存多少张。 */
     private static final int MAX_ENTRIES = 128;
     /** 向图床要的源图边长；2 倍于纹理，本地再做区域平均，缩下来不会糊。 */
     private static final int REQUEST_DIMENSION = 128;
+    /** 大封面向图床要的源图边长；更大，保证详情页那张大图清晰。 */
+    private static final int REQUEST_DIMENSION_LARGE = 512;
     /** 下载大小上限。 */
     private static final long MAX_IMAGE_BYTES = 8L * 1024L * 1024L;
     /** 源图最大边长，防止超大图把内存吃穿。 */
@@ -86,6 +102,8 @@ public final class MediaThumbnails {
         return thread;
     });
     private final Map<String, Entry> entries = new LinkedHashMap<>(32, 0.75F, true);
+    /** 大封面缓存（详情页大图），与小缩略图分开，互不挤占，纹理分辨率也更高。 */
+    private final Map<String, Entry> largeEntries = new LinkedHashMap<>(16, 0.75F, true);
     private long nextToken;
 
     private MediaThumbnails() {
@@ -118,16 +136,30 @@ public final class MediaThumbnails {
      * <p>渲染循环里每帧调用是安全的：命中缓存只是一次哈希查找，未命中时也会被 pending 状态挡住。</p>
      */
     public Thumb get(String url) {
+        return get(url, false);
+    }
+
+    /**
+     * 取大封面缩略图（详情页那张大图，纹理分辨率更高）；还没下载好返回 {@code null}，并顺带发起下载。
+     *
+     * <p>与小缩略图走同一套下载/缩放逻辑，只是纹理更大、向图床要的源图更大，因此更清晰。</p>
+     */
+    public Thumb getLarge(String url) {
+        return get(url, true);
+    }
+
+    private Thumb get(String url, boolean large) {
         if (url == null || url.isBlank()) {
             return null;
         }
+        Map<String, Entry> map = mapFor(large);
         synchronized (this) {
-            Entry entry = entries.get(url);
+            Entry entry = map.get(url);
             if (entry != null && entry.thumb() != null) {
                 return entry.thumb();
             }
         }
-        request(url);
+        request(url, large);
         return null;
     }
 
@@ -138,37 +170,84 @@ public final class MediaThumbnails {
      * 在方框里留出对称的空白，而不是被切掉两边。</p>
      */
     public static void draw(GuiGraphicsExtractor graphics, Thumb thumb, int x, int y, int size) {
-        if (thumb == null || size <= 0) {
+        drawBounded(graphics, thumb, x, y, x + size, y + size);
+    }
+
+    /**
+     * 在任意矩形内<b>等比内接</b>绘制缩略图，供共享元素过渡插值封面位置/尺寸时使用。
+     *
+     * <p>和 {@link #draw} 同一条路径：先按纹理原始宽高比决定内接尺寸，再在矩形里居中，
+     * 不裁切、不拉伸。</p>
+     */
+    public static void drawBounded(GuiGraphicsExtractor graphics, Thumb thumb,
+                                   int x0, int y0, int x1, int y1) {
+        drawBounded(graphics, thumb, x0, y0, x1, y1, -1);
+    }
+
+    /**
+     * 在任意矩形内等比内接绘制缩略图，并叠加一个 ARGB 颜色（用于交叉淡入）。
+     *
+     * <p>{@code color} 为 {@code -1} 时走和 {@link #drawBounded(GuiGraphicsExtractor, Thumb, int, int, int, int)}
+     * 完全相同的路径；否则用带颜色参数的 blit 把同一个纹理按 alpha 叠加上去。
+     * 两个纹理来自同一张封面、同一内接尺寸，淡入过程中不会露出空白。</p>
+     *
+     * @param color ARGB 颜色；alpha 通道控制不透明度
+     */
+    public static void drawBounded(GuiGraphicsExtractor graphics, Thumb thumb,
+                                   int x0, int y0, int x1, int y1, int color) {
+        if (thumb == null || x1 <= x0 || y1 <= y0) {
             return;
         }
+        int boxWidth = x1 - x0;
+        int boxHeight = y1 - y0;
         float aspect = thumb.aspect();
         int drawWidth;
         int drawHeight;
-        if (aspect >= 1.0F) {
-            drawWidth = size;
-            drawHeight = Math.max(1, Math.round(size / aspect));
+        if (aspect >= (float) boxWidth / boxHeight) {
+            drawWidth = boxWidth;
+            drawHeight = Math.max(1, Math.round(boxWidth / aspect));
         } else {
-            drawHeight = size;
-            drawWidth = Math.max(1, Math.round(size * aspect));
+            drawHeight = boxHeight;
+            drawWidth = Math.max(1, Math.round(boxHeight * aspect));
         }
-        int offsetX = x + (size - drawWidth) / 2;
-        int offsetY = y + (size - drawHeight) / 2;
-        // 这个重载的四个 int 是 <b>(x0, y0, x1, y1)</b>，不是 (x, y, w, h)；
-        // 四个 float 是 <b>(u0, u1, v0, v1)</b>，不是 (u0, v0, u1, v1)。
-        // 按 (x, y, w, h) 传会得到一个右下角缩到 (w, h) 的倒置矩形，画出来什么都没有
-        // ——"封面全都消失"就是这么来的。
-        graphics.blit(thumb.view(), thumb.sampler(),
-                offsetX, offsetY, offsetX + drawWidth, offsetY + drawHeight,
-                0.0F, 1.0F, 0.0F, 1.0F);
+        int offsetX = x0 + (boxWidth - drawWidth) / 2;
+        int offsetY = y0 + (boxHeight - drawHeight) / 2;
+        if (color == -1) {
+            // 这个重载的四个 int 是 <b>(x0, y0, x1, y1)</b>，不是 (x, y, w, h)；
+            // 四个 float 是 <b>(u0, u1, v0, v1)</b>，不是 (u0, v0, u1, v1)。
+            // 按 (x, y, w, h) 传会得到一个右下角缩到 (w, h) 的倒置矩形，画出来什么都没有
+            // ——"封面全都消失"就是这么来的。
+            graphics.blit(thumb.view(), thumb.sampler(),
+                    offsetX, offsetY, offsetX + drawWidth, offsetY + drawHeight,
+                    0.0F, 1.0F, 0.0F, 1.0F);
+            return;
+        }
+        // 带 tint 的版本需要按纹理注册 ID 走 TextureManager，才能把颜色（含 alpha）
+        // 传给 BlitRenderState；GpuTextureView 的 blit 重载没有颜色参数。
+        graphics.blit(GuiPipeline.TEXTURED, thumb.id(),
+                offsetX, offsetY, 0.0F, 0.0F,
+                drawWidth, drawHeight,
+                thumb.width(), thumb.height(),
+                thumb.width(), thumb.height(), color);
     }
 
     /** 只发起下载，不等结果。 */
     public void request(String url) {
+        request(url, false);
+    }
+
+    /** 只发起大封面下载，不等结果。 */
+    public void requestLarge(String url) {
+        request(url, true);
+    }
+
+    private void request(String url, boolean large) {
         if (url == null || url.isBlank() || executor.isShutdown()) {
             return;
         }
+        Map<String, Entry> map = mapFor(large);
         synchronized (this) {
-            Entry existing = entries.get(url);
+            Entry existing = map.get(url);
             if (existing != null) {
                 if (existing.loading() && !existing.isStale()) {
                     return;
@@ -178,13 +257,13 @@ public final class MediaThumbnails {
                 }
             }
             long token = nextToken++;
-            entries.put(url, Entry.pending(token));
+            map.put(url, Entry.pending(token));
         }
         try {
-            executor.execute(() -> download(url));
+            executor.execute(() -> download(url, large));
         } catch (java.util.concurrent.RejectedExecutionException ignored) {
             synchronized (this) {
-                entries.remove(url);
+                map.remove(url);
             }
         }
     }
@@ -198,6 +277,10 @@ public final class MediaThumbnails {
                 client.execute(() -> release(client, entry));
             }
             entries.clear();
+            for (Entry entry : largeEntries.values()) {
+                client.execute(() -> release(client, entry));
+            }
+            largeEntries.clear();
         }
     }
 
@@ -208,11 +291,11 @@ public final class MediaThumbnails {
 
     // ── 下载与生成 ──────────────────────────────────────────────────────
 
-    private void download(String url) {
+    private void download(String url, boolean large) {
         try {
             OkHttpClient client = HttpClientFactory.create();
             Request request = new Request.Builder()
-                    .url(downloadUrl(url))
+                    .url(downloadUrl(url, requestDimension(large)))
                     .header("User-Agent", "MinecraftMusicPlayer/" + MusicPlayerMod.VERSION)
                     .get()
                     .build();
@@ -235,24 +318,26 @@ public final class MediaThumbnails {
             }
             NativeImage thumbnail;
             try (NativeImage source = readImage(bytes)) {
-                thumbnail = toThumbnail(source);
+                thumbnail = toThumbnail(source, textureSize(large));
             }
-            Identifier textureId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "thumb/" + hash(url));
-            Minecraft.getInstance().execute(() -> register(url, textureId, thumbnail));
+            Identifier textureId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, textureIdPath(large, url));
+            Minecraft.getInstance().execute(() -> register(url, textureId, thumbnail, large));
         } catch (Exception exception) {
+            Map<String, Entry> map = mapFor(large);
             synchronized (this) {
-                Entry current = entries.get(url);
+                Entry current = map.get(url);
                 if (current != null && current.loading()) {
-                    entries.put(url, Entry.failure(current.token()));
+                    map.put(url, Entry.failure(current.token()));
                 }
             }
             MusicPlayerMod.LOGGER.debug("缩略图下载失败: {}", url, exception);
         }
     }
 
-    private synchronized void register(String url, Identifier textureId, NativeImage image) {
+    private synchronized void register(String url, Identifier textureId, NativeImage image, boolean large) {
         Minecraft client = Minecraft.getInstance();
-        Entry current = entries.get(url);
+        Map<String, Entry> map = mapFor(large);
+        Entry current = map.get(url);
         if (current == null || !current.loading()) {
             // 期间被 clear() 清掉：直接释放，避免纹理泄漏
             image.close();
@@ -270,18 +355,18 @@ public final class MediaThumbnails {
             // from2dImage 只把像素写进命令缓冲，<b>不会</b>关掉 NativeImage，得由我们自己释放。
             // 但不能立刻关：写入是录进命令缓冲、帧末才提交的，提前 close 会让上传读到已释放的
             // 内存。所以把它挂在缓存条目上，等这张纹理被淘汰/清空时再释放——那时早就提交完了。
-            entries.put(url, Entry.ready(
+            map.put(url, Entry.ready(
                     new Thumb(textureId, resources.textureView(), sampler, width, height), image));
-            while (entries.size() > MAX_ENTRIES) {
-                String eldestKey = entries.keySet().iterator().next();
-                Entry eldest = entries.remove(eldestKey);
+            while (map.size() > MAX_ENTRIES) {
+                String eldestKey = map.keySet().iterator().next();
+                Entry eldest = map.remove(eldestKey);
                 if (eldest != null) {
                     release(client, eldest);
                 }
             }
         } catch (Exception exception) {
             image.close();
-            entries.put(url, Entry.failure(current.token()));
+            map.put(url, Entry.failure(current.token()));
             MusicPlayerMod.LOGGER.debug("缩略图注册失败: {}", url, exception);
         }
     }
@@ -329,16 +414,16 @@ public final class MediaThumbnails {
      * <p>缩小时按<b>区域平均</b>取色，不是最近邻抽点：最近邻会漏掉大部分像素，
      * 高频细节变成噪点，缩小后还会闪烁。</p>
      */
-    private static NativeImage toThumbnail(NativeImage source) {
+    private static NativeImage toThumbnail(NativeImage source, int textureSize) {
         int srcWidth = Math.max(1, source.getWidth());
         int srcHeight = Math.max(1, source.getHeight());
-        float scale = (float) TEXTURE_SIZE / Math.max(srcWidth, srcHeight);
+        float scale = (float) textureSize / Math.max(srcWidth, srcHeight);
         if (scale > 1.0F) {
             // 源图本来就比纹理小：不放大，凭空插值只会更糊
             scale = 1.0F;
         }
-        int outWidth = Math.max(1, Math.min(TEXTURE_SIZE, Math.round(srcWidth * scale)));
-        int outHeight = Math.max(1, Math.min(TEXTURE_SIZE, Math.round(srcHeight * scale)));
+        int outWidth = Math.max(1, Math.min(textureSize, Math.round(srcWidth * scale)));
+        int outHeight = Math.max(1, Math.min(textureSize, Math.round(srcHeight * scale)));
 
         NativeImage result = new NativeImage(outWidth, outHeight, true);
         for (int y = 0; y < outHeight; y++) {
@@ -411,7 +496,7 @@ public final class MediaThumbnails {
     }
 
     /** 网易图床支持 {@code ?param=WxH} 服务端缩放；其它来源原样请求。 */
-    private static String downloadUrl(String url) {
+    private static String downloadUrl(String url, int requestDimension) {
         if (url.indexOf('?') >= 0) {
             return url;
         }
@@ -428,7 +513,25 @@ public final class MediaThumbnails {
         if (!normalized.equals("music.126.net") && !normalized.endsWith(".music.126.net")) {
             return url;
         }
-        return url + "?param=" + REQUEST_DIMENSION + "y" + REQUEST_DIMENSION;
+        return url + "?param=" + requestDimension + "y" + requestDimension;
+    }
+
+    private Map<String, Entry> mapFor(boolean large) {
+        return large ? largeEntries : entries;
+    }
+
+    private static int textureSize(boolean large) {
+        return large ? TEXTURE_SIZE_LARGE : TEXTURE_SIZE;
+    }
+
+    private static int requestDimension(boolean large) {
+        return large ? REQUEST_DIMENSION_LARGE : REQUEST_DIMENSION;
+    }
+
+    private static String textureIdPath(boolean large, String url) {
+        // Identifier 的 path 只允许 a-z0-9/._-，大写会被 assertValidPath 直接拒掉
+        // （fromNamespaceAndPath 抛 IdentifierException），这里必须全小写。
+        return (large ? "thumb_large/" : "thumb/") + hash(url);
     }
 
     private static String hash(String url) {
