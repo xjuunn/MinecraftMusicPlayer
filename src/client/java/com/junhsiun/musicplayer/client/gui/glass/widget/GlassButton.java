@@ -3,6 +3,7 @@ package com.junhsiun.musicplayer.client.gui.glass.widget;
 import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
@@ -121,8 +122,12 @@ public class GlassButton extends AbstractButton {
             textColor = usable ? GlassTheme.TEXT : GlassWidgets.dim(GlassTheme.TEXT, 0.45F);
         }
 
-        int textY = y0 + Math.round((height - 8 * GlassTheme.Text.CONTROL) / 2.0F);
-        GlassWidgets.centeredText(graphics, Minecraft.getInstance().font, getMessage(),
+        // 文字垂直居中：用字体真实行高（乘缩放）算，不再用写死的 8（那是未缩放的基准行高，
+        // 缩放后实际行高不同，写死会让文字整体偏上）。
+        Font font = Minecraft.getInstance().font;
+        int textHeight = Math.round(font.lineHeight * GlassTheme.Text.CONTROL);
+        int textY = y0 + Math.round((height - textHeight) / 2.0F);
+        GlassWidgets.centeredText(graphics, font, getMessage(),
                 x0 + width / 2, textY,
                 GlassWidgets.dim(textColor, 0.10F * down), GlassTheme.Text.CONTROL);
     }

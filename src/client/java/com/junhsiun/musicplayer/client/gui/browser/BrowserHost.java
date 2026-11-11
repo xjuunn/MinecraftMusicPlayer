@@ -1,5 +1,6 @@
 package com.junhsiun.musicplayer.client.gui.browser;
 
+import com.junhsiun.musicplayer.client.gui.animation.HeroElement;
 import com.junhsiun.musicplayer.model.MediaItem;
 
 /**
@@ -12,6 +13,15 @@ public interface BrowserHost {
 
     /** 压入一页（新页面从右侧滑入）。 */
     void push(BrowserPage page);
+
+    /**
+     * 压入一页，并带上源元素的屏幕几何，用于共享元素（Hero）过渡。
+     *
+     * <p>默认退回 {@link #push(BrowserPage)}：不关心动画的宿主不用实现。</p>
+     */
+    default void push(BrowserPage page, HeroElement origin) {
+        push(page);
+    }
 
     /** 返回上一页（上一页从左侧滑入）。栈里只剩一页时什么都不做。 */
     void pop();
