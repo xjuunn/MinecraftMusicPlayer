@@ -318,6 +318,11 @@ public final class GlassPanel {
         // 带上当前裁剪区：玻璃面板是手写 BlitRenderState 提交的，原版 enableScissor 管不到，
         // 不传的话滚动区里的面板会画到列表外面去（行、徽标、播放按钮都会漏出来）
         ScreenRectangle clip = GlassWidgets.clipRectangle();
+        if (clip != null && (clip.width() <= 0 || clip.height() <= 0)) {
+            // 裁剪区退化（宽或高为 0）：scissorArea 为 0 会让渲染器 enableScissor 抛异常崩溃，
+            // 这种区域本来就不可见，直接不提交。
+            return;
+        }
         if (clip != null
                 && (x1 <= clip.left() || x0 >= clip.right() || y1 <= clip.top() || y0 >= clip.bottom())) {
             return;

@@ -1,5 +1,6 @@
 package com.junhsiun.musicplayer.client.gui.browser;
 
+import com.junhsiun.musicplayer.client.gui.animation.HeroElement;
 import com.junhsiun.musicplayer.client.gui.media.MediaListView;
 import com.junhsiun.musicplayer.model.MediaItem;
 import com.junhsiun.musicplayer.model.MediaKind;
@@ -31,8 +32,9 @@ public abstract class BrowserPage implements MediaListView.Listener {
     protected BrowserHost host;
 
     protected BrowserPage() {
-        // 浏览窗口内部全部走扁平视觉：整个窗口只有最外层是液态玻璃。
-        view.setMinimal(true);
+        // 浏览窗口内部也用液态玻璃渲染（行、徽标、行尾按钮都用折射玻璃），
+        // 小控件材质已在 GlassTheme 里调得更清澈，铺满内容也不会糊。
+        view.setMinimal(false);
         // 所有条目都可以点开详情页：歌曲有自己的居中详情页，其余进通用详情页。
         view.setSongsClickable(true);
     }
@@ -72,14 +74,26 @@ public abstract class BrowserPage implements MediaListView.Listener {
      */
     @Override
     public void onItemClick(MediaItem item) {
+        onItemClick(item, null);
+    }
+
+    /**
+     * 带源几何的点击：单曲页会把 {@code origin} 交给外壳做共享元素过渡。
+     *
+     * <p>单曲进入居中详情页，歌单/歌手/专辑等进入带头部区块的通用详情页；两种页面
+     * 都把自己的封面与标题作为共享元素目标，所以都能做 Hero 过渡。</p>
+     */
+    @Override
+    public void onItemClick(MediaItem item, HeroElement origin) {
         if (host == null || item == null || item.id().isBlank()) {
             return;
         }
         if (item.kind() == MediaKind.SONG) {
-            host.push(new SongDetailPage(item));
+            host.push(new SongDetailPage(item), origin);
             return;
         }
-        host.push(new DetailPage(item.kind(), item.id()));
+        // 歌单/歌手/专辑等：头部区块同样有封面和标题，传入条目快照即可做同样的过渡。
+        host.push(new DetailPage(item), origin);
     }
 
     /** 行尾"加入歌单"按钮：默认交给宿主发点播命令（有歌在播时即为追加到队列）。 */
