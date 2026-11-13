@@ -13,6 +13,8 @@ import com.junhsiun.musicplayer.client.gui.glass.GlassBackdrop;
 import com.junhsiun.musicplayer.client.gui.glass.GlassPanel;
 import com.junhsiun.musicplayer.client.gui.media.MediaThumbnails;
 import com.junhsiun.musicplayer.client.gui.window.GlassWindowScreen;
+import com.junhsiun.musicplayer.client.idle.IdleController;
+import com.junhsiun.musicplayer.client.idle.IdleRenderer;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.network.BgmConfigPayload;
@@ -122,6 +124,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             MusicPlayerClientConfigManager.tick();
             ClientJukeboxController.getInstance().tick(client);
             ClientMusicController.getInstance().tick();
+            IdleController.getInstance().tick(client);
             prefetchHeldCover(client);
             // consumeClick 会把一次按下消费成一次打开，长按不会连续弹窗
             while (OPEN_BROWSER.consumeClick()) {
@@ -169,6 +172,8 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             ClientMusicUiState.getInstance().clear();
             // 浏览界面的缩略图纹理同理：退出世界就放掉，别把上一局的封面带进下一局
             MediaThumbnails.getInstance().clear();
+            IdleController.getInstance().reset();
+            IdleRenderer.getInstance().reset();
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             MusicPlayerClientConfigManager.flushDirty();
@@ -177,6 +182,8 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             ClientJukeboxController.getInstance().stopAll("Client stopping.");
             CoverArtTextureCache.getInstance().shutdown();
             GlassBackdrop.getInstance().reset();
+            IdleController.getInstance().reset();
+            IdleRenderer.getInstance().reset();
         });
 
         // 主菜单（未连接存档）也使用客户端本地歌单替换原版背景音乐
