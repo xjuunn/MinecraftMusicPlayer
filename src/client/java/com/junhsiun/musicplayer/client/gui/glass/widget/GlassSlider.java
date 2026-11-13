@@ -99,10 +99,6 @@ public class GlassSlider extends AbstractSliderButton {
     @Override
     public void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
         boolean usable = isActive();
-<<<<<<< HEAD
-        hover.tick(isHoveredOrFocused() && usable, GlassTheme.Motion.HOVER);
-        grab.tickSpring(held && usable, held ? GlassTheme.Motion.PRESS : GlassTheme.Motion.RELEASE);
-=======
         hover.tick((isHovered() || isFocused()) && usable, GlassTheme.Motion.HOVER);
         float lift = hover.eased();
 

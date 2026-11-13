@@ -50,6 +50,14 @@ import java.util.function.Supplier;
 public final class MusicQueueService {
     private static final long FALLBACK_TRACK_TIMEOUT_MS = 10 * 60_000L;
     private static final int PLAYLIST_BATCH_SIZE = 8;
+    /**
+     * 当前曲目结束、下一首还没接上时最多等这么久。
+     *
+     * <p>正常情况下换曲只隔一次异步解析，很快就会 {@code startTrack} 并重新广播。
+     * 如果超过这个宽限期仍然空着（例如播客节目加载失败），说明播放真的结束了，
+     * 必须补发一次停止状态，否则客户端会一直停在上一首。</p>
+     */
+    private static final long PLAYBACK_EMPTY_BROADCAST_GRACE_MILLIS = 6_000L;
 
     private final Deque<QueuedTrack> queue = new ArrayDeque<>();
     private final Deque<QueuedTrack> playlistQueue = new ArrayDeque<>();
@@ -117,6 +125,15 @@ public final class MusicQueueService {
     private boolean radioPlaylistMode = false;
     private String radioName = "";
     private final Map<String, TrackInfo> radioResolvedTracks = new HashMap<>();
+    /**
+     * 正在异步解析的播客节目数（只在服务端线程访问）。
+     *
+     * <p>播客是一个节目解析完再预载下一个：队列暂时为空但节目还在加载时不能当成播放结束。
+     * 反过来，队列为空且没有在途解析就说明真的没东西可放了，必须正常收尾。</p>
+     */
+    private int pendingRadioLoads;
+    /** {@link #currentPlayback} 变空（且可能还没广播停止）的时刻；0 表示无需兜底。 */
+    private long playbackEmptySinceMillis;
 
     // ── Public query methods ─────────────────────────────────────────
 
@@ -317,6 +334,13 @@ public final class MusicQueueService {
             }
         } else {
             uiStateTicks = 0;
+            // 兜底：任何把 currentPlayback 清空却没广播的路径都可能让客户端停在上一首，
+            // 空档超过宽限期仍没有新曲目就补发一次停止状态。
+            if (playbackEmptySinceMillis > 0L
+                    && now - playbackEmptySinceMillis >= PLAYBACK_EMPTY_BROADCAST_GRACE_MILLIS) {
+                playbackEmptySinceMillis = 0L;
+                broadcastUiState(server);
+            }
         }
 
         if (currentPlayback != null) {
@@ -1008,10 +1032,12 @@ public final class MusicQueueService {
             if (onSuccess != null) server.execute(onSuccess);
             return CompletableFuture.completedFuture(null);
         }
+        pendingRadioLoads++;
         ProgramInfo prog = cachedRadioPrograms.get(index);
         if (prog.mainTrackId().isBlank()) {
             server.execute(() -> {
                 playlistTotalTracks--;
+                pendingRadioLoads = Math.max(0, pendingRadioLoads - 1);
                 if (onSuccess != null) onSuccess.run();
                 if (currentPlayback == null && radioPlaylistMode) advance(server, null);
             });
@@ -1043,6 +1069,7 @@ public final class MusicQueueService {
                                 // Don't add more for this requester - but still track index? No, we failed to add.
                                 // Just skip adding to queue; we'll adjust total
                                 playlistTotalTracks--;
+                                pendingRadioLoads = Math.max(0, pendingRadioLoads - 1);
                                 if (currentPlayback == null && radioPlaylistMode) {
                                     advance(server, null);
                                 }
@@ -1052,6 +1079,7 @@ public final class MusicQueueService {
                                         "", playlistRequesterId, playlistRequesterName,
                                         programTrack.sourceUrls(), programTrack.coverUrl()));
                                 playlistTrackIndex++;
+                                pendingRadioLoads = Math.max(0, pendingRadioLoads - 1);
                             }
                             if (currentPlayback == null && source == null) {
                                 advance(server, null);
@@ -1060,6 +1088,7 @@ public final class MusicQueueService {
                     } else {
                         server.execute(() -> {
                             playlistTotalTracks--;
+                            pendingRadioLoads = Math.max(0, pendingRadioLoads - 1);
                             if (currentPlayback == null && radioPlaylistMode) advance(server, null);
                         });
                     }
@@ -1068,6 +1097,7 @@ public final class MusicQueueService {
                     MusicPlayerMod.LOGGER.trace("播客节目解析失败: {} - {}", prog.name(), rootMessage(ex));
                     server.execute(() -> {
                         playlistTotalTracks--;
+                        pendingRadioLoads = Math.max(0, pendingRadioLoads - 1);
                         if (currentPlayback == null && radioPlaylistMode) advance(server, null);
                     });
                     return null;
@@ -1091,6 +1121,7 @@ public final class MusicQueueService {
         radioProgramIndex = 0;
         radioPlaylistMode = false;
         radioResolvedTracks.clear();
+        pendingRadioLoads = 0;
     }
 
     private void loadNextPlaylistTrack(MinecraftServer server) {
@@ -1181,13 +1212,19 @@ public final class MusicQueueService {
         currentPlayback = null;
         paused = false;
         pausedAtMillis = 0L;
+        playbackEmptySinceMillis = 0L;
         voteSkipPlayers.clear();
         clearLyrics(server);
         playlistQueue.clear();
         resetPlaylistState();
         refreshTrackCache();
         String payload = payloadReason(reason);
-        server.getPlayerList().getPlayers().forEach(player -> sendStop(player, payload));
+        server.getPlayerList().getPlayers().forEach(player -> {
+            sendStop(player, payload);
+            // 队列已经清空：打开着「当前队列」页的客户端立即同步一次，
+            // 不必等下一次低频轮询，避免最后一首已经停播却还留在列表里。
+            sendQueue(player);
+        });
         broadcastUiState(server);
         if (reason != null && !reason.getString().isBlank()) {
             broadcast(server, reason.copy().withStyle(ChatFormatting.YELLOW));
@@ -1355,6 +1392,7 @@ public final class MusicQueueService {
         pausedAtMillis = 0L;
         voteSkipPlayers.clear();
         clearLyrics(server);
+        playbackEmptySinceMillis = System.currentTimeMillis();
 
         // Priority 1: normal queue (high-priority "macro" tasks)
         if (!queue.isEmpty()) {
@@ -1397,7 +1435,10 @@ public final class MusicQueueService {
         // Both empty
         if (playlistMode) {
             if (radioPlaylistMode) {
-                if (playlistTrackIndex < playlistTotalTracks) {
+                if (playlistTrackIndex < playlistTotalTracks && pendingRadioLoads > 0) {
+                    // 还有节目正在异步解析：解析完成后会再次调用 advance。
+                    // 只有「还有剩余节目但没有在途解析」才算加载失败，必须继续往下收尾，
+                    // 否则客户端会永远停在上一首。
                     return;
                 }
             }
@@ -1476,6 +1517,7 @@ public final class MusicQueueService {
         currentPlayback = new CurrentPlayback(track, now, now + timeout, requesterId, requesterName);
         paused = false;
         pausedAtMillis = 0L;
+        playbackEmptySinceMillis = 0L;
         // 新曲：等客户端回报 started 之前不推进歌词，并丢掉上一条的位置
         clientPlaybackStarted = false;
         clientPositionMillis = -1L;
