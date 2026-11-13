@@ -5,8 +5,12 @@
   "client": [
     "ClientLevelAccessor",
     "GameRendererMixin",
+    "HudAccessor",
+    "HudMixin",
+    "KeyboardHandlerMixin",
     "LevelEventHandlerAccessor",
     "LevelEventHandlerMixin",
+    "MouseHandlerMixin",
     "MusicManagerAccessor",
     "MusicManagerMixin",
     "OptionsMixin",
