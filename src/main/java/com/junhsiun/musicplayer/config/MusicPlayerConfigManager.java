@@ -94,12 +94,16 @@ public final class MusicPlayerConfigManager {
         if (config.glass == null) {
             config.glass = new MusicPlayerConfig.GlassSettings();
         }
+        if (config.idle == null) {
+            config.idle = new MusicPlayerConfig.IdleSettings();
+        }
     }
 
     /** 规范化<b>全部分节</b>。新增分节记得加到这里。 */
     private static void normalizeAll() {
         config.client.normalize();
         config.glass.normalize();
+        config.idle.normalize();
     }
 
     /** 强制重新读取磁盘上的配置，供 {@code /musicplayer config reload} 使用。 */
@@ -154,6 +158,12 @@ public final class MusicPlayerConfigManager {
     /** 一键把<b>客户端设置</b>恢复默认并立即落盘。 */
     public static void resetClient() {
         config.client.resetToDefaults();
+        save();
+    }
+
+    /** 一键把<b>挂机纯享</b>设置恢复默认并立即落盘。 */
+    public static void resetIdle() {
+        config.idle.resetToDefaults();
         save();
     }
 
