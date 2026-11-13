@@ -1,0 +1,35 @@
+{
+  "type": "crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "IAI"
+  ],
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "A": "minecraft:amethyst_shard"
+  },
+  "result": {
+    "id": "minecraft:music_disc_cat",
+    "count": 1,
+    "components": {
+      "!minecraft:jukebox_playable": {},
+      "minecraft:custom_name": {
+        "translate": "musicplayer.disc.master",
+        "fallback": "Music Disc Master",
+        "color": "light_purple",
+        "italic": false
+      },
+      "minecraft:lore": [
+        {
+          "translate": "musicplayer.disc.master_lore",
+          "fallback": "Must be burned before it can be played",
+          "color": "dark_gray",
+          "italic": false
+        }
+      ],
+      "minecraft:custom_data": {
+        "musicplayer_disc_master": true
+      }
+    }
+  }
+}
