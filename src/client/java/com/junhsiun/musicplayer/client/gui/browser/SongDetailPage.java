@@ -2,6 +2,7 @@ package com.junhsiun.musicplayer.client.gui.browser;
 
 import com.junhsiun.musicplayer.client.ClientMusicUiState;
 import com.junhsiun.musicplayer.client.media.MediaBrowserService;
+import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.model.LyricLine;
 import com.junhsiun.musicplayer.model.MediaDetail;
 import com.junhsiun.musicplayer.model.MediaItem;
@@ -137,6 +138,25 @@ public final class SongDetailPage extends BrowserPage {
             return;
         }
         host.play(new MediaItem(id, MediaKind.SONG, titleText(),
+                artistText(), coverUrl(), durationText()));
+    }
+
+    /**
+     * 把本页这首刻录到主手持有的唱片。
+     *
+     * @return 当前是否满足刻录条件（主手有可刻录唱片）
+     */
+    public boolean canBurnThis() {
+        Minecraft minecraft = Minecraft.getInstance();
+        return !id.isBlank() && minecraft.player != null
+                && MusicDiscHelper.isBurnableDisc(minecraft.player.getMainHandItem());
+    }
+
+    public void burnThis() {
+        if (host == null || !canBurnThis()) {
+            return;
+        }
+        host.burn(new MediaItem(id, MediaKind.SONG, titleText(),
                 artistText(), coverUrl(), durationText()));
     }
 

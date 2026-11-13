@@ -104,6 +104,14 @@ public abstract class BrowserPage implements MediaListView.Listener {
         }
     }
 
+    /** 行尾最右侧的刻录按钮：交给宿主发送 {@code /music burn song <id>}。 */
+    @Override
+    public void onTrailingPlay(MediaItem item) {
+        if (host != null) {
+            host.burn(item);
+        }
+    }
+
     /** 列表末尾的"加载更多"。默认什么都不做（搜索页是翻页，不是追加）。 */
     @Override
     public void onLoadMore() {

@@ -32,6 +32,14 @@ public interface BrowserHost {
     /** 按条目类型发送点播命令，效果等同于在聊天栏里敲 {@code /music play ...}。 */
     void play(MediaItem item);
 
+    /**
+     * 把这首歌刻录到主手持有的唱片，等同于 {@code /music burn song <id>}。
+     *
+     * <p>只有手持可刻录唱片时界面才会显示刻录入口；宿主仍应再校验一次，避免手持物
+     * 在点击与发送命令之间发生变化。</p>
+     */
+    void burn(MediaItem item);
+
     /** 跳过当前歌曲，等同于在聊天栏执行 {@code /music skip}。 */
     void skip();
 

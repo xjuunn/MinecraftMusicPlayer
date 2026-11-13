@@ -362,7 +362,8 @@ public final class ClientBgmController {
 
     private void playTrack(TrackInfo track) {
         ClientMusicController.getInstance().playBgm(
-                track.id(), track.sourceUrls(), track.title(), track.artist(), bgmListener);
+                track.id(), track.sourceUrls(), track.title(), track.artist(),
+                track.coverUrl(), track.durationMillis(), bgmListener);
     }
 
     private TrackInfo pollPool() {

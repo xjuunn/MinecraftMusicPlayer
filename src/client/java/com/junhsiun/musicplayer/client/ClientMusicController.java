@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.client;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
+import com.junhsiun.musicplayer.client.idle.AudioAnalyzer;
 import com.junhsiun.musicplayer.network.MusicControlPayload;
 import com.junhsiun.musicplayer.network.MusicPlaybackReportPayload;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
@@ -48,8 +49,15 @@ public final class ClientMusicController {
     private volatile String currentTrackId = "";
     private volatile boolean backgroundMusicPlaying;
     private volatile boolean bgmPlaying;
+    /** 最近一次「带原因的停止」时刻：用户暂停 / 停止 / 退出播放、关掉背景音乐等。 */
+    private volatile long explicitStopMillis;
     private volatile BgmListener bgmListener;
     private long lastPositionReportTime;
+    /** 当前曲目的展示信息（队列播放与网络 BGM 共用），供纯享模式等界面读取。 */
+    private volatile String currentTitle = "";
+    private volatile String currentArtist = "";
+    private volatile String currentCoverUrl = "";
+    private volatile long currentDurationMillis;
 
     private ClientMusicController() {
     }
@@ -65,6 +73,55 @@ public final class ClientMusicController {
     /** 网络背景音乐是否正在播放（与队列播放标志相互独立）。 */
     public boolean isBgmPlaying() {
         return bgmPlaying;
+    }
+
+    /** 当前曲目 ID（队列播放与网络 BGM 共用），用于取歌词。 */
+    public String currentTrackId() {
+        return currentTrackId;
+    }
+
+    /** 当前曲目标题。 */
+    public String currentTitle() {
+        return currentTitle;
+    }
+
+    /** 当前曲目艺术家 / 副标题。 */
+    public String currentArtist() {
+        return currentArtist;
+    }
+
+    /** 当前曲目封面地址；未知时为空串。 */
+    public String currentCoverUrl() {
+        return currentCoverUrl;
+    }
+
+    /** 当前曲目时长（毫秒）；未知为 0。 */
+    public long currentDurationMillis() {
+        return currentDurationMillis;
+    }
+
+    /**
+     * 最近一次「显式停止」的时刻（{@code Util.getMillis()} 时间轴）。
+     *
+     * <p>换曲时的内部 {@code stop(null)} 不算显式停止：它只是把上一首收掉，
+     * 紧接着就会播放下一首。只有玩家暂停 / 停止 / 退出、服务端主动停止、
+     * 关闭网络背景音乐这类带原因的停止才更新。挂机纯享用它区分「换曲空档」与「真的停了」。</p>
+     */
+    public long lastExplicitStopMillis() {
+        return explicitStopMillis;
+    }
+
+    /** 当前播放进度（毫秒）：直接来自声卡位置，未在播放返回 0。 */
+    public long currentElapsedMillis() {
+        if (!backgroundMusicPlaying && !bgmPlaying) {
+            return 0L;
+        }
+        try {
+            int position = audioDevice.getPosition();
+            return position <= 0 ? 0L : position;
+        } catch (RuntimeException ignored) {
+            return 0L;
+        }
     }
 
     public void tick() {
@@ -99,12 +156,19 @@ public final class ClientMusicController {
             playbackThread = null;
         }
         audioDevice.reset();
+        AudioAnalyzer.reset();
         currentTrackId = "";
+        currentTitle = "";
+        currentArtist = "";
+        currentCoverUrl = "";
+        currentDurationMillis = 0L;
         backgroundMusicPlaying = false;
         bgmPlaying = false;
         bgmListener = null;
         lastPositionReportTime = 0L;
         if (reason != null && !reason.isBlank()) {
+            // 只有带原因的停止才算「真的停了」，供纯享模式区分换曲空档。
+            explicitStopMillis = net.minecraft.util.Util.getMillis();
             MusicPlayerMod.LOGGER.info("客户端已停止播放: {}", reason);
         }
     }
@@ -112,6 +176,8 @@ public final class ClientMusicController {
     private synchronized void play(String trackId, List<String> urls, String title, String subtitle, long offsetMillis) {
         stop(null);
         currentTrackId = trackId == null ? "" : trackId;
+        currentTitle = title == null ? "" : title;
+        currentArtist = subtitle == null ? "" : subtitle;
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft != null && minecraft.getMusicManager() != null) {
             minecraft.getMusicManager().stopPlaying();
@@ -127,9 +193,14 @@ public final class ClientMusicController {
      * 静默播放网络背景音乐：不上报服务端、不触发歌词与提示，
      * 播放结束/失败通过 {@code listener} 回调给 BGM 控制器。
      */
-    public synchronized void playBgm(String trackId, List<String> urls, String title, String subtitle, BgmListener listener) {
+    public synchronized void playBgm(String trackId, List<String> urls, String title, String subtitle,
+                                     String coverUrl, long durationMillis, BgmListener listener) {
         stop(null);
         currentTrackId = trackId == null ? "" : trackId;
+        currentTitle = title == null ? "" : title;
+        currentArtist = subtitle == null ? "" : subtitle;
+        currentCoverUrl = coverUrl == null ? "" : coverUrl;
+        currentDurationMillis = Math.max(0L, durationMillis);
         bgmPlaying = true;
         bgmListener = listener;
         audioDevice.setSeekPosition(0L);
@@ -333,6 +404,8 @@ public final class ClientMusicController {
                 }
                 seekPositionMillis = 0L;
             }
+            AudioAnalyzer.feed(samples, offs, len,
+                    Math.max(1, audioFormat.getChannels()), audioFormat.getSampleRate());
             byte[] buffer = getByteArray(len * 2);
             int index = 0;
             for (int i = offs; i < offs + len; i++) {

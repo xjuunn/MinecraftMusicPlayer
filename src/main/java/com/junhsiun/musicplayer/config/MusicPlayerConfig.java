@@ -72,6 +72,8 @@ public class MusicPlayerConfig {
     public ClientSettings client = new ClientSettings();
     /** 液态玻璃外观。 */
     public GlassSettings glass = new GlassSettings();
+    /** 挂机「纯享」特效。 */
+    public IdleSettings idle = new IdleSettings();
 
     /** 可规范化 / 可重置的配置分节。新增分节请实现本接口。 */
     public interface Section {
@@ -225,6 +227,94 @@ public class MusicPlayerConfig {
                 return fallback;
             }
             return value;
+        }
+    }
+
+    /**
+     * 挂机「纯享」特效设置。
+     *
+     * <p>长时间无输入时把 HUD 隐藏，然后在当前画面上叠一层全屏视觉特效与歌词。
+     * 所有参数都是纯客户端本地设置，不会同步到服务端。</p>
+     */
+    public static final class IdleSettings implements Section {
+        public static final boolean DEFAULT_ENABLED = true;
+        public static final String DEFAULT_EFFECT = "liquid";
+        public static final String DEFAULT_FILTER = "none";
+        public static final int DEFAULT_DELAY_SECONDS = 60;
+        public static final double DEFAULT_INTENSITY = 1.0D;
+        public static final double DEFAULT_LYRIC_SCALE = 1.0D;
+        public static final boolean DEFAULT_SHOW_LYRICS = true;
+        public static final int MIN_DELAY_SECONDS = 15;
+        public static final int MAX_DELAY_SECONDS = 300;
+
+        /** 是否启用挂机纯享模式。 */
+        public boolean enabled = DEFAULT_ENABLED;
+        /** 特效种类：{@code liquid} / {@code aurora} / {@code cinematic}。 */
+        public String effect = DEFAULT_EFFECT;
+        /** 背景滤镜：{@code none} / {@code soft} / {@code warm} / {@code cool} / {@code mono} / {@code neon}。 */
+        public String filter = DEFAULT_FILTER;
+        /** 判定挂机所需的无输入时长（秒）。 */
+        public int delaySeconds = DEFAULT_DELAY_SECONDS;
+        /** 特效强度，0.2 - 1.6。 */
+        public double intensity = DEFAULT_INTENSITY;
+        /** 歌词字号倍率，0.6 - 1.6。 */
+        public double lyricScale = DEFAULT_LYRIC_SCALE;
+        /** 是否在纯享模式中显示歌词与曲目信息。 */
+        public boolean showLyrics = DEFAULT_SHOW_LYRICS;
+
+        @Override
+        public void normalize() {
+            effect = normalizeEffect(effect);
+            filter = normalizeFilter(filter);
+            if (delaySeconds < MIN_DELAY_SECONDS || delaySeconds > MAX_DELAY_SECONDS) {
+                delaySeconds = DEFAULT_DELAY_SECONDS;
+            }
+            if (Double.isNaN(intensity) || intensity < 0.2D || intensity > 1.6D) {
+                intensity = DEFAULT_INTENSITY;
+            }
+            if (Double.isNaN(lyricScale) || lyricScale < 0.6D || lyricScale > 1.6D) {
+                lyricScale = DEFAULT_LYRIC_SCALE;
+            }
+        }
+
+        @Override
+        public void resetToDefaults() {
+            enabled = DEFAULT_ENABLED;
+            effect = DEFAULT_EFFECT;
+            filter = DEFAULT_FILTER;
+            delaySeconds = DEFAULT_DELAY_SECONDS;
+            intensity = DEFAULT_INTENSITY;
+            lyricScale = DEFAULT_LYRIC_SCALE;
+            showLyrics = DEFAULT_SHOW_LYRICS;
+        }
+
+        /** 把任意输入规范成三种预设之一；非法值回退 {@link #DEFAULT_EFFECT}。 */
+        public static String normalizeEffect(String raw) {
+            if (raw == null) {
+                return DEFAULT_EFFECT;
+            }
+            return switch (raw.trim().toLowerCase(Locale.ROOT)) {
+                case "aurora" -> "aurora";
+                case "cinematic" -> "cinematic";
+                case "liquid" -> "liquid";
+                default -> DEFAULT_EFFECT;
+            };
+        }
+
+        /** 把任意输入规范成六种滤镜之一；非法值回退 {@link #DEFAULT_FILTER}。 */
+        public static String normalizeFilter(String raw) {
+            if (raw == null) {
+                return DEFAULT_FILTER;
+            }
+            return switch (raw.trim().toLowerCase(Locale.ROOT)) {
+                case "soft" -> "soft";
+                case "warm" -> "warm";
+                case "cool" -> "cool";
+                case "mono" -> "mono";
+                case "neon" -> "neon";
+                case "none" -> "none";
+                default -> DEFAULT_FILTER;
+            };
         }
     }
 
