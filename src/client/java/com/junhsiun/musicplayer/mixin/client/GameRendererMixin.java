@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.mixin.client;
 
 import com.junhsiun.musicplayer.client.gui.glass.GlassPanel;
+import com.junhsiun.musicplayer.client.idle.IdleRenderer;
 import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -31,5 +32,6 @@ public abstract class GameRendererMixin {
     )
     private void musicplayer$captureGlassBackdrop(CallbackInfo callbackInfo) {
         GlassPanel.beforeGui();
+        IdleRenderer.beforeGui(((GameRenderer) (Object) this).gameRenderState().guiRenderState);
     }
 }

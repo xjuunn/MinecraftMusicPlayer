@@ -21,6 +21,7 @@ import com.junhsiun.musicplayer.client.gui.glass.widget.GlassTextField;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassToggle;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
 import com.junhsiun.musicplayer.client.gui.glass.widget.ScrollPanel;
+import com.junhsiun.musicplayer.client.gui.icon.SvgIcon;
 import com.junhsiun.musicplayer.client.gui.icon.SvgIcons;
 import com.junhsiun.musicplayer.client.gui.media.MediaListView;
 import com.junhsiun.musicplayer.client.gui.window.GlassWindow;
@@ -29,9 +30,13 @@ import com.junhsiun.musicplayer.client.gui.window.WindowAnchor;
 import com.junhsiun.musicplayer.client.gui.window.WindowAnimations;
 import com.junhsiun.musicplayer.client.gui.window.WindowBounds;
 import com.junhsiun.musicplayer.client.gui.window.WindowSize;
+import com.junhsiun.musicplayer.client.idle.IdleController;
+import com.junhsiun.musicplayer.client.idle.IdleEffect;
+import com.junhsiun.musicplayer.client.idle.IdleFilter;
 import com.junhsiun.musicplayer.client.media.MediaBrowserService;
 import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
+import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.model.MediaDetail;
 import com.junhsiun.musicplayer.model.MediaItem;
 import com.junhsiun.musicplayer.model.MediaKind;
@@ -298,6 +303,43 @@ public final class MusicBrowserScreen extends GlassWindowScreen implements Brows
         queuePollTicks = QUEUE_POLL_INTERVAL - 1;
     }
 
+    /**
+     * 把歌曲刻录到主手持有的唱片。
+     *
+     * <p>走聊天栏同一条命令链路，曲目解析、扣除唱片、写入 NBT 全部由服务端完成；
+     * 界面只负责发 ID。点击瞬间再确认一次主手，避免列表画出来之后玩家已经换了物品。</p>
+     */
+    @Override
+    public void burn(MediaItem item) {
+        if (item == null || item.id().isBlank() || item.kind() != MediaKind.SONG) {
+            return;
+        }
+        if (!holdsBurnableDisc()) {
+            return;
+        }
+        sendCommand("music burn song " + item.id());
+    }
+
+    /** 主手是否拿着可刻录的唱片；刻录命令只认主手，界面据此决定是否显示刻录按钮。 */
+    private static boolean holdsBurnableDisc() {
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft.player != null
+                && MusicDiscHelper.isBurnableDisc(minecraft.player.getMainHandItem());
+    }
+
+    /**
+     * 每帧把「手上有没有唱片」同步给所有页面的列表。
+     *
+     * <p>按钮显示与否取决于玩家实时手持物，而列表控件在切页时会被复用，不能只在
+     * {@code buildContent} 时配置一次。这里只改一个图标字段，不会重建控件、不影响滚动位置。</p>
+     */
+    private void syncDiscAction() {
+        SvgIcon icon = holdsBurnableDisc() ? SvgIcons.DISC : null;
+        for (BrowserPage page : stack) {
+            page.view().setTrailingActionIcon(icon);
+        }
+    }
+
     @Override
     public void seekForward() {
         sendCommand("music seek 10");
@@ -551,6 +593,8 @@ public final class MusicBrowserScreen extends GlassWindowScreen implements Brows
         }
         MediaListView view = page.view();
         view.setRectangle(width, listHeight, x, top);
+        // 主手拿着可刻录唱片时，行尾最右侧多一个「刻录」按钮；换手由 tick 每帧同步。
+        view.setTrailingActionIcon(holdsBurnableDisc() ? SvgIcons.DISC : null);
         addRenderableWidget(view);
         page.apply();
 
@@ -718,10 +762,21 @@ public final class MusicBrowserScreen extends GlassWindowScreen implements Brows
                     MusicPlayerConfigManager.save();
                     ClientBgmController.getInstance().onGlobalToggleChanged();
                 });
-        rowY += SETTINGS_ROW_STEP;
+        rowY += SETTINGS_ROW_STEP + 8;
+
+        // 挂机纯享也属于纯客户端行为，直接并在这里，避免为它单开一个标签页。
+        rowY = addSectionHeader(x, rowY, width, "musicplayer.settings.section.immersive",
+                Component.translatable("musicplayer.settings.idle_preview"), () -> {
+                    IdleController.getInstance().requestPreview();
+                    onClose();
+                });
+        rowY = buildIdleSettings(x, rowY, width);
+
+        rowY += SETTINGS_ROW_STEP + 8;
         addSettingWidget(GlassButton.regular(x, rowY, width,
                 Component.translatable("musicplayer.settings.reset_defaults"), () -> {
                     MusicPlayerConfigManager.resetClient();
+                    MusicPlayerConfigManager.resetIdle();
                     ClientBgmController.getInstance().onGlobalToggleChanged();
                     settingsRelayoutPending = true;
                 }));
@@ -774,6 +829,114 @@ public final class MusicBrowserScreen extends GlassWindowScreen implements Brows
                     MusicPlayerConfigManager.save();
                 });
         addSettingWidget(picker);
+    }
+
+    /**
+     * 挂机纯享的表单内容。
+     *
+     * <p>这些设置属于纯客户端行为，直接嵌在客户端标签页里（见
+     * {@link #buildClientSettings}），不再单独占一个标签页。返回下一行的起点。</p>
+     */
+    private int buildIdleSettings(int x, int y, int width) {
+        MusicPlayerConfig.IdleSettings idle = MusicPlayerConfigManager.get().idle;
+        int rowY = y;
+        addToggleRow(x, rowY, width, "musicplayer.settings.idle_enabled",
+                idle.enabled, true, value -> {
+                    idle.enabled = value;
+                    MusicPlayerConfigManager.save();
+                    if (!value) {
+                        IdleController.getInstance().reset();
+                    }
+                });
+        rowY += SETTINGS_ROW_STEP;
+        addIdleEffectRow(x, rowY, width, idle);
+        rowY += SETTINGS_ROW_STEP;
+        addIdleFilterRow(x, rowY, width, idle);
+        rowY += SETTINGS_ROW_STEP;
+        addSliderRow(x, rowY, width, "musicplayer.settings.idle_delay",
+                MusicPlayerConfig.IdleSettings.MIN_DELAY_SECONDS,
+                MusicPlayerConfig.IdleSettings.MAX_DELAY_SECONDS,
+                idle.delaySeconds, value -> formatInteger(value) + "s",
+                value -> {
+                    idle.delaySeconds = (int) Math.round(value);
+                    MusicPlayerConfigManager.markDirty();
+                },
+                value -> MusicPlayerConfigManager.save());
+        rowY += SETTINGS_ROW_STEP;
+        addSliderRow(x, rowY, width, "musicplayer.settings.idle_intensity", 0.2D, 1.6D,
+                idle.intensity, value -> String.format(Locale.ROOT, "%.2fx", value),
+                value -> {
+                    idle.intensity = value;
+                    MusicPlayerConfigManager.markDirty();
+                },
+                value -> MusicPlayerConfigManager.save());
+        rowY += SETTINGS_ROW_STEP;
+        addSliderRow(x, rowY, width, "musicplayer.settings.idle_lyric_scale", 0.6D, 1.6D,
+                idle.lyricScale, value -> String.format(Locale.ROOT, "%.2fx", value),
+                value -> {
+                    idle.lyricScale = value;
+                    MusicPlayerConfigManager.markDirty();
+                },
+                value -> MusicPlayerConfigManager.save());
+        rowY += SETTINGS_ROW_STEP;
+        addToggleRow(x, rowY, width, "musicplayer.settings.idle_show_lyrics",
+                idle.showLyrics, true, value -> {
+                    idle.showLyrics = value;
+                    MusicPlayerConfigManager.save();
+                });
+        return rowY + SETTINGS_ROW_STEP;
+    }
+
+    /** 特效预设选择：与 {@link IdleEffect} 的枚举顺序一一对应。 */
+    private void addIdleEffectRow(int x, int y, int width, MusicPlayerConfig.IdleSettings idle) {
+        int controlWidth = controlWidth(width);
+        int labelWidth = Math.max(1, width - controlWidth - 12);
+        addSettingWidget(new GlassLabel(x, y, labelWidth, SETTINGS_ROW_HEIGHT,
+                Component.translatable("musicplayer.settings.idle_effect"),
+                GlassTheme.Text.VALUE, FlatTheme.TEXT_SECONDARY));
+
+        IdleEffect[] effects = IdleEffect.values();
+        List<Component> labels = new ArrayList<>(effects.length);
+        for (IdleEffect effect : effects) {
+            labels.add(Component.translatable(effect.translationKey()));
+        }
+        int selected = IdleEffect.indexOf(IdleEffect.of(idle.effect));
+        GlassTabs tabs = new GlassTabs(x + width - controlWidth, y + 2,
+                controlWidth, 18, labels, selected);
+        tabs.onSelect(index -> {
+            if (index < 0 || index >= effects.length) {
+                return;
+            }
+            idle.effect = effects[index].key();
+            MusicPlayerConfigManager.save();
+        });
+        addSettingWidget(tabs);
+    }
+
+    /** 背景滤镜选择：与 {@link IdleFilter} 的枚举顺序一一对应。 */
+    private void addIdleFilterRow(int x, int y, int width, MusicPlayerConfig.IdleSettings idle) {
+        int controlWidth = controlWidth(width);
+        int labelWidth = Math.max(1, width - controlWidth - 12);
+        addSettingWidget(new GlassLabel(x, y, labelWidth, SETTINGS_ROW_HEIGHT,
+                Component.translatable("musicplayer.settings.idle_filter"),
+                GlassTheme.Text.VALUE, FlatTheme.TEXT_SECONDARY));
+
+        IdleFilter[] filters = IdleFilter.values();
+        List<Component> labels = new ArrayList<>(filters.length);
+        for (IdleFilter filter : filters) {
+            labels.add(Component.translatable(filter.translationKey()));
+        }
+        int selected = IdleFilter.indexOf(IdleFilter.of(idle.filter));
+        GlassTabs tabs = new GlassTabs(x + width - controlWidth, y + 2,
+                controlWidth, 18, labels, selected);
+        tabs.onSelect(index -> {
+            if (index < 0 || index >= filters.length) {
+                return;
+            }
+            idle.filter = filters[index].key();
+            MusicPlayerConfigManager.save();
+        });
+        addSettingWidget(tabs);
     }
 
     /**
@@ -875,6 +1038,18 @@ public final class MusicBrowserScreen extends GlassWindowScreen implements Brows
     private int addSectionHeader(int x, int y, int width, String labelKey) {
         addSettingWidget(new GlassLabel(x, y + 3, width, 14,
                 Component.translatable(labelKey), GlassTheme.Text.LABEL, FlatTheme.TEXT_TERTIARY));
+        return y + SETTINGS_ROW_STEP;
+    }
+
+    /** 右侧带操作按钮的分组标题；按钮与标题同一行，返回下一行的起点。 */
+    private int addSectionHeader(int x, int y, int width, String labelKey,
+                                 Component actionLabel, Runnable action) {
+        int buttonWidth = Math.min(64, Math.max(48, Math.round(width * 0.2F)));
+        int labelWidth = Math.max(1, width - buttonWidth - 12);
+        addSettingWidget(new GlassLabel(x, y + 3, labelWidth, 14,
+                Component.translatable(labelKey), GlassTheme.Text.LABEL, FlatTheme.TEXT_TERTIARY));
+        addSettingWidget(GlassButton.regular(x + width - buttonWidth, y, buttonWidth,
+                actionLabel, action));
         return y + SETTINGS_ROW_STEP;
     }
 
@@ -1142,6 +1317,8 @@ public final class MusicBrowserScreen extends GlassWindowScreen implements Brows
             super.tick();
             return;
         }
+
+        syncDiscAction();
 
         if (refocusOnTick) {
             refocusOnTick = false;
