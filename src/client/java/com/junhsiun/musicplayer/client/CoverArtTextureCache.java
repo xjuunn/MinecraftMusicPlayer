@@ -151,10 +151,6 @@ public final class CoverArtTextureCache {
                     throw new IOException("Image dimensions out of range: " + image.getWidth() + "x" + image.getHeight());
                 }
                 NativeImage processedImage = toCircularTexture(image);
-<<<<<<< HEAD
-                ResourceLocation textureId = ResourceLocation.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "cover/" + hashUrl(coverUrl));
-                Minecraft.getInstance().execute(() -> registerTexture(coverUrl, textureId, processedImage));
-=======
                 ResourceLocation textureId = ResourceLocation.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "cover/" + hashUrl(coverUrl));
                 Minecraft.getInstance().execute(() -> registerTexture(coverUrl, token, textureId, processedImage, startedNanos));
             }
@@ -315,15 +311,6 @@ public final class CoverArtTextureCache {
         return Math.min(1.0F, value);
     }
 
-<<<<<<< HEAD
-    private record CacheEntry(ResourceLocation textureId, boolean loading, boolean failed) {
-        public static CacheEntry pending() {
-            return new CacheEntry(null, true, false);
-        }
-
-        public static CacheEntry ready(ResourceLocation textureId) {
-            return new CacheEntry(textureId, false, false);
-=======
     private record CacheEntry(ResourceLocation textureId, boolean loading, boolean failed, long token, long stampMillis) {
         public static CacheEntry pending(long token) {
             return new CacheEntry(null, true, false, token, System.currentTimeMillis());
