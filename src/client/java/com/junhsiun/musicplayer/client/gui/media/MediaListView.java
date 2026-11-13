@@ -73,6 +73,15 @@ public class MediaListView extends AbstractWidget {
         default void onSecondaryPlay(MediaItem item) {
         }
 
+        /**
+         * 点了行尾最右侧的第三个操作按钮。
+         *
+         * <p>只有通过 {@link #setTrailingActionIcon(SvgIcon)} 配置了图标才会出现。
+         * 浏览界面在手持唱片时用它显示「刻录」按钮。</p>
+         */
+        default void onTrailingPlay(MediaItem item) {
+        }
+
         /** 点了列表末尾的"加载更多"。 */
         void onLoadMore();
 
@@ -188,9 +197,17 @@ public class MediaListView extends AbstractWidget {
      * <p>排在主按钮左侧。当前队列页用它在「跳过」左边再放一个「快进」。</p>
      */
     private SvgIcon secondaryActionIcon;
+    /**
+     * 行尾最右侧的第三个操作按钮的图标；{@code null} 表示不显示。
+     *
+     * <p>排在整个操作区的最后面（最靠右）。浏览界面在手持可刻录唱片时用它显示「刻录」，
+     * 与其他界面共用同一套行样式，不需要单独维护一份列表排版。</p>
+     */
+    private SvgIcon trailingActionIcon;
     /** 行尾按钮当前是否可点。刻录请求在途时置 {@code false}，避免连点重复刻录。 */
     private boolean actionEnabled = true;
     private boolean secondaryActionEnabled = true;
+    private boolean trailingActionEnabled = true;
     /** 行尾按钮是否显示。队列页在没有正在播放的歌曲时会把它整列收起。 */
     private boolean rowActionsVisible = true;
     /**
@@ -232,7 +249,7 @@ public class MediaListView extends AbstractWidget {
 
     /** 按下锁定的目标类型。 */
     private enum PressTarget {
-        NONE, ROW, PLAY, SECONDARY
+        NONE, ROW, PLAY, SECONDARY, TRAILING
     }
 
     /**
@@ -412,6 +429,16 @@ public class MediaListView extends AbstractWidget {
         this.secondaryActionEnabled = enabled;
     }
 
+    /** 设置行尾最右侧第三个按钮的图标；传 {@code null} 隐藏它。 */
+    public void setTrailingActionIcon(SvgIcon icon) {
+        this.trailingActionIcon = icon;
+    }
+
+    /** 行尾第三个按钮是否可点。 */
+    public void setTrailingActionEnabled(boolean enabled) {
+        this.trailingActionEnabled = enabled;
+    }
+
     /**
      * 行尾操作按钮是否显示。
      *
@@ -575,9 +602,9 @@ public class MediaListView extends AbstractWidget {
 
         // 与 drawRow 相同的可写宽度收窄顺序：行尾按钮 → 补充信息。
         if (queuable(item) && rowActionsVisible && actionRowAllowed(item)) {
-            textRight = playButtonLeft() + shift - PLAY_GAP;
+            textRight = playButtonLeft(item) + shift - PLAY_GAP;
             if (secondaryActionVisible(item)) {
-                textRight = secondaryButtonLeft() + shift - PLAY_GAP;
+                textRight = secondaryButtonLeft(item) + shift - PLAY_GAP;
             }
         }
         // 行尾补充信息（时长、播放量）：右对齐在按钮左侧，终点是详情页对应的那一行。
@@ -732,28 +759,47 @@ public class MediaListView extends AbstractWidget {
      *
      * <p>贴着行内容右边界，和歌单行的右箭头占同一列——两类行右边的按钮/箭头在同一条竖线上，
      * 整列看下去不会一高一低。（歌曲行没有箭头，所以这里不用再给箭头让位置。）</p>
+     *
+     * <p>手持唱片时最右侧还会多出一个「刻录」按钮，主按钮随之向左让位。</p>
      */
-    private int playButtonRight() {
-        return contentRight() - ROW_RIGHT_PADDING;
+    private int playButtonRight(MediaItem item) {
+        return trailingActionVisible(item)
+                ? trailingButtonLeft() - PLAY_GAP
+                : contentRight() - ROW_RIGHT_PADDING;
     }
 
     /** 播放按钮左边界。 */
-    private int playButtonLeft() {
-        return playButtonRight() - PLAY_SIZE;
+    private int playButtonLeft(MediaItem item) {
+        return playButtonRight(item) - PLAY_SIZE;
     }
 
     /** 行尾第二个按钮的右边界：主按钮左侧隔一个间距。 */
-    private int secondaryButtonRight() {
-        return playButtonLeft() - PLAY_GAP;
+    private int secondaryButtonRight(MediaItem item) {
+        return playButtonLeft(item) - PLAY_GAP;
     }
 
-    private int secondaryButtonLeft() {
-        return secondaryButtonRight() - PLAY_SIZE;
+    private int secondaryButtonLeft(MediaItem item) {
+        return secondaryButtonRight(item) - PLAY_SIZE;
+    }
+
+    /** 行尾最右侧第三个按钮的右边界。 */
+    private int trailingButtonRight() {
+        return contentRight() - ROW_RIGHT_PADDING;
+    }
+
+    private int trailingButtonLeft() {
+        return trailingButtonRight() - PLAY_SIZE;
     }
 
     /** 这一行是否显示第二个操作按钮。 */
     private boolean secondaryActionVisible(MediaItem item) {
         return secondaryActionIcon != null && queuable(item) && rowActionsVisible
+                && actionRowAllowed(item);
+    }
+
+    /** 这一行是否显示最右侧的第三个操作按钮。 */
+    private boolean trailingActionVisible(MediaItem item) {
+        return trailingActionIcon != null && queuable(item) && rowActionsVisible
                 && actionRowAllowed(item);
     }
 
@@ -766,8 +812,26 @@ public class MediaListView extends AbstractWidget {
         if (index < 0 || !secondaryActionVisible(items.get(index))) {
             return -1;
         }
-        int right = secondaryButtonRight();
-        int left = secondaryButtonLeft();
+        int right = secondaryButtonRight(items.get(index));
+        int left = secondaryButtonLeft(items.get(index));
+        int top = rowTop(index) + (ROW_HEIGHT - PLAY_SIZE) / 2;
+        if (mouseX < left || mouseX > right || mouseY < top || mouseY > top + PLAY_SIZE) {
+            return -1;
+        }
+        return index;
+    }
+
+    /** 鼠标是否落在某一行最右侧的第三个操作按钮上。 */
+    private int trailingRowAt(double mouseX, double mouseY) {
+        if (!trailingActionEnabled || trailingActionIcon == null || !rowActionsVisible) {
+            return -1;
+        }
+        int index = rowAt(mouseX, mouseY);
+        if (index < 0 || !trailingActionVisible(items.get(index))) {
+            return -1;
+        }
+        int right = trailingButtonRight();
+        int left = trailingButtonLeft();
         int top = rowTop(index) + (ROW_HEIGHT - PLAY_SIZE) / 2;
         if (mouseX < left || mouseX > right || mouseY < top || mouseY > top + PLAY_SIZE) {
             return -1;
@@ -784,8 +848,8 @@ public class MediaListView extends AbstractWidget {
         if (index < 0 || !queuable(items.get(index)) || !actionRowAllowed(items.get(index))) {
             return -1;
         }
-        int right = playButtonRight();
-        int left = playButtonLeft();
+        int right = playButtonRight(items.get(index));
+        int left = playButtonLeft(items.get(index));
         int top = rowTop(index) + (ROW_HEIGHT - PLAY_SIZE) / 2;
         if (mouseX < left || mouseX > right || mouseY < top || mouseY > top + PLAY_SIZE) {
             return -1;
@@ -880,6 +944,14 @@ public class MediaListView extends AbstractWidget {
             pressActive = true;
             return;
         }
+        int trailingIndex = trailingRowAt(event.x(), event.y());
+        if (trailingIndex >= 0) {
+            pressedRow = trailingIndex;
+            pressTarget = PressTarget.TRAILING;
+            pressedItem = items.get(trailingIndex);
+            pressActive = true;
+            return;
+        }
         int queueIndex = playRowAt(event.x(), event.y());
         if (queueIndex >= 0) {
             pressedRow = queueIndex;
@@ -948,6 +1020,7 @@ public class MediaListView extends AbstractWidget {
         switch (target) {
             case PLAY -> listener.onPlay(item);
             case SECONDARY -> listener.onSecondaryPlay(item);
+            case TRAILING -> listener.onTrailingPlay(item);
             // 源几何必须在 clearPress() 之前取：pressedRow 一清就不知道是哪一行了。
             // 取不到也照样跳转，只是不做共享元素动画。
             case ROW -> listener.onItemClick(item, heroElement(clickedRow, item, true));
@@ -1109,6 +1182,7 @@ public class MediaListView extends AbstractWidget {
         int hoverIndex = isMouseOver(mouseX, mouseY) ? rowAt(mouseX, mouseY) : -1;
         int hoverPlay = isMouseOver(mouseX, mouseY) ? playRowAt(mouseX, mouseY) : -1;
         int hoverSecondary = isMouseOver(mouseX, mouseY) ? secondaryRowAt(mouseX, mouseY) : -1;
+        int hoverTrailing = isMouseOver(mouseX, mouseY) ? trailingRowAt(mouseX, mouseY) : -1;
         hoveredRow = hoverIndex;
         hover.tick(hoverIndex >= 0, GlassTheme.Motion.HOVER);
 
@@ -1128,9 +1202,10 @@ public class MediaListView extends AbstractWidget {
             float rowPress = pressTarget == PressTarget.ROW ? pressValue : 0.0F;
             float playPress = pressTarget == PressTarget.PLAY ? pressValue : 0.0F;
             float secondaryPress = pressTarget == PressTarget.SECONDARY ? pressValue : 0.0F;
+            float trailingPress = pressTarget == PressTarget.TRAILING ? pressValue : 0.0F;
             drawRow(graphics, font, items.get(index), index, top, revealProgress(now, index),
-                    hoverAmount, rowPress, playPress, secondaryPress,
-                    index == hoverPlay, index == hoverSecondary);
+                    hoverAmount, rowPress, playPress, secondaryPress, trailingPress,
+                    index == hoverPlay, index == hoverSecondary, index == hoverTrailing);
         }
         drawPagination(graphics, font, mouseX, mouseY);
         drawScrollbar(graphics);
@@ -1336,7 +1411,8 @@ public class MediaListView extends AbstractWidget {
      */
     private void drawRow(GuiGraphicsExtractor graphics, Font font, MediaItem item, int index, int top,
                          float reveal, float hoverAmount, float pressAmount, float playPress,
-                         float secondaryPress, boolean queueHovered, boolean secondaryHovered) {
+                         float secondaryPress, float trailingPress,
+                         boolean queueHovered, boolean secondaryHovered, boolean trailingHovered) {
         if (reveal <= 0.0F) {
             return;
         }
@@ -1420,14 +1496,20 @@ public class MediaListView extends AbstractWidget {
 
         boolean showAction = queuable(item) && rowActionsVisible && actionRowAllowed(item);
         if (showAction) {
-            int buttonLeft = playButtonLeft();
+            if (trailingActionVisible(item)) {
+                drawActionButton(graphics, trailingButtonLeft(),
+                        rowTop + (ROW_HEIGHT - PLAY_SIZE) / 2,
+                        trailingHovered, trailingPress, dim, trailingActionIcon, trailingActionEnabled);
+            }
+            int buttonLeft = playButtonLeft(item);
             drawActionButton(graphics, buttonLeft, rowTop + (ROW_HEIGHT - PLAY_SIZE) / 2,
                     queueHovered, playPress, dim, actionIcon, actionEnabled);
             textRight = buttonLeft - PLAY_GAP;
             if (secondaryActionVisible(item)) {
-                drawActionButton(graphics, secondaryButtonLeft(), rowTop + (ROW_HEIGHT - PLAY_SIZE) / 2,
+                int secondaryLeft = secondaryButtonLeft(item);
+                drawActionButton(graphics, secondaryLeft, rowTop + (ROW_HEIGHT - PLAY_SIZE) / 2,
                         secondaryHovered, secondaryPress, dim, secondaryActionIcon, secondaryActionEnabled);
-                textRight = secondaryButtonLeft() - PLAY_GAP;
+                textRight = secondaryLeft - PLAY_GAP;
             }
         }
 
