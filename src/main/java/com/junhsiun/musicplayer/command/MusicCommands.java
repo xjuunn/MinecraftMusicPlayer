@@ -1022,7 +1022,7 @@ public final class MusicCommands {
                         })))
                         .then(boolSetting("allowCustomServer", value -> MusicPlayerConfigManager.get().allowCustomServer = value))
                         .then(Commands.literal("apiMode").then(Commands.argument("value", StringArgumentType.word())
-                                .suggests((context, builder) -> net.minecraft.commands.SharedSuggestionProvider.suggest(
+                                .suggests((context, builder) -> net.minecraft.commands.suggestions.SuggestionContext.suggest(
                                         new String[]{"auto", "direct", "proxy"}, builder))
                                 .executes(context -> {
                                     String value = MusicApiMode.normalize(StringArgumentType.getString(context, "value"));

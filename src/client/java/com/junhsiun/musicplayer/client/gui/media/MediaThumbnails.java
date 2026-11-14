@@ -10,6 +10,7 @@ import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.GuiPipeline;
+import net.minecraft.client.renderer.texture.ExternalTextureProvider;
 import net.minecraft.client.renderer.texture.TextureResources;
 import net.minecraft.resources.Identifier;
 import okhttp3.OkHttpClient;
@@ -351,12 +352,15 @@ public final class MediaThumbnails {
             GpuSampler sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
             TextureResources resources = TextureResources.from2dImage(
                     () -> "musicplayer_thumb", image, sampler);
-            client.getTextureManager().register(textureId, resources);
+            // 26.4-snapshot-8 起 TextureManager 只接受 TextureProvider：ExternalTextureProvider 是官方
+            // 的“外部已上传纹理”包装，它原样返回传入的 TextureResources，且 releaseTexture 为空实现。
+            // 因此纹理生命周期仍由本缓存负责——淘汰条目时必须自己 close() TextureResources。
+            client.getTextureManager().registerProvider(textureId, new ExternalTextureProvider(resources));
             // from2dImage 只把像素写进命令缓冲，<b>不会</b>关掉 NativeImage，得由我们自己释放。
             // 但不能立刻关：写入是录进命令缓冲、帧末才提交的，提前 close 会让上传读到已释放的
             // 内存。所以把它挂在缓存条目上，等这张纹理被淘汰/清空时再释放——那时早就提交完了。
             map.put(url, Entry.ready(
-                    new Thumb(textureId, resources.textureView(), sampler, width, height), image));
+                    new Thumb(textureId, resources.textureView(), sampler, width, height), image, resources));
             while (map.size() > MAX_ENTRIES) {
                 String eldestKey = map.keySet().iterator().next();
                 Entry eldest = map.remove(eldestKey);
@@ -375,6 +379,11 @@ public final class MediaThumbnails {
     private static void release(Minecraft client, Entry entry) {
         if (entry.thumb() != null) {
             client.getTextureManager().release(entry.thumb().id());
+        }
+        // 26.4-snapshot-8 起 ExternalTextureProvider.releaseTexture 是空实现，
+        // TextureManager.release 不再顺带关闭纹理，必须自己关，否则 GPU 显存会泄漏。
+        if (entry.resources() != null) {
+            entry.resources().close();
         }
         if (entry.image() != null) {
             entry.image().close();
@@ -548,18 +557,18 @@ public final class MediaThumbnails {
         }
     }
 
-    private record Entry(Thumb thumb, NativeImage image, boolean loading, boolean failed,
-                         long token, long stampMillis) {
+    private record Entry(Thumb thumb, NativeImage image, TextureResources resources, boolean loading,
+                         boolean failed, long token, long stampMillis) {
         static Entry pending(long token) {
-            return new Entry(null, null, true, false, token, System.currentTimeMillis());
+            return new Entry(null, null, null, true, false, token, System.currentTimeMillis());
         }
 
-        static Entry ready(Thumb thumb, NativeImage image) {
-            return new Entry(thumb, image, false, false, 0L, System.currentTimeMillis());
+        static Entry ready(Thumb thumb, NativeImage image, TextureResources resources) {
+            return new Entry(thumb, image, resources, false, false, 0L, System.currentTimeMillis());
         }
 
         static Entry failure(long token) {
-            return new Entry(null, null, false, true, token, System.currentTimeMillis());
+            return new Entry(null, null, null, false, true, token, System.currentTimeMillis());
         }
 
         boolean isStale() {

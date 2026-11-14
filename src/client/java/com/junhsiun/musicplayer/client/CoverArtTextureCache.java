@@ -4,6 +4,7 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.ExternalTextureProvider;
 import net.minecraft.client.renderer.texture.TextureResources;
 import net.minecraft.resources.Identifier;
 import okhttp3.OkHttpClient;
@@ -131,11 +132,25 @@ public final class CoverArtTextureCache {
     public synchronized void clear() {
         Minecraft client = Minecraft.getInstance();
         for (CacheEntry entry : entries.values()) {
-            if (entry.textureId() != null) {
-                client.execute(() -> client.getTextureManager().release(entry.textureId()));
-            }
+            client.execute(() -> releaseEntry(client, entry));
         }
         entries.clear();
+    }
+
+    /**
+     * 释放一条缓存占用的纹理。
+     *
+     * <p>26.4-snapshot-8 起 {@code TextureManager} 的纹理都由 {@code TextureProvider} 托管，
+     * 而 {@code ExternalTextureProvider.releaseTexture} 是空实现，{@code release(id)} 不再顺带
+     * 关闭纹理。所以这里在注销 ID 之后再自己 {@code close()} 一次，否则显存会泄漏。</p>
+     */
+    private static void releaseEntry(Minecraft client, CacheEntry entry) {
+        if (entry.textureId() != null) {
+            client.getTextureManager().release(entry.textureId());
+        }
+        if (entry.resources() != null) {
+            entry.resources().close();
+        }
     }
 
     public void shutdown() {
@@ -199,13 +214,16 @@ public final class CoverArtTextureCache {
             // clear() 期间、或被新一轮重试取代的在途下载：直接释放纹理，避免泄漏
             CacheEntry current = entries.get(coverUrl);
             if (current == null || !current.loading() || current.token() != token) {
-                client.getTextureManager().release(textureId);
                 image.close();
                 return;
             }
+            // 26.4-snapshot-8 起 TextureManager 不再接受现成的 TextureResources，
+            // 只能注册 TextureProvider；ExternalTextureProvider 正是官方的“外部已上传纹理”包装，
+            // 它把传入的 TextureResources 原样当作 current handle 返回，并且 releaseTexture 是空实现，
+            // 所以纹理的生命周期仍然完全由本缓存（release / TextureResources.close）控制，行为与旧版一致。
             TextureResources texture = TextureResources.from2dImage(() -> "musicplayer_cover", image);
-            client.getTextureManager().register(textureId, texture);
-            entries.put(coverUrl, CacheEntry.ready(textureId));
+            client.getTextureManager().registerProvider(textureId, new ExternalTextureProvider(texture));
+            entries.put(coverUrl, CacheEntry.ready(textureId, texture));
             // 用 INFO 而不是 DEBUG：这一行是"封面到底有没有下载成功"的唯一证据。
             // 默认日志级别下 DEBUG 不会打印，出问题时就看不出是没下载、还是下载了但没画出来。
             // 每个 URL 每个会话只会打印一次（命中缓存后 request 直接返回）。
@@ -216,8 +234,8 @@ public final class CoverArtTextureCache {
             while (entries.size() > MAX_CACHE_SIZE) {
                 String eldestKey = entries.keySet().iterator().next();
                 CacheEntry eldest = entries.remove(eldestKey);
-                if (eldest != null && eldest.textureId() != null) {
-                    client.getTextureManager().release(eldest.textureId());
+                if (eldest != null) {
+                    releaseEntry(client, eldest);
                 }
             }
         } catch (Exception exception) {
@@ -399,17 +417,18 @@ public final class CoverArtTextureCache {
         }
     }
 
-    private record CacheEntry(Identifier textureId, boolean loading, boolean failed, long token, long stampMillis) {
+    private record CacheEntry(Identifier textureId, TextureResources resources, boolean loading,
+                              boolean failed, long token, long stampMillis) {
         public static CacheEntry pending(long token) {
-            return new CacheEntry(null, true, false, token, System.currentTimeMillis());
+            return new CacheEntry(null, null, true, false, token, System.currentTimeMillis());
         }
 
-        public static CacheEntry ready(Identifier textureId) {
-            return new CacheEntry(textureId, false, false, 0L, System.currentTimeMillis());
+        public static CacheEntry ready(Identifier textureId, TextureResources resources) {
+            return new CacheEntry(textureId, resources, false, false, 0L, System.currentTimeMillis());
         }
 
         public static CacheEntry failure(long token) {
-            return new CacheEntry(null, false, true, token, System.currentTimeMillis());
+            return new CacheEntry(null, null, false, true, token, System.currentTimeMillis());
         }
 
         /** 下载卡住（超过 {@link #PENDING_TIMEOUT_MILLIS} 仍未完成）：允许重新发起。 */

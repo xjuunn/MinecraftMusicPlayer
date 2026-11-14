@@ -5,7 +5,7 @@
 ## 分支与工作流
 
 - 每个适配版本使用独立分支，分支名即 Minecraft 版本号（如 `1.19.2`、`1.20.1`、`26.2`、`26.3`）。
-- `master` 为最新版本主分支（当前 `26.4-snapshot-5`）。
+- `master` 为最新版本主分支（当前 `26.4-snapshot-7`）。
 - 适配新版本时，从**最接近的目标版本分支**切出新分支（例如适配 1.19.2 基于 `1.20.1`，适配 1.20.1 基于 `1.21.11`），而不是直接基于 master。
 - 适配操作全部在新分支上完成。
 - **默认禁止切换或修改其他分支。** 后续功能更新如需同步到各版本分支，使用 `cherry-pick` 将主分支提交挑选到目标分支，但必须由用户明确要求后才执行。
@@ -74,7 +74,7 @@
 
 | API | 新版本 | 旧版本 |
 |---|---|---|
-| 动态纹理 | 26.4+ 移除 `DynamicTexture`，改用 `TextureResources.from2dImage(Supplier<String>, NativeImage)` 后 `TextureManager.register(id, resources)`，不再调用 `upload()` | `new DynamicTexture(supplier, image)` + `texture.upload()` |
+| 动态纹理 | 26.4-snapshot-8+ 移除 `TextureManager.register(Identifier, TextureResources)`，只能用 `registerProvider(id, new ExternalTextureProvider(resources))`；`ExternalTextureProvider.createTexture` 原样返回传入句柄，`releaseTexture` 是空实现，因此 `release(id)` **不再**释放纹理，淘汰/清空时必须自己 `TextureResources.close()`。26.4-snapshot-5～7 用 `TextureResources.from2dImage(Supplier<String>, NativeImage[, GpuSampler])` + `register(id, resources)`，不再调用 `upload()` | `new DynamicTexture(supplier, image)` + `texture.upload()` |
 | `com.mojang.math.Axis` | `Axis.YP.rotationDegrees(...)`（1.19.3+） | 1.19.2 用 `com.mojang.math.Vector3f.YP` 等 |
 | `ConfirmLinkScreen.confirmLinkNow(url, parent, warn)` | 存在 | 用构造器 `new ConfirmLinkScreen(accepted -> { if (accepted) openUri(...); setScreen(parent); }, url, false)`；**回调必须在 accepted 为 true 时真正打开 URL 并恢复父屏幕** |
 | `Util.getPlatform().openUri` | 顶层 `net.minecraft.Util` | 同左 |
@@ -82,6 +82,7 @@
 | `WorldRenderContext` | `matrixStack()` / `consumers()`（fabric-rendering-v1） | 1.19.2 实测可用 |
 | `RenderType` / `BufferUploader` | `entityCutoutNoCull(ResourceLocation)`、`setupRenderState`/`clearRenderState`、`drawWithShader` | 1.19.2/1.20.1 实测可用 |
 | `VertexConsumer` | 旧式 `vertex...color/uv/overlayCoords/uv2/normal/endVertex` | 1.21.2+ 改为 `addVertex` 风格，按目标版本选 |
+| 命令补全 | 26.4-snapshot-8+ 移除 `net.minecraft.commands.SharedSuggestionProvider`，静态方法迁到 `net.minecraft.commands.suggestions.SuggestionContext`（`suggest`/`suggestResource` 签名一致） | `net.minecraft.commands.SharedSuggestionProvider.suggest(...)` |
 
 ### Mixin
 
@@ -125,7 +126,11 @@
 
 | 分支 | Minecraft | Java | Fabric API（示例） |
 |---|---|---|---|
-| `master` | 26.4-snapshot-5 | 25 | 随分支更新 |
+| `master` | 26.4-snapshot-7 | 25 | 随分支更新 |
+| `26.4-snapshot-8` | 26.4-snapshot-8 | 25 | `0.166.2+26.4` |
+| `26.4-snapshot-7` | 26.4-snapshot-7 | 25 | `0.165.4+26.4` |
+| `26.4-snapshot-5` | 26.4-snapshot-5 | 25 | — |
+| `26.3` | 26.3 | 25 | — |
 | `26.2` | 26.2 | 25 | — |
 | `26.1` | 26.1 | 25 | — |
 | `1.21.11` | 1.21.11 | 21+ | — |
