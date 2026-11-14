@@ -135,7 +135,7 @@ public class GlassListView extends AbstractWidget {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (!active || !visible || button == 0 || !isMouseOver(mouseX, mouseY)) {
+        if (!active || !visible || button != 0 || !isMouseOver(mouseX, mouseY)) {
             return false;
         }
         int index = actionRowAt(mouseX, mouseY);

@@ -562,7 +562,7 @@ public final class SongDetailView extends AbstractWidget {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         // 本控件铺满整块详情区域，不能直接把点击交给基类：那会让点空白处也响一下。
         // 只有真的点在按钮上才接受这次点击。
-        if (!isActive() || button == 0) {
+        if (!isActive() || button != 0) {
             return false;
         }
         if (overBurnButton(mouseX, mouseY)) {
