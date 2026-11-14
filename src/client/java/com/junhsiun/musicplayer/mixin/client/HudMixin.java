@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.mixin.client;
 
 import com.junhsiun.musicplayer.client.idle.IdleController;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.Hud;
 import net.minecraft.util.Util;
@@ -23,7 +24,8 @@ public abstract class HudMixin {
     private boolean musicplayer$restoreHud;
 
     @Inject(method = "extractRenderState", at = @At("HEAD"))
-    private void musicplayer$hideHudForIdle(GuiGraphicsExtractor graphics, CallbackInfo callbackInfo) {
+    private void musicplayer$hideHudForIdle(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker,
+                                            CallbackInfo callbackInfo) {
         HudAccessor accessor = (HudAccessor) (Object) this;
         // 上一帧如果在 RETURN 之前抛了异常（界面代码崩溃），标记会残留。
         // 这里先把 HUD 恢复回去，避免一次崩溃让 HUD 永久消失、还带进下一局。
@@ -42,7 +44,8 @@ public abstract class HudMixin {
     }
 
     @Inject(method = "extractRenderState", at = @At("RETURN"))
-    private void musicplayer$restoreHudAfterIdle(GuiGraphicsExtractor graphics, CallbackInfo callbackInfo) {
+    private void musicplayer$restoreHudAfterIdle(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker,
+                                                 CallbackInfo callbackInfo) {
         if (musicplayer$restoreHud) {
             ((HudAccessor) (Object) this).musicplayer$setHidden(false);
             musicplayer$restoreHud = false;
