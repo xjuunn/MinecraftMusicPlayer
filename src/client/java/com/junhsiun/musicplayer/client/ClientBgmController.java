@@ -6,6 +6,11 @@ import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.model.SearchEntry;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.platform.NeteaseApiClient;
+import com.junhsiun.musicplayer.platform.api.DirectMusicApi;
+import com.junhsiun.musicplayer.platform.api.MusicApi;
+import com.junhsiun.musicplayer.platform.api.MusicApiMode;
+import com.junhsiun.musicplayer.platform.api.MusicApiRouter;
+import com.junhsiun.musicplayer.platform.api.ProxyMusicApi;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.LevelLoadingScreen;
 import net.minecraft.sounds.Music;
@@ -60,7 +65,20 @@ public final class ClientBgmController {
      */
     private volatile String baseUrl = MusicPlayerConfig.DEFAULT_NETEASE_BASE_URL;
     /** 客户端专用 API 实例：基础地址由本类解析，服务端共享实例不受影响。 */
-    private final NeteaseApiClient api = new NeteaseApiClient(this::resolveBaseUrl);
+    private final NeteaseApiClient proxyApi = new NeteaseApiClient(this::resolveBaseUrl);
+    /** 直连实现：与 {@code MediaBrowserService} 共用同一套网易云明文接口。 */
+    private final DirectMusicApi directApi = new DirectMusicApi();
+    /**
+     * 取数链路与命令侧、浏览界面保持一致：直连优先，失败回退后端。
+     *
+     * <p>此前背景音乐只走 {@link NeteaseApiClient}（即配置的后端地址），一旦该后端不可用
+     * （例如 {@code mycelis.dpdns.org} 返回 402 DEPLOYMENT_DISABLED），歌单拉取必然失败，
+     * 背景音乐就静默降级回原版音乐。加上直连后，后端挂掉也能正常播放。</p>
+     */
+    private final MusicApi api = new MusicApiRouter(
+            () -> directApi,
+            new ProxyMusicApi(proxyApi),
+            MusicApiMode::current);
     /** 客户端主线程专用：连续播放失败计数。 */
     private int consecutiveFailures;
 
