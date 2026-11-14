@@ -284,13 +284,24 @@ public class ScrollPanel extends AbstractWidget implements ContainerEventHandler
         }
     }
 
-    /** 容器失去焦点时，把内部控件的高亮一起清掉。 */
+    /**
+     * 容器失去焦点时，把内部控件的高亮一起清掉。
+     *
+     * <p><b>为什么不能无条件清：</b>{@code ContainerEventHandler.mouseClicked} 的默认实现
+     * 会在子控件返回 true 之后对<b>上一个焦点</b>调用 {@code setFocused(false)}。
+     * 滚动容器自己就是那个"上一个焦点"（上一次点击把它设成了焦点），于是这条回调会在
+     * 按下与放开之间插入，把 {@link #focusedChild} 与 {@link #dragging} 清空——
+     * 随后的 {@code mouseReleased} 发现 {@code dragging == false} 就直接返回，
+     * 子控件永远收不到 onRelease。表现是设置页里<b>只有第一次点击有效</b>。</p>
+     *
+     * <p>按下尚未放开时（{@code dragging} 为 true）必须保留这两项状态，等释放流程
+     * 结束后再清高亮；这也正是 {@code GlassToggle} 等控件能正常切换的原因所在。</p>
+     */
     @Override
     public void setFocused(boolean focused) {
         super.setFocused(focused);
-        if (!focused) {
+        if (!focused && !dragging) {
             setFocused((GuiEventListener) null);
-            dragging = false;
         }
     }
 
