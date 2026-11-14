@@ -31,7 +31,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
@@ -60,7 +60,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
     /** 打开音乐浏览界面的快捷键，默认 M。 */
     private static final KeyMapping OPEN_BROWSER = new KeyMapping(
             "key.musicplayer.open_browser",
-            InputConstants.Type.KEYBOARD,
+            InputConstants.Type.KEYSYM,
             InputConstants.KEY_M,
             KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music")));
 
@@ -122,7 +122,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
         WorldRenderEvents.AFTER_ENTITIES.register(JukeboxCoverRenderer::render);
         WorldRenderEvents.AFTER_ENTITIES.register(JukeboxCoverRenderer::render);
         // 快捷键默认 M，玩家可在「选项 → 控制」里改键（KeyMapping 就是原版的改键机制）
-        KeyMappingHelper.registerKeyMapping(OPEN_BROWSER);
+        KeyBindingHelper.registerKeyBinding(OPEN_BROWSER);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             MusicPlayerClientConfigManager.tick();
             ClientJukeboxController.getInstance().tick(client);
@@ -131,7 +131,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             prefetchHeldCover(client);
             // consumeClick 会把一次按下消费成一次打开，长按不会连续弹窗
             while (OPEN_BROWSER.consumeClick()) {
-                if (client.gui.screen() == null && client.player != null) {
+                if (client.screen == null && client.player != null) {
                     // 打开玻璃界面的唯一正确入口（预编译 + 不强制渲染一帧），见 GlassWindowScreen#open
                     GlassWindowScreen.open(new MusicBrowserScreen());
                 }

@@ -4,7 +4,7 @@ import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
 import com.junhsiun.musicplayer.client.gui.icon.SvgIcon;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.InputWithModifiers;
@@ -102,7 +102,7 @@ public class GlassIconButton extends AbstractButton {
     }
 
     @Override
-    protected void extractContents(GuiGraphicsExtractor graphics) {
+    protected void renderContents(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         boolean usable = isActive();
         hover.tick((isHovered() || isFocused()) && usable, GlassTheme.Motion.HOVER);
         press.tickSpring(held && usable, held ? GlassTheme.Motion.PRESS : GlassTheme.Motion.RELEASE);

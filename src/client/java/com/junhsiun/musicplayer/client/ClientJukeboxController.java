@@ -424,7 +424,7 @@ public final class ClientJukeboxController {
 
     private void showNowPlaying(String title, String subtitle) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.gui == null || title == null || title.isBlank()) {
+        if (title == null || title.isBlank()) {
             return;
         }
         String text = subtitle == null || subtitle.isBlank() ? title : title + " - " + subtitle;

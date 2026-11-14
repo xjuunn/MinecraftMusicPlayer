@@ -1,7 +1,7 @@
 package com.junhsiun.musicplayer.client.gui.media;
 
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
@@ -26,7 +26,7 @@ public class MediaCover extends AbstractWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (width <= 0 || height <= 0) {
             return;
         }

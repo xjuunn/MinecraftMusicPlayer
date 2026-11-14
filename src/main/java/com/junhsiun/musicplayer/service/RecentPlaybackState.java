@@ -4,7 +4,6 @@ import com.junhsiun.musicplayer.model.RecentTrack;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.UUIDUtil;
-import net.minecraft.resources.Identifier;
 import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
@@ -26,7 +25,7 @@ public final class RecentPlaybackState extends SavedData {
     /** 每位玩家保留的最大条数。 */
     public static final int MAX_ENTRIES = 50;
 
-    private static final Identifier ID = Identifier.fromNamespaceAndPath("musicplayer", "recent_playback");
+    private static final String ID = "musicplayer_recent_playback";
     private static final Codec<RecentPlaybackState> CODEC = RecordCodecBuilder.create(instance ->
             instance.group(
                     Codec.unboundedMap(UUIDUtil.STRING_CODEC, RecentTrack.CODEC.listOf())

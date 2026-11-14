@@ -7,10 +7,10 @@ import com.junhsiun.musicplayer.client.gui.glass.GlassWidgetPipelines;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
-import net.minecraft.client.renderer.state.gui.BlitRenderState;
+import net.minecraft.client.gui.render.state.BlitRenderState;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.util.Util;
@@ -28,7 +28,7 @@ public final class GlassWidgets {
      * 玻璃方块的裁剪区栈。
      *
      * <p>GUI 渲染是单线程的，静态字段在这里是安全的；用栈是为了支持嵌套（列表里再套一层
-     * 滚动区），语义与 {@code GuiGraphicsExtractor} 的 scissor 栈一致。</p>
+     * 滚动区），语义与 {@code GuiGraphics} 的 scissor 栈一致。</p>
      */
     private static final Deque<Clip> CLIP_STACK = new ArrayDeque<>();
 
@@ -104,7 +104,7 @@ public final class GlassWidgets {
 
         /** 缓出后的进度，用于亮度。 */
         public float eased() {
-            return Mth.smoothstep(clamp01(value));
+            return (float) Mth.smoothstep((double) clamp01(value));
         }
     }
 
@@ -117,7 +117,7 @@ public final class GlassWidgets {
      * @param lift  hover 提亮，{@code press} 是按下压暗；只改几何与逐 draw 光学参数
      * @return 是否画成功，失败时调用方应退回 {@link #roundedFill}
      */
-    public static boolean glassBackground(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+    public static boolean glassBackground(GuiGraphics graphics, int x0, int y0, int x1, int y1,
                                           GlassStyle style, float lift, float press) {
         if (x1 <= x0 || y1 <= y0) {
             return false;
@@ -158,19 +158,19 @@ public final class GlassWidgets {
     }
 
     /** 窗口的叠加层。 */
-    public static void windowOverlay(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+    public static void windowOverlay(GuiGraphics graphics, int x0, int y0, int x1, int y1,
                                      float radius) {
         overlayFill(graphics, x0, y0, x1, y1, radius, GlassTheme.overlayAlpha());
     }
 
     /** 叠加层：纯色圆角填充，描边与柔光都关掉。 */
-    private static void overlayFill(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+    private static void overlayFill(GuiGraphics graphics, int x0, int y0, int x1, int y1,
                                     float radius, float alpha) {
         int rgb = GlassTheme.overlayColor() & 0xFFFFFF;
         roundedFill(graphics, x0, y0, x1, y1, rgb, rgb, radius, alpha, 1.0F);
     }
     /** 圆角填充，玻璃不可用时的退化路径。 */
-    public static void roundedFill(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+    public static void roundedFill(GuiGraphics graphics, int x0, int y0, int x1, int y1,
                                    int fill, int border, float radius, float alpha, float scale) {
         if (x1 <= x0 || y1 <= y0 || alpha <= 0.02F) {
             return;
@@ -217,35 +217,35 @@ public final class GlassWidgets {
     }
 
     /** 叠加文字缩放，调用方必须成对使用 push/pop。 */
-    public static void pushScaledText(GuiGraphicsExtractor graphics, int anchorX, int anchorY, float scale) {
+    public static void pushScaledText(GuiGraphics graphics, int anchorX, int anchorY, float scale) {
         graphics.pose().pushMatrix();
         graphics.pose().translate(anchorX, anchorY);
         graphics.pose().scale(scale, scale);
         graphics.pose().translate(-anchorX, -anchorY);
     }
 
-    public static void popText(GuiGraphicsExtractor graphics) {
+    public static void popText(GuiGraphics graphics) {
         graphics.pose().popMatrix();
     }
 
     /** 左对齐文字。 */
-    public static void text(GuiGraphicsExtractor graphics, Font font, Component text,
+    public static void text(GuiGraphics graphics, Font font, Component text,
                             int x, int y, int color, float scale) {
         pushScaledText(graphics, x, y, scale);
-        graphics.text(font, text, x, y, color);
+        graphics.drawString(font, text, x, y, color);
         popText(graphics);
     }
 
     /** 居中文字。 */
-    public static void centeredText(GuiGraphicsExtractor graphics, Font font, Component text,
+    public static void centeredText(GuiGraphics graphics, Font font, Component text,
                                     int centerX, int y, int color, float scale) {
         pushScaledText(graphics, centerX, y, scale);
-        graphics.centeredText(font, text, centerX, y, color);
+        graphics.drawCenteredString(font, text, centerX, y, color);
         popText(graphics);
     }
 
     /** 右对齐文字，宽度按缩放后的占位算。 */
-    public static void rightText(GuiGraphicsExtractor graphics, Font font, Component text,
+    public static void rightText(GuiGraphics graphics, Font font, Component text,
                                  int rightX, int y, int color, float scale) {
         text(graphics, font, text, Math.round(rightX - font.width(text) * scale), y, color, scale);
     }
@@ -273,7 +273,7 @@ public final class GlassWidgets {
      *
      * <p>必须与 {@link #endClip} 成对使用；嵌套时取交集，与 {@code enableScissor} 一致。</p>
      */
-    public static void beginClip(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1) {
+    public static void beginClip(GuiGraphics graphics, int x0, int y0, int x1, int y1) {
         if (x1 <= x0 || y1 <= y0) {
             // 退化矩形（宽或高为 0）：内容本来就不存在。压一个不可见层，
             // 让 endClip 保持配对，同时不往原版剪刀栈里塞任何东西。
@@ -349,7 +349,7 @@ public final class GlassWidgets {
     }
 
     /** 结束一段裁剪，与 {@link #beginClip} 成对使用。 */
-    public static void endClip(GuiGraphicsExtractor graphics) {
+    public static void endClip(GuiGraphics graphics) {
         Clip clip = CLIP_STACK.poll();
         // 只有真的往原版栈里压过，才需要弹一次；否则会破坏原版 scissor 栈的配对。
         if (clip != null && clip.scissorPushed()) {
@@ -369,7 +369,7 @@ public final class GlassWidgets {
         return clip == null ? null : clip.glass();
     }
 
-    private static void submit(GuiGraphicsExtractor graphics, RenderPipeline pipeline,
+    private static void submit(GuiGraphics graphics, RenderPipeline pipeline,
                                int x0, int y0, int x1, int y1, int color) {
         ScreenRectangle clip = clipRectangle();
         if (clip != null && (clip.width() <= 0 || clip.height() <= 0)) {
@@ -384,7 +384,7 @@ public final class GlassWidgets {
         }
         // 第十三个参数是 scissorArea，渲染器据此真正裁剪；完全靠它遮挡，
         // 不在这里改坐标——改坐标会把圆角/边缘畸变的形状弄歪
-        graphics.guiRenderState.addGuiElement(new BlitRenderState(
+        graphics.guiRenderState.submitBlitToCurrentLayer(new BlitRenderState(
                 pipeline,
                 TextureSetup.noTexture(),
                 new Matrix3x2f(graphics.pose()),

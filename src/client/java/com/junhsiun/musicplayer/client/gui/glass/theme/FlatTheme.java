@@ -2,7 +2,7 @@ package com.junhsiun.musicplayer.client.gui.glass.theme;
 
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 
 /**
  * 窗口内部的扁平视觉语言。
@@ -65,7 +65,7 @@ public final class FlatTheme {
     }
 
     /** 纯色圆角填充；透明度取自 {@code argb} 的高 8 位。 */
-    public static void fill(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+    public static void fill(GuiGraphics graphics, int x0, int y0, int x1, int y1,
                             float radius, int argb) {
         float alpha = ((argb >>> 24) & 0xFF) / 255.0F;
         GlassWidgets.roundedFill(graphics, x0, y0, x1, y1,
@@ -73,14 +73,14 @@ public final class FlatTheme {
     }
 
     /** 带独立描边的圆角填充。 */
-    public static void fillBorder(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+    public static void fillBorder(GuiGraphics graphics, int x0, int y0, int x1, int y1,
                                   float radius, int fillRgb, int borderRgb, float alpha) {
         GlassWidgets.roundedFill(graphics, x0, y0, x1, y1,
                 fillRgb & 0xFFFFFF, borderRgb & 0xFFFFFF, radius, alpha, 1.0F);
     }
 
     /** 输入框：1 像素描边 + 轻微压暗的内部；聚焦时底部浮出一条强调色细线。 */
-    public static void field(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+    public static void field(GuiGraphics graphics, int x0, int y0, int x1, int y1,
                              float radius, float lift, boolean focused) {
         int borderAlpha = alpha(0xFFFFFF, 0.16F + 0.10F * lift);
         fill(graphics, x0, y0, x1, y1, radius, borderAlpha);
@@ -95,7 +95,7 @@ public final class FlatTheme {
     }
 
     /** 1 像素分隔线。 */
-    public static void divider(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1) {
+    public static void divider(GuiGraphics graphics, int x0, int y0, int x1, int y1) {
         graphics.fill(x0, y0, x1, y1, DIVIDER);
     }
 }

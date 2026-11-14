@@ -24,6 +24,7 @@ public final class MusicDiscHelper {
     private static final String ROOT_KEY = "musicplayer_disc";
     private static final String PENDING_KEY = "musicplayer_pending_disc";
     private static final String PENDING_TOKEN_KEY = "musicplayer_pending_token";
+    private static final String MASTER_KEY = "musicplayer_disc_master";
     private static final String TRACK_ID_KEY = "track_id";
     private static final String TITLE_KEY = "title";
     private static final String ARTIST_KEY = "artist";
@@ -64,6 +65,18 @@ public final class MusicDiscHelper {
 
     public static boolean isMusicPlayerDisc(ItemStack stack) {
         return read(stack).isPresent();
+    }
+
+    /** 唱片母版：可刻录但本身不可播放，也不能放入唱片机。 */
+    public static boolean isDiscMaster(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        if (customData == null || customData.isEmpty()) {
+            return false;
+        }
+        return customData.copyTag().getBooleanOr(MASTER_KEY, false);
     }
 
     public static boolean isPendingDisc(ItemStack stack) {

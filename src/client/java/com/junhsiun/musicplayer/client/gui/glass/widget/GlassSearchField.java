@@ -5,7 +5,7 @@ import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.icon.SvgIcons;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
@@ -100,14 +100,14 @@ public class GlassSearchField extends EditBox {
         if (!isFocused()) {
             return false;
         }
-        if (event.key() == InputConstants.KEY_TAB || event.keycode() == InputConstants.KEYCODE_TAB) {
+        if (event.key() == InputConstants.KEY_TAB || event.key() == InputConstants.KEY_RETURN) {
             return false;
         }
         return true;
     }
 
     @Override
-    public void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         boolean usable = isActive();
         hover.tick(isHoveredOrFocused() && usable, GlassTheme.Motion.HOVER);
         float lift = hover.eased();
@@ -139,7 +139,7 @@ public class GlassSearchField extends EditBox {
         // 文字垂直居中：EditBox 关掉边框后文字画在 getY()，把画笔整体下移即可
         graphics.pose().pushMatrix();
         graphics.pose().translate(0, Math.round((height - 8) / 2.0F));
-        super.extractWidgetRenderState(graphics);
+        super.renderWidget(graphics, mouseX, mouseY, partialTick);
         graphics.pose().popMatrix();
     }
 }

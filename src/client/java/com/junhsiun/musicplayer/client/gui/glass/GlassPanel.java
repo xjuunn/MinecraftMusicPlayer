@@ -5,12 +5,12 @@ import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.renderpearl.api.textures.GpuSampler;
-import com.mojang.renderpearl.api.textures.GpuTextureView;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.blaze3d.textures.GpuTextureView;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
-import net.minecraft.client.renderer.state.gui.BlitRenderState;
+import net.minecraft.client.gui.render.state.BlitRenderState;
 import org.joml.Matrix3x2f;
 
 /**
@@ -67,7 +67,7 @@ public final class GlassPanel {
      * @param style    材质参数
      * @return 是否真的提交了玻璃；{@code false} 表示这一帧背景还没就绪（首帧）
      */
-    public static boolean draw(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+    public static boolean draw(GuiGraphics graphics, int x0, int y0, int x1, int y1,
                                GlassStyle style) {
         return draw(graphics, x0, y0, x1, y1, style, true);
     }
@@ -126,14 +126,14 @@ public final class GlassPanel {
             return;
         }
         try {
-            RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, look));
+            RenderSystem.getDevice().precompilePipeline(GlassPipelines.panel(style, look));
             // 子控件用的是带窗口叠加的变体，一并编译，避免首次画按钮时才编译
-            RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, childLook));
+            RenderSystem.getDevice().precompilePipeline(GlassPipelines.panel(style, childLook));
             // 控件材质一次编译完：它们都是固定风格，一次性把 GPU 程序编译掉，
             // 免得界面首帧在渲染中途才开始编译（那会打断当前帧）
             for (GlassStyle control : CONTROL_STYLES) {
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(control, look));
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(control, childLook));
+                RenderSystem.getDevice().precompilePipeline(GlassPipelines.panel(control, look));
+                RenderSystem.getDevice().precompilePipeline(GlassPipelines.panel(control, childLook));
             }
             prepared = true;
             compileShadowPipeline(style);
@@ -166,8 +166,8 @@ public final class GlassPanel {
         }
         if (!prepared) {
             try {
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, look));
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, childLook));
+                RenderSystem.getDevice().precompilePipeline(GlassPipelines.panel(style, look));
+                RenderSystem.getDevice().precompilePipeline(GlassPipelines.panel(style, childLook));
                 prepared = true;
             } catch (Throwable throwable) {
                 unavailable = true;
@@ -192,7 +192,7 @@ public final class GlassPanel {
     private static void compileShadowPipeline(GlassStyle style) {
         String key = style.pipelineKey();
         try {
-            RenderSystem.getCompiledPipeline(GlassPipelines.shadow(style));
+            RenderSystem.getDevice().precompilePipeline(GlassPipelines.shadow(style));
             compiledShadowKey = key;
         } catch (Throwable throwable) {
             // 投影失败不至于让整个界面不可用，退化成不带投影的面板
@@ -219,7 +219,7 @@ public final class GlassPanel {
      * @param withShadow 是否绘制底部投影
      * @return 是否真的提交了玻璃
      */
-    public static boolean draw(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+    public static boolean draw(GuiGraphics graphics, int x0, int y0, int x1, int y1,
                                GlassStyle style, boolean withShadow) {
         if (x1 <= x0 || y1 <= y0) {
             return false;
@@ -275,7 +275,7 @@ public final class GlassPanel {
      *
      * @return 是否画成功；背景未就绪或着色器不可用时返回 {@code false}
      */
-    public static boolean drawTuned(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+    public static boolean drawTuned(GuiGraphics graphics, int x0, int y0, int x1, int y1,
                                     GlassStyle style, float refraction, float dispersion,
                                     float centerDispersion) {
         return drawTuned(graphics, x0, y0, x1, y1, style, refraction, dispersion, centerDispersion,
@@ -288,7 +288,7 @@ public final class GlassPanel {
      *
      * @return 是否画成功；背景未就绪或着色器不可用时返回 {@code false}
      */
-    public static boolean drawTuned(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1,
+    public static boolean drawTuned(GuiGraphics graphics, int x0, int y0, int x1, int y1,
                                     GlassStyle style, float refraction, float dispersion,
                                     float centerDispersion, float aDistance,
                                     float contraRatio, float shrink) {
@@ -313,7 +313,7 @@ public final class GlassPanel {
      * @param color 顶点色。面板用它承载折射/色散等四项调参，编码见
      *              {@link GlassDebug#encode(GlassStyle)}
      */
-    private static void submit(GuiGraphicsExtractor graphics, RenderPipeline pipeline,
+    private static void submit(GuiGraphics graphics, RenderPipeline pipeline,
                                TextureSetup setup, int x0, int y0, int x1, int y1, int color) {
         // 带上当前裁剪区：玻璃面板是手写 BlitRenderState 提交的，原版 enableScissor 管不到，
         // 不传的话滚动区里的面板会画到列表外面去（行、徽标、播放按钮都会漏出来）
@@ -327,7 +327,7 @@ public final class GlassPanel {
                 && (x1 <= clip.left() || x0 >= clip.right() || y1 <= clip.top() || y0 >= clip.bottom())) {
             return;
         }
-        graphics.guiRenderState.addGuiElement(new BlitRenderState(
+        graphics.guiRenderState.submitBlitToCurrentLayer(new BlitRenderState(
                 pipeline,
                 setup,
                 new Matrix3x2f(graphics.pose()),

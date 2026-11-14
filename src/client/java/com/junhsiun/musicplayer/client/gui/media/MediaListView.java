@@ -14,7 +14,7 @@ import com.junhsiun.musicplayer.model.MediaStat;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.KeyEvent;
@@ -1112,7 +1112,7 @@ public class MediaListView extends AbstractWidget {
     // ── 绘制 ────────────────────────────────────────────────────────────
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (width <= 0 || height <= 0) {
             return;
         }
@@ -1134,7 +1134,7 @@ public class MediaListView extends AbstractWidget {
         graphics.pose().pushMatrix();
         graphics.pose().translate(shift, 0.0F);
 
-        drawContent(graphics, font);
+        drawContent(graphics, font, mouseX, mouseY);
 
         graphics.pose().popMatrix();
         GlassWidgets.endClip(graphics);
@@ -1175,20 +1175,20 @@ public class MediaListView extends AbstractWidget {
         }
     }
 
-    private void drawContent(GuiGraphicsExtractor graphics, Font font) {
+    private void drawContent(GuiGraphics graphics, Font font, int mouseX, int mouseY) {
         prefetchCovers();
-        double mouseX = graphics.mouseX();
-        double mouseY = graphics.mouseY();
-        int hoverIndex = isMouseOver(mouseX, mouseY) ? rowAt(mouseX, mouseY) : -1;
-        int hoverPlay = isMouseOver(mouseX, mouseY) ? playRowAt(mouseX, mouseY) : -1;
-        int hoverSecondary = isMouseOver(mouseX, mouseY) ? secondaryRowAt(mouseX, mouseY) : -1;
-        int hoverTrailing = isMouseOver(mouseX, mouseY) ? trailingRowAt(mouseX, mouseY) : -1;
+        double mx = mouseX;
+        double my = mouseY;
+        int hoverIndex = isMouseOver((int) mx, (int) my) ? rowAt(mx, my) : -1;
+        int hoverPlay = isMouseOver((int) mx, (int) my) ? playRowAt(mx, my) : -1;
+        int hoverSecondary = isMouseOver((int) mx, (int) my) ? secondaryRowAt(mx, my) : -1;
+        int hoverTrailing = isMouseOver((int) mx, (int) my) ? trailingRowAt(mx, my) : -1;
         hoveredRow = hoverIndex;
         hover.tick(hoverIndex >= 0, GlassTheme.Motion.HOVER);
 
         // 越界部分由外层的 GlassWidgets.beginClip 统一遮挡（文字走原版 scissor，
         // 玻璃走 scissorArea），这里只做整行的剔除，省掉看不见的那些行的排版开销。
-        drawHeader(graphics, font);
+        drawHeader(graphics, font, (int) mx, (int) my);
         long now = Util.getMillis();
         for (int index = 0; index < items.size(); index++) {
             int top = rowTop(index);
@@ -1241,7 +1241,7 @@ public class MediaListView extends AbstractWidget {
 
     // ── 头部 ────────────────────────────────────────────────────────────
 
-    private void drawHeader(GuiGraphicsExtractor graphics, Font font) {
+    private void drawHeader(GuiGraphics graphics, Font font, int mouseX, int mouseY) {
         if (header == null) {
             return;
         }
@@ -1290,7 +1290,7 @@ public class MediaListView extends AbstractWidget {
             drawStats(graphics, font, header.stats(), textLeft, top + 25, statsWidth);
         }
         if (header.playAll()) {
-            drawHeaderAction(graphics, font);
+            drawHeaderAction(graphics, font, mouseX, mouseY);
         }
 
         if (reveal > 0.01F && !descriptionLines.isEmpty()) {
@@ -1339,13 +1339,13 @@ public class MediaListView extends AbstractWidget {
      * <p>歌单动辄几百首，逐首点播放按钮不现实；这里给它一个入口，走的是同一条点播命令
      * （{@code /music play playlist <id>}），和聊天栏点播完全等价。</p>
      */
-    private void drawHeaderAction(GuiGraphicsExtractor graphics, Font font) {
+    private void drawHeaderAction(GuiGraphics graphics, Font font, int mouseX, int mouseY) {
         int left = headerActionLeft();
         int top = headerActionTop();
         int right = left + HEADER_ACTION_WIDTH;
         int bottom = top + HEADER_ACTION_HEIGHT;
-        boolean hovered = isMouseOver(graphics.mouseX(), graphics.mouseY())
-                && overHeaderAction(graphics.mouseX(), graphics.mouseY());
+        boolean hovered = isMouseOver(mouseX, mouseY)
+                && overHeaderAction(mouseX, mouseY);
         float lift = hovered ? 1.0F : 0.30F;
         // 液态玻璃胶囊：和别处的玻璃按钮走同一套材质，悬停时提亮、边缘折射更明显。
         if (!GlassWidgets.glassBackground(graphics, left, top, right, bottom,
@@ -1365,7 +1365,7 @@ public class MediaListView extends AbstractWidget {
                 textColor, GlassTheme.Text.LABEL);
     }
 
-    private void drawStats(GuiGraphicsExtractor graphics, Font font, List<MediaStat> stats,
+    private void drawStats(GuiGraphics graphics, Font font, List<MediaStat> stats,
                            int x, int y, int maxWidth) {
         if (stats == null || stats.isEmpty()) {
             return;
@@ -1409,7 +1409,7 @@ public class MediaListView extends AbstractWidget {
      * 只有封面 + 一行标题的时候，右侧一大片空白会让整行看起来很空，所以补上序号、右对齐的
      * 补充信息和播放按钮；数据源没给就不画那一段，不会留空位。</p>
      */
-    private void drawRow(GuiGraphicsExtractor graphics, Font font, MediaItem item, int index, int top,
+    private void drawRow(GuiGraphics graphics, Font font, MediaItem item, int index, int top,
                          float reveal, float hoverAmount, float pressAmount, float playPress,
                          float secondaryPress, float trailingPress,
                          boolean queueHovered, boolean secondaryHovered, boolean trailingHovered) {
@@ -1562,7 +1562,7 @@ public class MediaListView extends AbstractWidget {
      * 空队列时则是"开始播放"——和聊天栏点播完全是同一条路径。唱片母版界面复用同一套行，
      * 只把图标换成刻录、回调换成发刻录请求（见 {@code DiscMasterScreen}）。</p>
      */
-    private void drawActionButton(GuiGraphicsExtractor graphics, int x, int y, boolean hovered,
+    private void drawActionButton(GuiGraphics graphics, int x, int y, boolean hovered,
                                   float press, float dim, SvgIcon icon, boolean enabled) {
         float pressAmount = GlassWidgets.clamp01(press);
         int color;
@@ -1593,7 +1593,7 @@ public class MediaListView extends AbstractWidget {
         icon.drawCentered(graphics, x, y, PLAY_SIZE, PLAY_ICON_SIZE, color);
     }
 
-    private void drawPagination(GuiGraphicsExtractor graphics, Font font, double mouseX, double mouseY) {
+    private void drawPagination(GuiGraphics graphics, Font font, double mouseX, double mouseY) {
         if (paginationHeight() <= 0) {
             return;
         }
@@ -1618,7 +1618,7 @@ public class MediaListView extends AbstractWidget {
                 top + (PAGE_FOOTER_HEIGHT - 8) / 2, labelColor, GlassTheme.Text.LABEL);
     }
 
-    private void drawPageButton(GuiGraphicsExtractor graphics, int x, int y,
+    private void drawPageButton(GuiGraphics graphics, int x, int y,
                                 SvgIcon icon, boolean enabled, boolean hovered) {
         int color;
         if (minimal) {
@@ -1651,7 +1651,7 @@ public class MediaListView extends AbstractWidget {
      * <p>贴图走 {@link MediaThumbnails#draw}：在 {@code size × size} 方框内<b>等比内接</b>，
      * 整张封面都在、不裁切，缩放用线性采样。</p>
      */
-    private void drawCover(GuiGraphicsExtractor graphics, int x, int y, int size, String url, String title) {
+    private void drawCover(GuiGraphics graphics, int x, int y, int size, String url, String title) {
         MediaThumbnails.Thumb thumb = url == null || url.isBlank()
                 ? null : MediaThumbnails.getInstance().get(url);
         if (thumb != null) {
@@ -1662,7 +1662,7 @@ public class MediaListView extends AbstractWidget {
     }
 
     /** 封面还没就绪时的占位：圆角底 + 中间一小块更亮的形状。 */
-    private void drawCoverPlaceholder(GuiGraphicsExtractor graphics, int x, int y, int size) {
+    private void drawCoverPlaceholder(GuiGraphics graphics, int x, int y, int size) {
         // 占位：圆角底 + 中间一小块更亮的形状，视觉上像"封面位置"而不是空缺
         float radius = size * 0.22F;
         float baseAlpha = minimal ? 0.10F : 0.14F;
@@ -1680,7 +1680,7 @@ public class MediaListView extends AbstractWidget {
      * <p>画在行内容右侧预留的那一列里（{@link #contentRight()} 已经把这块让出来了），
      * 所以它和行不会重叠。一条极淡的轨道 + 一根滑块，只有真的能滚动时才出现。</p>
      */
-    private void drawScrollbar(GuiGraphicsExtractor graphics) {
+    private void drawScrollbar(GuiGraphics graphics) {
         double max = maxScroll();
         if (max <= 0.0D) {
             return;
@@ -1708,7 +1708,7 @@ public class MediaListView extends AbstractWidget {
 
     // ── 状态层 ──────────────────────────────────────────────────────────
 
-    private void drawLoading(GuiGraphicsExtractor graphics, Font font) {
+    private void drawLoading(GuiGraphics graphics, Font font) {
         int centerX = getX() + width / 2;
         int centerY = getY() + height / 2 - 8;
         drawSpinner(graphics, centerX, centerY, 9);
@@ -1720,7 +1720,7 @@ public class MediaListView extends AbstractWidget {
     }
 
     /** 8 个点绕圈，按时间错开透明度——比一张旋转贴图省事，也不占资源。 */
-    private void drawSpinner(GuiGraphicsExtractor graphics, int centerX, int centerY, int radius) {
+    private void drawSpinner(GuiGraphics graphics, int centerX, int centerY, int radius) {
         float phase = (Util.getMillis() % 900L) / 900.0F;
         for (int index = 0; index < 8; index++) {
             double angle = index * Math.PI / 4.0D;
@@ -1732,7 +1732,7 @@ public class MediaListView extends AbstractWidget {
         }
     }
 
-    private void drawCenteredStatus(GuiGraphicsExtractor graphics, Font font, Component text) {
+    private void drawCenteredStatus(GuiGraphics graphics, Font font, Component text) {
         int color = minimal
                 ? FlatTheme.TEXT_TERTIARY
                 : GlassWidgets.dim(GlassTheme.TEXT_SECONDARY, 0.40F);

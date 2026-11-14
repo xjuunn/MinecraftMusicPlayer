@@ -28,10 +28,10 @@ public abstract class GameRendererMixin {
     @Inject(
             method = "render",
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/client/gui/render/GuiRenderer;render()V")
+                    target = "Lnet/minecraft/client/gui/render/GuiRenderer;render(Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V")
     )
     private void musicplayer$captureGlassBackdrop(CallbackInfo callbackInfo) {
         GlassPanel.beforeGui();
-        IdleRenderer.beforeGui(((GameRenderer) (Object) this).gameRenderState().guiRenderState);
+        IdleRenderer.beforeGui(((GameRendererAccessor) (Object) this).musicplayer$guiRenderState());
     }
 }

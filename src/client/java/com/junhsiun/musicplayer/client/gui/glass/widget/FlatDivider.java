@@ -1,7 +1,7 @@
 package com.junhsiun.musicplayer.client.gui.glass.widget;
 
 import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
@@ -28,7 +28,7 @@ public final class FlatDivider extends AbstractWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         FlatTheme.divider(graphics, getX(), getY(), getX() + getWidth(), getY() + getHeight());
     }
 }

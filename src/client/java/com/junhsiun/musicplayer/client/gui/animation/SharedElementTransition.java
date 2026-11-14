@@ -3,7 +3,7 @@ package com.junhsiun.musicplayer.client.gui.animation;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
 import com.junhsiun.musicplayer.client.gui.media.MediaThumbnails;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
 
@@ -177,7 +177,7 @@ public final class SharedElementTransition {
     }
 
     /** 在屏幕最上层画飞行中的封面与标题。 */
-    public void draw(GuiGraphicsExtractor graphics, Font font) {
+    public void draw(GuiGraphics graphics, Font font) {
         if (!isActive()) {
             return;
         }
@@ -224,7 +224,7 @@ public final class SharedElementTransition {
     }
 
     /** 标题的位置 / 缩放 / 颜色都取两端标题字段。 */
-    private void drawTitle(GuiGraphicsExtractor graphics, Font font, float eased) {
+    private void drawTitle(GuiGraphics graphics, Font font, float eased) {
         float centerX = lerp(eased, from.titleCenterX(), to.titleCenterX());
         float topY = lerp(eased, from.titleTopY(), to.titleTopY());
         float scale = lerp(eased, from.titleScale(), to.titleScale());
@@ -233,7 +233,7 @@ public final class SharedElementTransition {
     }
 
     /** 副标题 / 末尾文字的位置 / 缩放 / 颜色取对应的 {@link HeroElement.HeroText} 字段。 */
-    private void drawTextPair(GuiGraphicsExtractor graphics, Font font, float eased, Component text,
+    private void drawTextPair(GuiGraphics graphics, Font font, float eased, Component text,
                               HeroElement.HeroText fromText, HeroElement.HeroText toText) {
         float centerX = lerp(eased, fromText.centerX(), toText.centerX());
         float topY = lerp(eased, fromText.topY(), toText.topY());
@@ -242,7 +242,7 @@ public final class SharedElementTransition {
         drawCentered(graphics, font, text, centerX, topY, color, scale);
     }
 
-    private static void drawCentered(GuiGraphicsExtractor graphics, Font font, Component text,
+    private static void drawCentered(GuiGraphics graphics, Font font, Component text,
                                      float centerX, float topY, int color, float scale) {
         int baseX = Math.round(centerX);
         int baseY = Math.round(topY);
@@ -253,7 +253,7 @@ public final class SharedElementTransition {
     }
 
     /** 用亚像素平移把有小数坐标的封面画到整数基底上。 */
-    private void drawSubpixel(GuiGraphicsExtractor graphics,
+    private void drawSubpixel(GuiGraphics graphics,
                               float fx0, float fy0, float fx1, float fy1,
                               MediaThumbnails.Thumb thumb) {
         int baseX = (int) Math.floor(fx0);

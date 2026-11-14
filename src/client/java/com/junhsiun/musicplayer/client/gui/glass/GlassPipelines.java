@@ -3,19 +3,15 @@ package com.junhsiun.musicplayer.client.gui.glass;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+import net.minecraft.client.renderer.RenderPipelines;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.renderpearl.api.GpuFormat;
-import com.mojang.renderpearl.api.pipeline.BlendFunction;
-import com.mojang.renderpearl.api.pipeline.ColorTargetState;
-import com.mojang.renderpearl.api.pipeline.DepthStencilState;
-import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
-import net.minecraft.client.renderer.BindGroupLayouts;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.pipeline.BlendFunction;
 import net.minecraft.resources.Identifier;
 
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * 液态玻璃用到的 GPU 管线。
@@ -86,11 +82,7 @@ public final class GlassPipelines {
                     .withShaderDefine("GLASS_WINDOW_TINT_R", tintColor[0])
                     .withShaderDefine("GLASS_WINDOW_TINT_G", tintColor[1])
                     .withShaderDefine("GLASS_WINDOW_TINT_B", tintColor[2]);
-            return builder
-                    .withBindGroupLayout(BindGroupLayouts.PROJECTION)
-                    .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
-                    .withBindGroupLayout(BindGroupLayouts.SAMPLER0_SAMPLER1_SAMPLER2)
-                    .build();
+            return builder.build();
         });
     }
 
@@ -123,8 +115,6 @@ public final class GlassPipelines {
                 // 投影四边形向外扩张的像素数。着色器要用它把四边形尺寸还原成面板尺寸，
                 // 否则 SDF 会描述扩张后的框，投影变成一圈离开面板的圆角暗环。
                 .withShaderDefine("GLASS_SHADOW_PADDING", shadow.padding())
-                .withBindGroupLayout(BindGroupLayouts.PROJECTION)
-                .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
                 .build());
     }
 
@@ -138,18 +128,13 @@ public final class GlassPipelines {
         String key = spread + "/" + vertical;
         return BLUR_PIPELINES.computeIfAbsent(key, ignored -> {
             boolean verticalBlur = vertical;
-            RenderPipeline.Builder builder = RenderPipeline.builder()
+            RenderPipeline.Builder builder = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
                     .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE,
                             "pipeline/glass_blur_" + Float.floatToIntBits(spread) + (verticalBlur ? "_v" : "_h")))
                     .withVertexShader(BLUR_VERTEX_SHADER)
                     .withFragmentShader(BLUR_FRAGMENT_SHADER)
-                    .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
-                    .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
-                    .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
-                    .withColorTargetState(new ColorTargetState(Optional.empty(), GpuFormat.RGBA8_UNORM,
-                            ColorTargetState.WRITE_ALL))
+                    .withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.TRIANGLES)
                     // 离屏颜色目标没有深度附件，管线必须声明"不需要深度"
-                    .withDepthStencilState(Optional.<DepthStencilState>empty())
                     .withCull(false)
                     .withShaderDefine("GLASS_BLUR_SPREAD", spread);
             if (verticalBlur) {
@@ -161,16 +146,12 @@ public final class GlassPipelines {
 
     private static RenderPipeline.Builder baseGuiPipeline(String kind, String key) {
         String hash = Integer.toHexString(key.hashCode());
-        return RenderPipeline.builder()
+        return RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
                 .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE,
                         "pipeline/glass_" + kind + "_" + hash.toLowerCase(Locale.ROOT)))
                 .withVertexShader(GLASS_VERTEX_SHADER)
-                .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
-                // 界面元素永远是 4 个顶点一个 quad（BlitRenderState.buildVertices），
-                // 声明成 TRIANGLES 只会画出 0,1,2 这一个三角形，必须和 vanilla 一样用 QUADS
-                .withPrimitiveTopology(PrimitiveTopology.QUADS)
-                .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
-                .withDepthStencilState(Optional.<DepthStencilState>empty())
+                .withVertexFormat(DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS)
+                // 界面元素永远是 4 个顶点一个 quad（BlitRenderState.buildVertices）
                 .withCull(false);
     }
 }

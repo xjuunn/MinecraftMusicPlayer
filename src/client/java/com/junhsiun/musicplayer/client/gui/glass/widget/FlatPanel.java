@@ -1,7 +1,7 @@
 package com.junhsiun.musicplayer.client.gui.glass.widget;
 
 import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
@@ -49,7 +49,7 @@ public class FlatPanel extends AbstractWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         int x0 = getX();
         int y0 = getY();
         int x1 = x0 + getWidth();

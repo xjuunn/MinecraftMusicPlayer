@@ -1,6 +1,6 @@
 package com.junhsiun.musicplayer.client.gui.media;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.util.Util;
 
 /**
@@ -58,7 +58,7 @@ public final class CoverFade {
      * <p>只有“从未显示过任何图，且目标图也没下载好”这一种情况才会返回 {@code false}。
      * 一旦显示过图，后续 URL 变化、高清图迟到，都只会从旧图淡入新图。</p>
      */
-    public boolean draw(GuiGraphicsExtractor graphics, String url,
+    public boolean draw(GuiGraphics graphics, String url,
                         int x0, int y0, int x1, int y1) {
         MediaThumbnails thumbs = MediaThumbnails.getInstance();
         String targetUrl = url == null ? "" : url;
@@ -110,14 +110,14 @@ public final class CoverFade {
         return first == second || first.id().equals(second.id());
     }
 
-    private static void drawFull(GuiGraphicsExtractor graphics, MediaThumbnails.Thumb thumb,
+    private static void drawFull(GuiGraphics graphics, MediaThumbnails.Thumb thumb,
                                  int x0, int y0, int x1, int y1) {
         if (thumb != null) {
             MediaThumbnails.drawBounded(graphics, thumb, x0, y0, x1, y1);
         }
     }
 
-    private static void drawFaded(GuiGraphicsExtractor graphics, MediaThumbnails.Thumb thumb,
+    private static void drawFaded(GuiGraphics graphics, MediaThumbnails.Thumb thumb,
                                   int x0, int y0, int x1, int y1, float amount) {
         if (thumb == null) {
             return;

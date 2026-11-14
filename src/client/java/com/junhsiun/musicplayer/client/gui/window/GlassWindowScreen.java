@@ -4,7 +4,7 @@ import com.junhsiun.musicplayer.client.gui.glass.GlassPanel;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.components.events.GuiEventListener;
@@ -90,10 +90,10 @@ public abstract class GlassWindowScreen extends Screen {
         }
         GlassPanel.prewarm(screen.window().style());
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.gui == null) {
+        if (minecraft == null) {
             return;
         }
-        minecraft.gui.setScreen(screen);
+        minecraft.setScreen(screen);
     }
 
     /**
@@ -303,12 +303,12 @@ public abstract class GlassWindowScreen extends Screen {
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics) {
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         // 背景交给液态玻璃自己抓取：这里画原版暗色遮罩会让玻璃采样到被压暗的画面
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics) {
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         WindowTransform transform = currentTransform();
         WindowBounds animated = transform.apply(baseBounds);
 
@@ -343,7 +343,7 @@ public abstract class GlassWindowScreen extends Screen {
                 animated.x1(), animated.y1(), GlassTheme.Sizes.WINDOW_RADIUS);
 
         // 控件必须在玻璃之后提交，才会落在玻璃上层（见类注释）
-        super.extractRenderState(graphics);
+        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     /**

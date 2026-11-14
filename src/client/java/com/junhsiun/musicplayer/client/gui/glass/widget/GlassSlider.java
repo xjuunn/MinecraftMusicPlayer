@@ -3,7 +3,7 @@ package com.junhsiun.musicplayer.client.gui.glass.widget;
 import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
@@ -97,7 +97,7 @@ public class GlassSlider extends AbstractSliderButton {
     }
 
     @Override
-    public void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         boolean usable = isActive();
         hover.tick((isHovered() || isFocused()) && usable, GlassTheme.Motion.HOVER);
         float lift = hover.eased();

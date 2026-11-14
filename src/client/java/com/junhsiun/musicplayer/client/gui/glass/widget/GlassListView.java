@@ -3,7 +3,7 @@ package com.junhsiun.musicplayer.client.gui.glass.widget;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -136,7 +136,7 @@ public class GlassListView extends AbstractWidget {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
-        if (!active || !visible || !event.isLeftMouse() || !isMouseOver(event.x(), event.y())) {
+        if (!active || !visible || event.button() != 0 || !isMouseOver(event.x(), event.y())) {
             return false;
         }
         int index = actionRowAt(event.x(), event.y());
@@ -181,7 +181,7 @@ public class GlassListView extends AbstractWidget {
     // ── 绘制 ────────────────────────────────────────────────────────────
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (rows.isEmpty()) {
             return;
         }
@@ -193,8 +193,7 @@ public class GlassListView extends AbstractWidget {
         int x1 = x0 + width;
         int y1 = y0 + height;
 
-        int mouseX = graphics.mouseX();
-        int mouseY = graphics.mouseY();
+
         int hoverRow = rowAt(mouseX, mouseY);
         int hoverAction = actionRowAt(mouseX, mouseY);
         hover.tick(hoverRow >= 0, GlassTheme.Motion.HOVER);
@@ -260,7 +259,7 @@ public class GlassListView extends AbstractWidget {
      *   <li>歌名放得下：剩余宽度够放次文本才画，放不下就只留歌名。</li>
      * </ul>
      */
-    private void drawRowText(GuiGraphicsExtractor graphics, Font font, Row row, int x, int y) {
+    private void drawRowText(GuiGraphics graphics, Font font, Row row, int x, int y) {
         String title = row.title() == null ? "" : row.title().getString();
         String detail = row.detail() == null ? "" : row.detail().getString();
         int available = Math.round((actionX0() - x - 6) / TEXT_SCALE);
@@ -294,7 +293,7 @@ public class GlassListView extends AbstractWidget {
         return font.plainSubstrByWidth(text, Math.max(0, width - font.width(ellipsis))) + ellipsis;
     }
 
-    private void drawScrollbar(GuiGraphicsExtractor graphics, int x1, int y0, int y1) {
+    private void drawScrollbar(GuiGraphics graphics, int x1, int y0, int y1) {
         if (maxScroll() <= 0) {
             return;
         }

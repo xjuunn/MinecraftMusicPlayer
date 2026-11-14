@@ -4,8 +4,8 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "ClientLevelAccessor",
+    "GameRendererAccessor",
     "GameRendererMixin",
-    "HudAccessor",
     "HudMixin",
     "KeyboardHandlerMixin",
     "LevelEventHandlerAccessor",

@@ -3,21 +3,21 @@ package com.junhsiun.musicplayer.client.gui.glass;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.renderpearl.api.GpuFormat;
-import com.mojang.renderpearl.api.buffers.GpuBuffer;
-import com.mojang.renderpearl.api.commands.CommandEncoder;
-import com.mojang.renderpearl.api.commands.RenderPass;
-import com.mojang.renderpearl.api.device.GpuDevice;
-import com.mojang.renderpearl.api.textures.FilterMode;
-import com.mojang.renderpearl.api.textures.GpuSampler;
-import com.mojang.renderpearl.api.textures.GpuTexture;
-import com.mojang.renderpearl.api.textures.GpuTextureView;
+import com.mojang.blaze3d.textures.TextureFormat;
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.systems.CommandEncoder;
+import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Util;
 import org.lwjgl.BufferUtils;
 
 import java.nio.ByteBuffer;
-import java.util.Optional;
+import java.util.OptionalInt;
 
 /**
  * 液态玻璃背后的模糊背景：把当前画面逐级降采样成两级，供玻璃着色器按比例混合。
@@ -149,7 +149,7 @@ public final class GlassBackdrop {
         if (failed) {
             return;
         }
-        RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
+        RenderTarget main = Minecraft.getInstance().getMainRenderTarget();
         if (main == null || main.width <= 0 || main.height <= 0) {
             return;
         }
@@ -169,7 +169,7 @@ public final class GlassBackdrop {
         if (failed) {
             return;
         }
-        RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
+        RenderTarget main = Minecraft.getInstance().getMainRenderTarget();
         if (main == null || main.width <= 0 || main.height <= 0) {
             return;
         }
@@ -190,8 +190,6 @@ public final class GlassBackdrop {
             // 再降到 1/8 并重度模糊，供模糊度滑块的高端使用
             downsample(encoder, heavyA, frostA.view, linear);
             blur(encoder, heavyA, heavyB, HEAVY_SPREAD, HEAVY_ITERATIONS, linear);
-
-            encoder.submit();
             ready = true;
         } catch (Throwable throwable) {
             failed = true;
@@ -269,12 +267,12 @@ public final class GlassBackdrop {
     private void pass(CommandEncoder encoder, Target destination, GpuTextureView source,
                       float spread, boolean vertical, GpuSampler linear) {
         RenderPass pass = encoder.createRenderPass(
-                () -> "musicplayer glass blur " + destination.name, destination.view, Optional.empty());
+                () -> "musicplayer glass blur " + destination.name, destination.view, OptionalInt.empty());
         try {
-            pass.setPipeline(RenderSystem.getCompiledPipeline(GlassPipelines.blur(spread, vertical)));
-            pass.setUniform("Sampler0", source, linear);
-            pass.setVertexBuffer(0, quadBuffer.slice());
-            pass.draw(6, 1, 0, 0);
+            pass.setPipeline(GlassPipelines.blur(spread, vertical));
+            pass.bindTexture("Sampler0", source, linear);
+            pass.setVertexBuffer(0, quadBuffer);
+            pass.draw(6, 1);
         } finally {
             pass.close();
         }
@@ -318,7 +316,7 @@ public final class GlassBackdrop {
                     () -> "musicplayer glass " + name,
                     GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_RENDER_ATTACHMENT
                             | GpuTexture.USAGE_COPY_DST,
-                    GpuFormat.RGBA8_UNORM,
+                    TextureFormat.RGBA8,
                     Math.max(1, width),
                     Math.max(1, height),
                     1,
