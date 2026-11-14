@@ -78,7 +78,7 @@ public final class ClientPlaylistStore {
             return;
         }
         playlists.removeIf(existing -> playlist.id.equals(existing.id));
-        playlists.addFirst(playlist);
+        playlists.add(0, playlist);
         save();
     }
 

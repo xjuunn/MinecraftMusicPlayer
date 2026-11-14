@@ -5,10 +5,12 @@ import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.network.MusicConfigSnapshotPayload;
 import com.junhsiun.musicplayer.platform.api.MusicApiMode;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
+
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -61,16 +63,17 @@ public final class ServerConfigSync {
     }
 
     public static boolean canEdit(ServerPlayer player) {
-        return player != null && player.createCommandSourceStack().permissions()
-                .hasPermission(Permissions.COMMANDS_ADMIN);
+        return player != null && player.createCommandSourceStack().hasPermission(2);
     }
 
     /** 发给单个玩家。 */
     public static void send(ServerPlayer player) {
-        if (player == null || !ServerPlayNetworking.canSend(player, MusicConfigSnapshotPayload.TYPE)) {
+        if (player == null || !ServerPlayNetworking.canSend(player, MusicConfigSnapshotPayload.ID)) {
             return;
         }
-        ServerPlayNetworking.send(player, snapshot(player));
+        FriendlyByteBuf buf = PacketByteBufs.create();
+        snapshot(player).encode(buf);
+        ServerPlayNetworking.send(player, MusicConfigSnapshotPayload.ID, buf);
     }
 
     /** 发给所有在线玩家（修改后让所有人的设置页同步刷新）。 */

@@ -5,11 +5,9 @@ import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.icon.SvgIcon;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.InputWithModifiers;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -48,21 +46,21 @@ public class GlassNavButton extends AbstractButton {
     }
 
     @Override
-    public void onPress(InputWithModifiers input) {
+    public void onPress() {
         if (action != null) {
             action.run();
         }
     }
 
     @Override
-    public void onClick(MouseButtonEvent event, boolean doubled) {
-        super.onClick(event, doubled);
+    public void onClick(double mouseX, double mouseY) {
+        super.onClick(mouseX, mouseY);
         held = true;
     }
 
     @Override
-    public void onRelease(MouseButtonEvent event) {
-        super.onRelease(event);
+    public void onRelease(double mouseX, double mouseY) {
+        super.onRelease(mouseX, mouseY);
         held = false;
     }
 
@@ -72,7 +70,11 @@ public class GlassNavButton extends AbstractButton {
     }
 
     @Override
-    protected void extractContents(GuiGraphicsExtractor graphics) {
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        extractContents(graphics);
+    }
+
+    protected void extractContents(GuiGraphics graphics) {
         boolean usable = isActive();
         hover.tick((isHovered() || isFocused()) && usable, GlassTheme.Motion.HOVER);
         press.tickSpring(held && usable, held ? GlassTheme.Motion.PRESS : GlassTheme.Motion.RELEASE);

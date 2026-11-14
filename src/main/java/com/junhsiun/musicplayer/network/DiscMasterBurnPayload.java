@@ -1,10 +1,8 @@
 package com.junhsiun.musicplayer.network;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * 客户端 → 服务端：把指定歌曲刻录到手上的唱片母版。
@@ -12,22 +10,15 @@ import net.minecraft.resources.Identifier;
  * <p>只带歌曲 ID。曲目详情（标题、作者、音源直链）由服务端解析，和
  * {@code /music burn song} 走同一条链路，避免客户端伪造唱片内容。</p>
  */
-public record DiscMasterBurnPayload(String songId) implements CustomPacketPayload {
-    public static final Type<DiscMasterBurnPayload> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "disc_master_burn"));
-    public static final StreamCodec<RegistryFriendlyByteBuf, DiscMasterBurnPayload> CODEC =
-            CustomPacketPayload.codec(DiscMasterBurnPayload::write, DiscMasterBurnPayload::new);
+public record DiscMasterBurnPayload(String songId) {
+    public static final ResourceLocation ID =
+            new ResourceLocation(MusicPlayerMod.MOD_ID, "disc_master_burn");
 
-    public DiscMasterBurnPayload(RegistryFriendlyByteBuf buffer) {
-        this(buffer.readUtf());
+    public static DiscMasterBurnPayload decode(FriendlyByteBuf buffer) {
+        return new DiscMasterBurnPayload(buffer.readUtf());
     }
 
-    private void write(RegistryFriendlyByteBuf buffer) {
+    public void encode(FriendlyByteBuf buffer) {
         buffer.writeUtf(this.songId == null ? "" : this.songId);
-    }
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
     }
 }

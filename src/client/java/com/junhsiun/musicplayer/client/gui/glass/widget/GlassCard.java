@@ -5,7 +5,7 @@ import com.junhsiun.musicplayer.client.gui.glass.layout.GlassLayout;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.window.WindowBounds;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
@@ -178,7 +178,7 @@ public class GlassCard extends AbstractWidget {
         setX(value.x0());
         setY(value.y0());
         setWidth(value.width());
-        setHeight(value.height());
+        this.height = value.height();
         return this;
     }
 
@@ -286,7 +286,7 @@ public class GlassCard extends AbstractWidget {
     // ── 绘制 ────────────────────────────────────────────────────────────
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         int x0 = getX();
         int y0 = getY();
         int x1 = getX() + getWidth();

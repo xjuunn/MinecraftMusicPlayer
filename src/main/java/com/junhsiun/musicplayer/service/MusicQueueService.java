@@ -20,6 +20,7 @@ import com.junhsiun.musicplayer.platform.LyricService;
 import com.junhsiun.musicplayer.util.Messages;
 import com.junhsiun.musicplayer.util.PlayerSongLimiter;
 import com.junhsiun.musicplayer.util.SongRequestPolicy;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -27,6 +28,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayDeque;
@@ -381,7 +383,7 @@ public final class MusicQueueService {
                 // 玩家关掉歌词 / 已经没有音乐在放：手上有残留歌词就清掉再跳过，
                 // 否则关掉歌词开关或曲终之后 action bar 会一直挂着最后一句。
                 if (!playerLastOverlay.getOrDefault(player.getUUID(), "").isEmpty()) {
-                    player.sendOverlayMessage(Component.empty());
+                    player.displayClientMessage(Component.empty(), true);
                     playerLastOverlay.put(player.getUUID(), "");
                 }
                 continue;
@@ -446,7 +448,7 @@ public final class MusicQueueService {
 
                 if (currentPlayback == null || currentLyrics.isEmpty() || !lyricsReady()) {
                     if (!playerLastOverlay.getOrDefault(player.getUUID(), "").isEmpty()) {
-                        player.sendOverlayMessage(Component.empty());
+                        player.displayClientMessage(Component.empty(), true);
                         playerLastOverlay.put(player.getUUID(), "");
                     }
                     continue;
@@ -488,11 +490,11 @@ public final class MusicQueueService {
             // 自动隐藏，所以同一句歌词必须周期性重发，否则会"消失—重现"地闪。
             if (!overlayText.isEmpty()) {
                 if (refreshDue) {
-                    player.sendOverlayMessage(Component.literal("♫ " + overlayText).withStyle(ChatFormatting.AQUA));
+                    player.displayClientMessage(Component.literal("\u266A " + overlayText).withStyle(ChatFormatting.AQUA), true);
                     playerLastOverlay.put(player.getUUID(), overlayText);
                 }
             } else if (!playerLastOverlay.getOrDefault(player.getUUID(), "").isEmpty()) {
-                player.sendOverlayMessage(Component.empty());
+                player.displayClientMessage(Component.empty(), true);
                 playerLastOverlay.put(player.getUUID(), "");
             }
         }
@@ -548,7 +550,7 @@ public final class MusicQueueService {
             lyricsPreference.put(player.getUUID(), true);
         } else {
             lyricsPreference.put(player.getUUID(), false);
-            player.sendOverlayMessage(Component.empty());
+            player.displayClientMessage(Component.empty(), true);
         }
         if (lyricsPreferenceState != null) {
             lyricsPreferenceState.setEnabled(player.getUUID(), enabled);
@@ -559,7 +561,7 @@ public final class MusicQueueService {
         Boolean current = lyricsPreference.get(player.getUUID());
         if (current != null && current) {
             lyricsPreference.put(player.getUUID(), false);
-            player.sendOverlayMessage(Component.empty());
+            player.displayClientMessage(Component.empty(), true);
             if (lyricsPreferenceState != null) {
                 lyricsPreferenceState.setEnabled(player.getUUID(), false);
             }
@@ -589,9 +591,9 @@ public final class MusicQueueService {
 
     public void initLyricsState(MinecraftServer server) {
         lyricsPreferenceState = server.overworld().getDataStorage()
-                .computeIfAbsent(LyricsPreferenceState.TYPE);
+                .computeIfAbsent(LyricsPreferenceState::fromTag, LyricsPreferenceState::new, LyricsPreferenceState.storageId());
         recentState = server.overworld().getDataStorage()
-                .computeIfAbsent(RecentPlaybackState.TYPE);
+                .computeIfAbsent(RecentPlaybackState::fromTag, RecentPlaybackState::new, RecentPlaybackState.storageId());
     }
 
     private void ensureRecentState(ServerPlayer player) {
@@ -601,7 +603,7 @@ public final class MusicQueueService {
         MinecraftServer server = player.level().getServer();
         if (server != null) {
             recentState = server.overworld().getDataStorage()
-                    .computeIfAbsent(RecentPlaybackState.TYPE);
+                    .computeIfAbsent(RecentPlaybackState::fromTag, RecentPlaybackState::new, RecentPlaybackState.storageId());
         }
     }
 
@@ -836,7 +838,7 @@ public final class MusicQueueService {
                 playlistReversed = reverse;
                 playlistTrackIndex = reverse ? playlistTotalTracks - 1 : 0;
                 playlistRequesterId = requester.getUUID();
-                playlistRequesterName = requester.getGameProfile().name();
+                playlistRequesterName = requester.getName().getString();
                 playlistMode = true;
 
                 MusicPlayerMod.LOGGER.info("歌单模式启动: [{}] ID={}, 共 {} 首{}",
@@ -876,7 +878,7 @@ public final class MusicQueueService {
                                     source.sendFailure(Component.translatable("musicplayer.playlist.last_track_failed"));
                                     return;
                                 }
-                                SearchEntry entry = tracks.getFirst();
+                                SearchEntry entry = tracks.get(0);
                                 resolveTrack(entry.id()).whenComplete((track, rt) -> server.execute(() -> {
                                     if (rt != null || track == null) {
                                         source.sendFailure(Component.translatable("musicplayer.playlist.first_track_load_failed",
@@ -1010,7 +1012,7 @@ public final class MusicQueueService {
                 playlistTotalTracks = programs.size();
                 playlistTrackIndex = 0;
                 playlistRequesterId = requester.getUUID();
-                playlistRequesterName = requester.getGameProfile().name();
+                playlistRequesterName = requester.getName().getString();
                 playlistMode = true;
 
                 // Load first program only — remaining are loaded on demand during playback
@@ -1148,7 +1150,7 @@ public final class MusicQueueService {
         MusicPlayerMod.netease().playlistTracksPage(playlistId, index, 1)
                 .whenComplete((tracks, t) -> server.execute(() -> {
                     if (t != null || tracks.isEmpty()) return;
-                    SearchEntry entry = tracks.getFirst();
+                    SearchEntry entry = tracks.get(0);
                     int trackNumber = index + 1;
                     resolveTrack(entry.id()).whenComplete((track, rt) -> server.execute(() -> {
                         if (rt != null) {
@@ -1366,7 +1368,7 @@ public final class MusicQueueService {
             return;
         }
         if (currentPlayback == null) {
-            startTrack(server, track, requester.getUUID(), requester.getGameProfile().name());
+            startTrack(server, track, requester.getUUID(), requester.getName().getString());
             return;
         }
         queue.addLast(new QueuedTrack(
@@ -1375,13 +1377,13 @@ public final class MusicQueueService {
                 track.artist(),
                 track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
                 requester.getUUID(),
-                requester.getGameProfile().name(),
+                requester.getName().getString(),
                 track.sourceUrls(),
                 track.coverUrl()
         ));
         refreshTrackCache();
         if (MusicPlayerConfigManager.get().announceQueueChanges) {
-            broadcast(server, Component.translatable("musicplayer.queue.requested", requester.getGameProfile().name()).withStyle(ChatFormatting.GOLD)
+            broadcast(server, Component.translatable("musicplayer.queue.requested", requester.getName().getString()).withStyle(ChatFormatting.GOLD)
                     .append(Messages.clickableCommand(Component.literal(track.title()), Component.translatable("musicplayer.queue.replay_hover"), "/music play song " + track.id(), ChatFormatting.AQUA))
                     .append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY))
                     .append(track.artistId() != null && !track.artistId().isBlank()
@@ -1537,7 +1539,7 @@ public final class MusicQueueService {
         mutedOncePlayers.clear();
         server.getPlayerList().getPlayers().stream()
                 .filter(player -> !optedOutPlayers.contains(player.getUUID()))
-                .sorted(Comparator.comparing(player -> player.getGameProfile().name()))
+                .sorted(Comparator.comparing(player -> player.getName().getString()))
                 .forEach(player -> {
                     sendPlay(player, track, 0L);
                 });
@@ -1583,7 +1585,7 @@ public final class MusicQueueService {
         Component empty = Component.literal("");
         server.getPlayerList().getPlayers().stream()
                 .filter(p -> !optedOutPlayers.contains(p.getUUID()))
-                .forEach(p -> p.sendOverlayMessage(empty));
+                .forEach(p -> p.displayClientMessage(empty, true));
     }
 
     private int activeListeners(MinecraftServer server) {
@@ -1607,15 +1609,30 @@ public final class MusicQueueService {
 
     // ── Network ──────────────────────────────────────────────────────
 
+    /** 1.20.1 老式 networking：把新式 payload 对象经 FriendlyByteBuf 编码后发送。 */
+    private static void sendPayload(ServerPlayer player, Object payload) {
+        FriendlyByteBuf buf = PacketByteBufs.create();
+        if (payload instanceof MusicUiStatePayload p) {
+            p.encode(buf);
+            ServerPlayNetworking.send(player, MusicUiStatePayload.ID, buf);
+        } else if (payload instanceof MusicQueuePayload p) {
+            p.encode(buf);
+            ServerPlayNetworking.send(player, MusicQueuePayload.ID, buf);
+        } else if (payload instanceof MusicRecentPayload p) {
+            p.encode(buf);
+            ServerPlayNetworking.send(player, MusicRecentPayload.ID, buf);
+        }
+    }
+
     private void sendPlay(ServerPlayer player, TrackInfo track, long offsetMillis) {
-        if (ServerPlayNetworking.canSend(player, MusicControlPayload.TYPE)) {
-            ServerPlayNetworking.send(player, MusicControlPayload.play(track.id(), track.sourceUrls(), track.title(), track.artist(), offsetMillis));
+        if (ServerPlayNetworking.canSend(player, MusicControlPayload.ID)) {
+            MusicControlPayload.send(player, MusicControlPayload.play(track.id(), track.sourceUrls(), track.title(), track.artist(), offsetMillis));
         }
     }
 
     private void sendStop(ServerPlayer player, String reason) {
-        if (ServerPlayNetworking.canSend(player, MusicControlPayload.TYPE)) {
-            ServerPlayNetworking.send(player, MusicControlPayload.stop(reason));
+        if (ServerPlayNetworking.canSend(player, MusicControlPayload.ID)) {
+            MusicControlPayload.send(player, MusicControlPayload.stop(reason));
         }
     }
 
@@ -1640,10 +1657,10 @@ public final class MusicQueueService {
     }
 
     public void sendUiState(ServerPlayer player) {
-        if (player == null || !ServerPlayNetworking.canSend(player, MusicUiStatePayload.TYPE)) {
+        if (player == null || !ServerPlayNetworking.canSend(player, MusicUiStatePayload.ID)) {
             return;
         }
-        ServerPlayNetworking.send(player, uiState());
+        sendPayload(player, uiState());
     }
 
     public void broadcastUiState(MinecraftServer server) {
@@ -1657,19 +1674,19 @@ public final class MusicQueueService {
 
     /** 把当前队列快照发给单个玩家（队列页打开 / 刷新时按需调用）。 */
     public void sendQueue(ServerPlayer player) {
-        if (player == null || !ServerPlayNetworking.canSend(player, MusicQueuePayload.TYPE)) {
+        if (player == null || !ServerPlayNetworking.canSend(player, MusicQueuePayload.ID)) {
             return;
         }
-        ServerPlayNetworking.send(player, queueSnapshot());
+        sendPayload(player, queueSnapshot());
     }
 
     public void sendRecent(ServerPlayer player) {
-        if (player == null || !ServerPlayNetworking.canSend(player, MusicRecentPayload.TYPE)) {
+        if (player == null || !ServerPlayNetworking.canSend(player, MusicRecentPayload.ID)) {
             return;
         }
         ensureRecentState(player);
         List<RecentTrack> entries = recentState == null ? List.of() : recentState.entries(player.getUUID());
-        ServerPlayNetworking.send(player, new MusicRecentPayload(entries));
+        sendPayload(player, new MusicRecentPayload(entries));
     }
 
     private void broadcastRecent(MinecraftServer server) {
@@ -1739,7 +1756,7 @@ public final class MusicQueueService {
     private static void appendDownloadLink(MutableComponent line, TrackInfo track) {
         if (track.sourceUrls() != null && !track.sourceUrls().isEmpty()) {
             line.append(Component.literal(" "));
-            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().getFirst(), ChatFormatting.GREEN));
+            line.append(Messages.clickableUrl(Component.translatable("musicplayer.common.download_label"), Component.translatable("musicplayer.common.download_hover"), track.sourceUrls().get(0), ChatFormatting.GREEN));
         }
     }
 

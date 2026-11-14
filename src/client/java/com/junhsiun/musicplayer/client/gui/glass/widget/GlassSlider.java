@@ -3,9 +3,8 @@ package com.junhsiun.musicplayer.client.gui.glass.widget;
 import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
@@ -76,15 +75,15 @@ public class GlassSlider extends AbstractSliderButton {
     }
 
     @Override
-    public void onClick(MouseButtonEvent event, boolean doubled) {
-        super.onClick(event, doubled);
+    public void onClick(double mouseX, double mouseY) {
+        super.onClick(mouseX, mouseY);
         held = true;
     }
 
     @Override
-    public void onRelease(MouseButtonEvent event) {
+    public void onRelease(double mouseX, double mouseY) {
         boolean wasHeld = held;
-        super.onRelease(event);
+        super.onRelease(mouseX, mouseY);
         held = false;
         if (wasHeld && onCommit != null) {
             onCommit.run();
@@ -97,9 +96,9 @@ public class GlassSlider extends AbstractSliderButton {
     }
 
     @Override
-    public void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         boolean usable = isActive();
-        hover.tick((isHovered() || isFocused()) && usable, GlassTheme.Motion.HOVER);
+        hover.tick(isHoveredOrFocused() && usable, GlassTheme.Motion.HOVER);
         float lift = hover.eased();
 
         int x0 = getX();
@@ -126,7 +125,7 @@ public class GlassSlider extends AbstractSliderButton {
         FlatTheme.fill(graphics, knobX - radius, centerY - radius, knobX + radius, centerY + radius,
                 radius, FlatTheme.alpha(0xFFFFFF, usable ? 0.98F : 0.55F));
 
-        if (valueText != null && (alwaysShowValue || isHovered() || isFocused())) {
+        if (valueText != null && (alwaysShowValue || isHoveredOrFocused())) {
             Component label = valueText.textAt(value);
             if (label != null) {
                 GlassWidgets.rightText(graphics, font(), label, getX() + width,

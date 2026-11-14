@@ -73,11 +73,7 @@ public final class MusicDiscHelper {
         if (stack == null || stack.isEmpty()) {
             return false;
         }
-        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-        if (customData == null || customData.isEmpty()) {
-            return false;
-        }
-        return customData.copyTag().getBooleanOr(MASTER_KEY, false);
+        return stack.hasTag() && stack.getTag().getBoolean(MASTER_KEY);
     }
 
     public static String getPendingToken(ItemStack stack) {
@@ -138,6 +134,7 @@ public final class MusicDiscHelper {
         }
         root.put(URLS_KEY, urls);
 
+        burnedDisc.getOrCreateTag().putBoolean(MASTER_KEY, true);
         burnedDisc.getOrCreateTag().put(ROOT_KEY, root);
         burnedDisc.setHoverName(buildDisplayName(track));
         ListTag lore = buildLore(track, urls.size());

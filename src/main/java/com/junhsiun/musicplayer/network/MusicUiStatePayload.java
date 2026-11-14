@@ -1,34 +1,31 @@
 package com.junhsiun.musicplayer.network;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * 服务端 → 客户端：底部播放栏需要的实时状态。
  *
- * <p>只发"状态快照"，不发进度心跳：客户端拿到 {@code elapsedMillis} 后自己按真实时间推进，
+ * <p>只发「状态快照」，不发进度心跳：客户端拿到 {@code elapsedMillis} 后自己按真实时间推进，
  * 服务端每两秒左右再校准一次即可，避免每秒多轮广播。</p>
  */
 public record MusicUiStatePayload(boolean playing, boolean paused, String trackId, String title,
                                   String artist, String coverUrl, long elapsedMillis,
                                   long durationMillis, String requester, String playOrder,
-                                  int queueSize, int playlistRemaining) implements CustomPacketPayload {
+                                  int queueSize, int playlistRemaining) {
 
-    public static final Type<MusicUiStatePayload> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_ui_state"));
-    public static final StreamCodec<RegistryFriendlyByteBuf, MusicUiStatePayload> CODEC =
-            CustomPacketPayload.codec(MusicUiStatePayload::write, MusicUiStatePayload::new);
+    public static final ResourceLocation ID =
+            new ResourceLocation(MusicPlayerMod.MOD_ID, "music_ui_state");
 
-    public MusicUiStatePayload(RegistryFriendlyByteBuf buffer) {
-        this(buffer.readBoolean(), buffer.readBoolean(), buffer.readUtf(), buffer.readUtf(),
-                buffer.readUtf(), buffer.readUtf(), buffer.readLong(), buffer.readLong(),
-                buffer.readUtf(), buffer.readUtf(), buffer.readVarInt(), buffer.readVarInt());
+    public static MusicUiStatePayload decode(FriendlyByteBuf buffer) {
+        return new MusicUiStatePayload(buffer.readBoolean(), buffer.readBoolean(), buffer.readUtf(),
+                buffer.readUtf(), buffer.readUtf(), buffer.readUtf(), buffer.readLong(),
+                buffer.readLong(), buffer.readUtf(), buffer.readUtf(),
+                buffer.readVarInt(), buffer.readVarInt());
     }
 
-    private void write(RegistryFriendlyByteBuf buffer) {
+    public void encode(FriendlyByteBuf buffer) {
         buffer.writeBoolean(this.playing);
         buffer.writeBoolean(this.paused);
         buffer.writeUtf(this.trackId == null ? "" : this.trackId);
@@ -41,10 +38,5 @@ public record MusicUiStatePayload(boolean playing, boolean paused, String trackI
         buffer.writeUtf(this.playOrder == null ? "" : this.playOrder);
         buffer.writeVarInt(this.queueSize);
         buffer.writeVarInt(this.playlistRemaining);
-    }
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
     }
 }

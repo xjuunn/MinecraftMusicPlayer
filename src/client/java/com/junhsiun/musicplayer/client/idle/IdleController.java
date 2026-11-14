@@ -7,7 +7,7 @@ import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.util.Util;
+import net.minecraft.Util;
 
 /**
  * 挂机「纯享」模式的状态机。
@@ -303,7 +303,7 @@ public final class IdleController {
         if (client == null || client.player == null || client.level == null) {
             return false;
         }
-        if (client.gui.screen() != null || client.gui.overlay() != null) {
+        if (client.screen != null || client.getOverlay() != null) {
             return false;
         }
         LocalPlayer player = client.player;

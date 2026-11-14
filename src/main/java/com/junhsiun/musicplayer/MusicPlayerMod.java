@@ -35,8 +35,11 @@ import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
@@ -82,20 +85,6 @@ public final class MusicPlayerMod implements ModInitializer {
     @Override
     public void onInitialize() {
         MusicPlayerConfigManager.load();
-        PayloadTypeRegistry.clientboundPlay().register(MusicControlPayload.TYPE, MusicControlPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(JukeboxMusicPayload.TYPE, JukeboxMusicPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(OpenUrlPayload.TYPE, OpenUrlPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(BgmConfigPayload.TYPE, BgmConfigPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(DiscMasterBurnResultPayload.TYPE, DiscMasterBurnResultPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(MusicUiStatePayload.TYPE, MusicUiStatePayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(MusicRecentPayload.TYPE, MusicRecentPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(MusicQueuePayload.TYPE, MusicQueuePayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(MusicConfigSnapshotPayload.TYPE, MusicConfigSnapshotPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(DiscMasterBurnPayload.TYPE, DiscMasterBurnPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MusicUiRequestPayload.TYPE, MusicUiRequestPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MusicConfigUpdatePayload.TYPE, MusicConfigUpdatePayload.CODEC);
-
         CommandRegistrationCallback.EVENT.register(MusicCommands::register);
         ServerTickEvents.END_SERVER_TICK.register(JUKEBOX_PLAYBACK_SERVICE::tick);
         ServerTickEvents.END_SERVER_TICK.register(MUSIC_QUEUE_SERVICE::tick);
@@ -140,81 +129,30 @@ public final class MusicPlayerMod implements ModInitializer {
         });
         UseItemCallback.EVENT.register((player, world, hand) -> {
             if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
-                return InteractionResult.PASS;
+                return InteractionResultHolder.pass(player.getItemInHand(hand));
             }
             if (MusicDiscHelper.isDiscMaster(player.getItemInHand(hand))) {
-                // 右键空气时吞掉这次使用，避免母版被当成普通物品走后续流程；
-                // 界面在客户端打开，这里不需要做任何事。
-                return InteractionResult.SUCCESS;
+                return InteractionResultHolder.success(player.getItemInHand(hand));
             }
             if (MusicDiscHelper.isPendingDisc(player.getItemInHand(hand))) {
                 LOOT_MUSIC_DISC_SERVICE.useRandomDisc(serverPlayer, hand);
-                return InteractionResult.SUCCESS;
+                return InteractionResultHolder.success(player.getItemInHand(hand));
             }
-            return InteractionResult.PASS;
-        });
-        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
-            if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
-                return InteractionResult.PASS;
-            }
-            return LOOT_MUSIC_DISC_SERVICE.tryInjectOnOpen(serverPlayer, entity);
-        });
-        ServerPlayNetworking.registerGlobalReceiver(MusicPlaybackReportPayload.TYPE, (payload, context) ->
-                context.server().execute(() ->
-                        MUSIC_QUEUE_SERVICE.handlePlaybackReport(context.server(), context.player(), payload))
-        );
-        ServerPlayNetworking.registerGlobalReceiver(DiscMasterBurnPayload.TYPE, (payload, context) ->
-                context.server().execute(() ->
-                        DiscMasterService.burn(context.server(), context.player(), payload.songId()))
-        );
-        ServerPlayNetworking.registerGlobalReceiver(MusicUiRequestPayload.TYPE, (payload, context) ->
-                context.server().execute(() -> {
-                    String action = payload.action();
-                    if ("recent".equals(action)) {
-                        MUSIC_QUEUE_SERVICE.sendRecent(context.player());
-                        return;
-                    }
-                    if ("queue".equals(action)) {
-                        MUSIC_QUEUE_SERVICE.sendQueue(context.player());
-                        return;
-                    }
-                    MUSIC_QUEUE_SERVICE.sendUiState(context.player());
-                    MUSIC_QUEUE_SERVICE.sendRecent(context.player());
-                    MUSIC_QUEUE_SERVICE.sendQueue(context.player());
-                    ServerConfigSync.send(context.player());
-                })
-        );
-        ServerPlayNetworking.registerGlobalReceiver(MusicConfigUpdatePayload.TYPE, (payload, context) ->
-                context.server().execute(() ->
-                        ServerConfigSync.apply(context.player(), payload.key(), payload.value()))
-        );
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            MUSIC_QUEUE_SERVICE.handleJoin(handler.player);
-            sendBgmConfig(handler.player);
-            ServerConfigSync.send(handler.player);
-        });
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> MUSIC_QUEUE_SERVICE.handleDisconnect(handler.player));
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            MUSIC_QUEUE_SERVICE.initLyricsState(server);
-            LOOT_MUSIC_DISC_SERVICE.setServer(server);
-            LOOT_MUSIC_DISC_SERVICE.start();
-        });
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            MUSIC_QUEUE_SERVICE.shutdown(server);
-            JUKEBOX_PLAYBACK_SERVICE.shutdown(server);
-            NETEASE_API_CLIENT.shutdownExecutor();
+            return InteractionResultHolder.pass(player.getItemInHand(hand));
         });
     }
 
     public static void sendBgmConfig(ServerPlayer player) {
-        if (!ServerPlayNetworking.canSend(player, BgmConfigPayload.TYPE)) {
+        if (!ServerPlayNetworking.canSend(player, BgmConfigPayload.ID)) {
             return;
         }
         String playlistId = MusicPlayerConfigManager.get().bgmPlaylistId;
         String baseUrl = MusicPlayerConfigManager.get().neteaseBaseUrl;
-        ServerPlayNetworking.send(player, new BgmConfigPayload(
+        FriendlyByteBuf buf = PacketByteBufs.create();
+        new BgmConfigPayload(
                 playlistId == null ? "" : playlistId.trim(),
-                baseUrl == null ? "" : baseUrl.trim()));
+                baseUrl == null ? "" : baseUrl.trim()).encode(buf);
+        ServerPlayNetworking.send(player, BgmConfigPayload.ID, buf);
     }
 
     public static void syncBgmConfig(MinecraftServer server) {

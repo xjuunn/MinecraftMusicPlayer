@@ -1,10 +1,9 @@
 package com.junhsiun.musicplayer.client.gui.glass.widget;
 
 import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.Locale;
@@ -88,8 +87,8 @@ public final class GlassColorPicker extends AbstractWidget {
     }
 
     @Override
-    public void onClick(MouseButtonEvent event, boolean doubled) {
-        int index = indexAt(event.x(), event.y());
+    public void onClick(double mouseX, double mouseY) {
+        int index = indexAt(mouseX, mouseY);
         if (index < 0 || onChange == null) {
             return;
         }
@@ -102,8 +101,8 @@ public final class GlassColorPicker extends AbstractWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
-        hoveredIndex = indexAt(graphics.mouseX(), graphics.mouseY());
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        hoveredIndex = indexAt(mouseX, mouseY);
         hover.tick(hoveredIndex >= 0, 0.09F);
         float lift = hover.eased();
 

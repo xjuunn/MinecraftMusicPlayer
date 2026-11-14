@@ -5,12 +5,14 @@ import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.DiscMasterBurnResultPayload;
 import com.junhsiun.musicplayer.platform.url.UrlUtil;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.Prediction;
+
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 
@@ -68,7 +70,7 @@ public final class DiscMasterService {
         } else {
             held.shrink(1);
             if (!player.getInventory().add(burnedDisc)) {
-                player.drop(burnedDisc, false, Prediction.SERVER_ONLY);
+                player.drop(burnedDisc, false);
             }
         }
 
@@ -92,9 +94,11 @@ public final class DiscMasterService {
     }
 
     private static void reply(ServerPlayer player, boolean success, String message) {
-        if (!ServerPlayNetworking.canSend(player, DiscMasterBurnResultPayload.TYPE)) {
+        if (!ServerPlayNetworking.canSend(player, DiscMasterBurnResultPayload.ID)) {
             return;
         }
-        ServerPlayNetworking.send(player, new DiscMasterBurnResultPayload(success, message));
+        FriendlyByteBuf buf = PacketByteBufs.create();
+        new DiscMasterBurnResultPayload(success, message).encode(buf);
+        ServerPlayNetworking.send(player, DiscMasterBurnResultPayload.ID, buf);
     }
 }

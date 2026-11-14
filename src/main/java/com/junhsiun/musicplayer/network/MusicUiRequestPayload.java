@@ -1,30 +1,21 @@
 package com.junhsiun.musicplayer.network;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 
 /** 客户端 → 服务端：请求刷新底部播放状态 / 最近播放 / 配置快照。 */
-public record MusicUiRequestPayload(String action) implements CustomPacketPayload {
+public record MusicUiRequestPayload(String action) {
 
-    public static final Type<MusicUiRequestPayload> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_ui_request"));
-    public static final StreamCodec<RegistryFriendlyByteBuf, MusicUiRequestPayload> CODEC =
-            CustomPacketPayload.codec(MusicUiRequestPayload::write, MusicUiRequestPayload::new);
+    public static final ResourceLocation ID =
+            new ResourceLocation(MusicPlayerMod.MOD_ID, "music_ui_request");
 
-    public MusicUiRequestPayload(RegistryFriendlyByteBuf buffer) {
-        this(buffer.readUtf());
+    public static MusicUiRequestPayload decode(FriendlyByteBuf buffer) {
+        return new MusicUiRequestPayload(buffer.readUtf());
     }
 
-    private void write(RegistryFriendlyByteBuf buffer) {
+    public void encode(FriendlyByteBuf buffer) {
         buffer.writeUtf(this.action == null ? "" : this.action);
-    }
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
     }
 
     public static MusicUiRequestPayload all() {

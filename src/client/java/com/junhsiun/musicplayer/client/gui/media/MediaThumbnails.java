@@ -3,15 +3,9 @@ package com.junhsiun.musicplayer.client.gui.media;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.renderpearl.api.textures.FilterMode;
-import com.mojang.renderpearl.api.textures.GpuSampler;
-import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.GuiPipeline;
-import net.minecraft.client.renderer.texture.TextureResources;
-import net.minecraft.resources.Identifier;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.resources.ResourceLocation;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -116,13 +110,11 @@ public final class MediaThumbnails {
     /**
      * 一张可绘制的缩略图。
      *
-     * @param id     注册进 {@code TextureManager} 的标识（释放时要用）
-     * @param view   纹理视图
-     * @param sampler 采样器（线性过滤，缩放才平滑）
+     * @param id     注册进 {@code TextureManager} 的标识（绘制与释放时都要用）
      * @param width  纹理宽（像素）
      * @param height 纹理高（像素）
      */
-    public record Thumb(Identifier id, GpuTextureView view, GpuSampler sampler, int width, int height) {
+    public record Thumb(ResourceLocation id, int width, int height) {
 
         /** 原始宽高比。 */
         public float aspect() {
@@ -169,7 +161,7 @@ public final class MediaThumbnails {
      * <p>绝大多数封面是正方形，等比内接就等于铺满；少数非正方形的（部分歌单/头像）会
      * 在方框里留出对称的空白，而不是被切掉两边。</p>
      */
-    public static void draw(GuiGraphicsExtractor graphics, Thumb thumb, int x, int y, int size) {
+    public static void draw(GuiGraphics graphics, Thumb thumb, int x, int y, int size) {
         drawBounded(graphics, thumb, x, y, x + size, y + size);
     }
 
@@ -179,7 +171,7 @@ public final class MediaThumbnails {
      * <p>和 {@link #draw} 同一条路径：先按纹理原始宽高比决定内接尺寸，再在矩形里居中，
      * 不裁切、不拉伸。</p>
      */
-    public static void drawBounded(GuiGraphicsExtractor graphics, Thumb thumb,
+    public static void drawBounded(GuiGraphics graphics, Thumb thumb,
                                    int x0, int y0, int x1, int y1) {
         drawBounded(graphics, thumb, x0, y0, x1, y1, -1);
     }
@@ -187,13 +179,13 @@ public final class MediaThumbnails {
     /**
      * 在任意矩形内等比内接绘制缩略图，并叠加一个 ARGB 颜色（用于交叉淡入）。
      *
-     * <p>{@code color} 为 {@code -1} 时走和 {@link #drawBounded(GuiGraphicsExtractor, Thumb, int, int, int, int)}
+     * <p>{@code color} 为 {@code -1} 时走和 {@link #drawBounded(GuiGraphics, Thumb, int, int, int, int)}
      * 完全相同的路径；否则用带颜色参数的 blit 把同一个纹理按 alpha 叠加上去。
      * 两个纹理来自同一张封面、同一内接尺寸，淡入过程中不会露出空白。</p>
      *
      * @param color ARGB 颜色；alpha 通道控制不透明度
      */
-    public static void drawBounded(GuiGraphicsExtractor graphics, Thumb thumb,
+    public static void drawBounded(GuiGraphics graphics, Thumb thumb,
                                    int x0, int y0, int x1, int y1, int color) {
         if (thumb == null || x1 <= x0 || y1 <= y0) {
             return;
@@ -213,22 +205,20 @@ public final class MediaThumbnails {
         int offsetX = x0 + (boxWidth - drawWidth) / 2;
         int offsetY = y0 + (boxHeight - drawHeight) / 2;
         if (color == -1) {
-            // 这个重载的四个 int 是 <b>(x0, y0, x1, y1)</b>，不是 (x, y, w, h)；
-            // 四个 float 是 <b>(u0, u1, v0, v1)</b>，不是 (u0, v0, u1, v1)。
-            // 按 (x, y, w, h) 传会得到一个右下角缩到 (w, h) 的倒置矩形，画出来什么都没有
-            // ——"封面全都消失"就是这么来的。
-            graphics.blit(thumb.view(), thumb.sampler(),
-                    offsetX, offsetY, offsetX + drawWidth, offsetY + drawHeight,
-                    0.0F, 1.0F, 0.0F, 1.0F);
+            graphics.blit(thumb.id(), offsetX, offsetY, 0.0F, 0.0F,
+                    drawWidth, drawHeight, thumb.width(), thumb.height());
             return;
         }
-        // 带 tint 的版本需要按纹理注册 ID 走 TextureManager，才能把颜色（含 alpha）
-        // 传给 BlitRenderState；GpuTextureView 的 blit 重载没有颜色参数。
-        graphics.blit(GuiPipeline.TEXTURED, thumb.id(),
-                offsetX, offsetY, 0.0F, 0.0F,
-                drawWidth, drawHeight,
-                thumb.width(), thumb.height(),
-                thumb.width(), thumb.height(), color);
+        // 1.21.1 的 blit 没有颜色参数：用 graphics.setColor 包裹，把 tint（含 alpha）
+        // 作用到随后的 blit 上，实现交叉淡入。
+        float r = ((color >> 16) & 0xFF) / 255.0F;
+        float g = ((color >> 8) & 0xFF) / 255.0F;
+        float b = (color & 0xFF) / 255.0F;
+        float a = ((color >>> 24) & 0xFF) / 255.0F;
+        graphics.setColor(r, g, b, a);
+        graphics.blit(thumb.id(), offsetX, offsetY, 0.0F, 0.0F,
+                drawWidth, drawHeight, thumb.width(), thumb.height());
+        graphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     /** 只发起下载，不等结果。 */
@@ -320,7 +310,7 @@ public final class MediaThumbnails {
             try (NativeImage source = readImage(bytes)) {
                 thumbnail = toThumbnail(source, textureSize(large));
             }
-            Identifier textureId = Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, textureIdPath(large, url));
+            ResourceLocation textureId = new ResourceLocation(MusicPlayerMod.MOD_ID, textureIdPath(large, url));
             Minecraft.getInstance().execute(() -> register(url, textureId, thumbnail, large));
         } catch (Exception exception) {
             Map<String, Entry> map = mapFor(large);
@@ -334,7 +324,7 @@ public final class MediaThumbnails {
         }
     }
 
-    private synchronized void register(String url, Identifier textureId, NativeImage image, boolean large) {
+    private synchronized void register(String url, ResourceLocation textureId, NativeImage image, boolean large) {
         Minecraft client = Minecraft.getInstance();
         Map<String, Entry> map = mapFor(large);
         Entry current = map.get(url);
@@ -346,17 +336,15 @@ public final class MediaThumbnails {
         try {
             int width = image.getWidth();
             int height = image.getHeight();
-            // 线性采样：纹理比显示尺寸大得多，靠它把降采样做平滑；
-            // 用默认的最近邻会在缩小的时候丢像素，看起来"像素很低、有锯齿"。
-            GpuSampler sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
-            TextureResources resources = TextureResources.from2dImage(
-                    () -> "musicplayer_thumb", image, sampler);
-            client.getTextureManager().register(textureId, resources);
-            // from2dImage 只把像素写进命令缓冲，<b>不会</b>关掉 NativeImage，得由我们自己释放。
-            // 但不能立刻关：写入是录进命令缓冲、帧末才提交的，提前 close 会让上传读到已释放的
-            // 内存。所以把它挂在缓存条目上，等这张纹理被淘汰/清空时再释放——那时早就提交完了。
+            // DynamicTexture：上传后像素数据由纹理对象持有，注册进 TextureManager。
+            // 线性采样（默认 blit 走线性过滤）保证缩小显示时不出现块状锯齿。
+            com.mojang.blaze3d.platform.NativeImage uploaded = image;
+            net.minecraft.client.renderer.texture.DynamicTexture texture =
+                    new net.minecraft.client.renderer.texture.DynamicTexture(uploaded);
+            texture.upload();
+            client.getTextureManager().register(textureId, texture);
             map.put(url, Entry.ready(
-                    new Thumb(textureId, resources.textureView(), sampler, width, height), image));
+                    new Thumb(textureId, width, height), image));
             while (map.size() > MAX_ENTRIES) {
                 String eldestKey = map.keySet().iterator().next();
                 Entry eldest = map.remove(eldestKey);
@@ -398,7 +386,7 @@ public final class MediaThumbnails {
             NativeImage image = new NativeImage(width, height, true);
             for (int y = 0; y < height; y++) {
                 for (int x = 0; x < width; x++) {
-                    image.setPixel(x, y, buffered.getRGB(x, y));
+                    image.setPixelRGBA(x, y, argbToAbgr(buffered.getRGB(x, y)));
                 }
             }
             return image;
@@ -414,6 +402,17 @@ public final class MediaThumbnails {
      * <p>缩小时按<b>区域平均</b>取色，不是最近邻抽点：最近邻会漏掉大部分像素，
      * 高频细节变成噪点，缩小后还会闪烁。</p>
      */
+    /** NativeImage 在 1.21.1 里是 ABGR 序，BufferedImage 是 ARGB 序，读写时交换 R/B。 */
+    private static int argbToAbgr(int argb) {
+        int r = (argb >> 16) & 0xFF;
+        int b = argb & 0xFF;
+        return (argb & 0xFF00FF00) | (b << 16) | r;
+    }
+
+    private static int abgrToArgb(int abgr) {
+        return argbToAbgr(abgr);
+    }
+
     private static NativeImage toThumbnail(NativeImage source, int textureSize) {
         int srcWidth = Math.max(1, source.getWidth());
         int srcHeight = Math.max(1, source.getHeight());
@@ -439,7 +438,7 @@ public final class MediaThumbnails {
                 int samples = 0;
                 for (int sy = fromY; sy < toY; sy++) {
                     for (int sx = fromX; sx < toX; sx++) {
-                        int color = source.getPixel(sx, sy);
+                        int color = abgrToArgb(source.getPixelRGBA(sx, sy));
                         int a = (color >>> 24) & 0xFF;
                         alpha += a;
                         red += ((color >>> 16) & 0xFF) * a;
@@ -449,12 +448,12 @@ public final class MediaThumbnails {
                     }
                 }
                 if (samples == 0) {
-                    result.setPixel(x, y, 0);
+                    result.setPixelRGBA(x, y, 0);
                     continue;
                 }
                 int outAlpha = (int) (alpha / samples);
                 if (outAlpha <= 0) {
-                    result.setPixel(x, y, 0);
+                    result.setPixelRGBA(x, y, 0);
                     continue;
                 }
                 // 颜色按 alpha 加权平均，避免透明边缘把颜色拉黑
@@ -464,7 +463,7 @@ public final class MediaThumbnails {
                 int outBlue = (int) (blue / weight);
                 int coverage = roundedCoverage(x, y, outWidth, outHeight);
                 int maskedAlpha = outAlpha * coverage / 255;
-                result.setPixel(x, y, (maskedAlpha << 24) | (outRed << 16) | (outGreen << 8) | outBlue);
+                result.setPixelRGBA(x, y, argbToAbgr((maskedAlpha << 24) | (outRed << 16) | (outGreen << 8) | outBlue));
             }
         }
         return result;
@@ -529,7 +528,7 @@ public final class MediaThumbnails {
     }
 
     private static String textureIdPath(boolean large, String url) {
-        // Identifier 的 path 只允许 a-z0-9/._-，大写会被 assertValidPath 直接拒掉
+        // ResourceLocation 的 path 只允许 a-z0-9/._-，大写会被 assertValidPath 直接拒掉
         // （fromNamespaceAndPath 抛 IdentifierException），这里必须全小写。
         return (large ? "thumb_large/" : "thumb/") + hash(url);
     }

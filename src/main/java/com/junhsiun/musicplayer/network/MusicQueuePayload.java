@@ -2,10 +2,8 @@ package com.junhsiun.musicplayer.network;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.model.QueueEntry;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,25 +20,19 @@ import java.util.List;
  * @param playlistMode      当前是否处于歌单模式
  */
 public record MusicQueuePayload(List<QueueEntry> entries, int playlistRemaining,
-                                boolean playlistMode) implements CustomPacketPayload {
+                                boolean playlistMode) {
 
     /** 客户端最多接收这么多条，防止异常服务端塞爆列表。 */
     private static final int MAX_ENTRIES = 512;
 
-    public static final Type<MusicQueuePayload> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_queue"));
-    public static final StreamCodec<RegistryFriendlyByteBuf, MusicQueuePayload> CODEC =
-            CustomPacketPayload.codec(MusicQueuePayload::write, MusicQueuePayload::new);
+    public static final ResourceLocation ID =
+            new ResourceLocation(MusicPlayerMod.MOD_ID, "music_queue");
 
     public MusicQueuePayload {
         entries = entries == null ? List.of() : List.copyOf(entries);
     }
 
-    public MusicQueuePayload(RegistryFriendlyByteBuf buffer) {
-        this(readEntries(buffer), buffer.readVarInt(), buffer.readBoolean());
-    }
-
-    private static List<QueueEntry> readEntries(RegistryFriendlyByteBuf buffer) {
+    public static MusicQueuePayload decode(FriendlyByteBuf buffer) {
         int size = buffer.readVarInt();
         if (size < 0 || size > MAX_ENTRIES) {
             throw new IllegalArgumentException("Invalid queue entry count: " + size);
@@ -50,10 +42,12 @@ public record MusicQueuePayload(List<QueueEntry> entries, int playlistRemaining,
             entries.add(new QueueEntry(buffer.readUtf(), buffer.readUtf(),
                     buffer.readUtf(), buffer.readUtf(), buffer.readUtf()));
         }
-        return entries;
+        int playlistRemaining = buffer.readVarInt();
+        boolean playlistMode = buffer.readBoolean();
+        return new MusicQueuePayload(entries, playlistRemaining, playlistMode);
     }
 
-    private void write(RegistryFriendlyByteBuf buffer) {
+    public void encode(FriendlyByteBuf buffer) {
         buffer.writeVarInt(this.entries.size());
         for (QueueEntry entry : this.entries) {
             buffer.writeUtf(entry.id());
@@ -64,10 +58,5 @@ public record MusicQueuePayload(List<QueueEntry> entries, int playlistRemaining,
         }
         buffer.writeVarInt(this.playlistRemaining);
         buffer.writeBoolean(this.playlistMode);
-    }
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
     }
 }

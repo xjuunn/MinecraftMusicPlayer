@@ -3,7 +3,6 @@ package com.junhsiun.musicplayer.service;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper.DiscTrackData;
-import com.junhsiun.musicplayer.mixin.JukeboxBlockEntityInvoker;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -69,7 +68,7 @@ public final class JukeboxPlaybackService {
         }
 
         ItemStack insertedDisc = heldStack.copyWithCount(1);
-        jukebox.setSongItemWithoutPlaying(insertedDisc);
+        jukebox.setRecordWithoutPlaying(insertedDisc);
         jukebox.setChanged();
         serverLevel.setBlock(pos, state.setValue(JukeboxBlock.HAS_RECORD, true), 2);
 
@@ -116,23 +115,13 @@ public final class JukeboxPlaybackService {
         if (active == null) {
             return;
         }
-        if (!JukeboxBlockEntity.isInPlaylistMode(level, active.pos())) {
-            // 非歌单模式：这张唱片就播这一首，播完应当收尾停止。
-            // 如果只是 return，activeJukeboxes 里会一直留着这个条目，
-            // isPlayerListening 恒为 true，服务端就会每 tick 把最后一句歌词
-            // 重新发到 action bar 上，导致歌词永远不消失。
-            MusicPlayerMod.LOGGER.info("Custom jukebox track finished at {}: trackId={}", active.pos(), trackId);
-            activeJukeboxes.remove(active.key());
-            stopPlayback(level.getServer(), active);
-            return;
-        }
-        BlockEntity blockEntity = level.getBlockEntity(active.pos());
-        if (!(blockEntity instanceof JukeboxBlockEntity jukebox)
-                || !MusicDiscHelper.isMusicPlayerDisc(jukebox.getTheItem())) {
-            return;
-        }
+        // 1.20.1 原版唱片机没有歌单模式：这张唱片播完直接收尾停止。
+        // 如果只是 return，activeJukeboxes 里会一直留着这个条目，
+        // isPlayerListening 恒为 true，服务端就会每 tick 把最后一句歌词
+        // 重新发到 action bar 上，导致歌词永远不消失。
         MusicPlayerMod.LOGGER.info("Custom jukebox track finished at {}: trackId={}", active.pos(), trackId);
-        ((JukeboxBlockEntityInvoker) jukebox).musicplayer$tryToAdvancePlaylist(true);
+        activeJukeboxes.remove(active.key());
+        stopPlayback(level.getServer(), active);
     }
 
     public void tick(MinecraftServer server) {
@@ -273,7 +262,7 @@ public final class JukeboxPlaybackService {
         if (!(blockEntity instanceof JukeboxBlockEntity jukebox)) {
             return "missing jukebox block entity";
         }
-        if (jukebox.getTheItem().isEmpty()) {
+        if (jukebox.getFirstItem().isEmpty()) {
             return "jukebox record item is empty";
         }
         return null;
@@ -325,7 +314,7 @@ public final class JukeboxPlaybackService {
     }
 
     private void sendPlay(ServerPlayer player, ActiveJukebox active) {
-        if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
+        if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.ID)) {
             MusicPlayerMod.LOGGER.debug("Sending custom jukebox play to {} at {}", player.getScoreboardName(), active.pos());
             long offset;
             if (active.tryMarkFirstPlaySent()) {
@@ -333,7 +322,7 @@ public final class JukeboxPlaybackService {
             } else {
                 offset = Math.max(0L, System.currentTimeMillis() - active.startedAtMillis());
             }
-            ServerPlayNetworking.send(player, JukeboxMusicPayload.play(
+            JukeboxMusicPayload.send(player, JukeboxMusicPayload.play(
                     active.key(),
                     active.discData().urls(),
                     active.discData().title(),
@@ -346,9 +335,9 @@ public final class JukeboxPlaybackService {
     }
 
     private void sendStop(ServerPlayer player, long key) {
-        if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
+        if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.ID)) {
             MusicPlayerMod.LOGGER.debug("Sending custom jukebox stop to {} at {}", player.getScoreboardName(), BlockPos.of(key));
-            ServerPlayNetworking.send(player, JukeboxMusicPayload.stop(key));
+            JukeboxMusicPayload.send(player, JukeboxMusicPayload.stop(key));
         }
     }
 
@@ -358,9 +347,9 @@ public final class JukeboxPlaybackService {
             if (player == null || player.level() != level) {
                 continue;
             }
-            if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.TYPE)) {
+            if (ServerPlayNetworking.canSend(player, JukeboxMusicPayload.ID)) {
                 if (urlsChanged) {
-                    ServerPlayNetworking.send(player, JukeboxMusicPayload.refresh(
+                    JukeboxMusicPayload.send(player, JukeboxMusicPayload.refresh(
                             active.key(),
                             active.discData().urls(),
                             active.discData().title(),
@@ -370,7 +359,7 @@ public final class JukeboxPlaybackService {
                             active.discData().trackId()
                     ));
                 } else {
-                    ServerPlayNetworking.send(player, JukeboxMusicPayload.update(
+                    JukeboxMusicPayload.send(player, JukeboxMusicPayload.update(
                             active.key(),
                             active.discData().title(),
                             active.discData().artist(),

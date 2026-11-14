@@ -9,18 +9,20 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 在界面真正绘制之前抓取画面，供液态玻璃做背景模糊。
+ * 在界面真正绘制之前抓取画面，供液态玻璃做背景模糊、纯享模式画全屏特效。
  *
- * <p>26.x 的界面是"先提取、后绘制"，且 {@code GameRenderer} 里三件事的顺序是：</p>
+ * <p>1.20.1 的 {@code GameRenderer.render(float, long, boolean)} 内部顺序是：</p>
  * <pre>
- * extract()  ──→ Gui.extractRenderState()   ← 界面提取（Screen.extractRenderState 在这里）
- * render()   ──→ renderLevel()              ← 世界渲染
- *            ──→ GuiRenderer.render()       ← 界面绘制
+ * renderLevel()   ← 世界渲染
+ * Gui.render()    ← 界面绘制（HUD / Screen）
  * </pre>
  *
- * <p>所以提取阶段抓到的还是<b>上一帧合成完的画面</b>（其中已经包含上一帧画好的玻璃面板），
- * 玻璃会不断模糊自己并收敛成一片纯色。必须在 {@code GuiRenderer.render()} 之前抓，
- * 此时主渲染目标里正好是本帧的世界、且还没有画上界面。</p>
+ * <p>所以在 {@code Gui.render} 调用前注入：此时主渲染目标里正好是本帧的世界、
+ * 且还没有画上界面，是抓取背景的唯一正确时机。</p>
+ *
+ * <p>注意注入目标必须与版本一致：1.14.4 / 1.15.2 的签名是 {@code Gui.render(float)}，
+ * 1.16.5–1.19.2 是 {@code render(PoseStack, float)}，1.20.1 起才是
+ * {@code render(GuiGraphics, float)}；写错会导致注入点匹配不到而启动即崩。</p>
  */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
@@ -28,10 +30,10 @@ public abstract class GameRendererMixin {
     @Inject(
             method = "render",
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/client/gui/render/GuiRenderer;render()V")
+                    target = "Lnet/minecraft/client/gui/Gui;render(Lnet/minecraft/client/gui/GuiGraphics;F)V")
     )
     private void musicplayer$captureGlassBackdrop(CallbackInfo callbackInfo) {
         GlassPanel.beforeGui();
-        IdleRenderer.beforeGui(((GameRenderer) (Object) this).gameRenderState().guiRenderState);
+        IdleRenderer.beforeGui();
     }
 }

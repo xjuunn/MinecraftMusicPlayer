@@ -1,176 +1,98 @@
 package com.junhsiun.musicplayer.client.gui.glass;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
-import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallback;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.renderpearl.api.GpuFormat;
-import com.mojang.renderpearl.api.pipeline.BlendFunction;
-import com.mojang.renderpearl.api.pipeline.ColorTargetState;
-import com.mojang.renderpearl.api.pipeline.DepthStencilState;
-import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
-import net.minecraft.client.renderer.BindGroupLayouts;
-import net.minecraft.resources.Identifier;
-
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.ResourceProvider;
 
 /**
- * 液态玻璃用到的 GPU 管线。
+ * 液态玻璃用到的 GPU 着色器（1.21.1 老 {@code ShaderInstance} 体系）。
  *
- * <p>26.x 的渲染全部走 {@code RenderPipeline}：顶点/片元着色器按 {@code assets/<命名空间>/shaders/core/}
- * 下的文件加载，编译期的常量通过 shader define 注入。管线第一次被真正绘制时由
- * {@code PipelineCache} 惰性编译，所以这里可以放心地在运行时按需构造并缓存。</p>
+ * <p>26.x 的 {@code RenderPipeline} 在 1.21.1 不存在。这里改用 Fabric 的
+ * {@link CoreShaderRegistrationCallback} 把自定义 core shader 注册进原版着色器池，
+ * 绘制时通过 {@code RenderSystem.setShader()} + {@code VertexBuffer.drawWithShader()}
+ * 走老式立即渲染。</p>
  *
- * <p>本类返回的管线分三种：</p>
- * <ul>
- *   <li>{@link #panel(GlassStyle, GlassLook)}：玻璃本体（折射 + 色散 + 高光 + 染色）；</li>
- *   <li>{@link #shadow(GlassStyle)}：面板投影，和本体共用一份着色器，用 define 切分支；</li>
- *   <li>{@link #blur(boolean)}：把画面逐级降采样并做可分离高斯模糊。</li>
- * </ul>
+ * <p>26.x 管线里的 shader define 在 1.21.1 没有对应机制，调参（半径、染色、模糊档位等）
+ * 全部改走 shader json 的 {@code uniforms}；着色器文件里的对应常量也已改写为
+ * 从 uniform 读入（见 {@code assets/musicplayer/shaders/core/} 下 1.21.1 版本的 glsl）。</p>
  */
 public final class GlassPipelines {
 
     private static final String NAMESPACE = MusicPlayerMod.MOD_ID;
-    private static final Identifier GLASS_VERTEX_SHADER =
-            Identifier.fromNamespaceAndPath(NAMESPACE, "core/glass");
-    private static final Identifier GLASS_FRAGMENT_SHADER =
-            Identifier.fromNamespaceAndPath(NAMESPACE, "core/glass");
-    private static final Identifier BLUR_VERTEX_SHADER =
-            Identifier.fromNamespaceAndPath(NAMESPACE, "core/glass_blur");
-    private static final Identifier BLUR_FRAGMENT_SHADER =
-            Identifier.fromNamespaceAndPath(NAMESPACE, "core/glass_blur");
 
-    private static final Map<String, RenderPipeline> PANEL_PIPELINES = new HashMap<>();
-    private static final Map<String, RenderPipeline> SHADOW_PIPELINES = new HashMap<>();
-    private static final Map<String, RenderPipeline> BLUR_PIPELINES = new HashMap<>();
+    static net.minecraft.client.renderer.ShaderInstance glassShader;
+    static net.minecraft.client.renderer.ShaderInstance glassBlurShader;
+    static net.minecraft.client.renderer.ShaderInstance glassWidgetShader;
+    static net.minecraft.client.renderer.ShaderInstance idleShader;
+
+    private static volatile boolean registered;
 
     private GlassPipelines() {
     }
 
-    /**
-     * 玻璃本体管线。
-     *
-     * <p>注意折射、斜面、色散、中心色散<b>不在这里</b>：它们逐 draw 由顶点色传入
-     * （见 {@link GlassDebug#encode(GlassStyle)}），所以不需要为它们各编译一份管线。</p>
-     *
-     * <p>模糊度是编译期常量（顶点格式只有一路 color，已被六项光学参数占满），
-     * 因此它被量化成有限档位，见 {@link GlassLook}。同一档位共用一份管线。</p>
-     */
-    public static synchronized RenderPipeline panel(GlassStyle style, GlassLook look) {
-        String cacheKey = style.pipelineKey() + "/" + look.key();
-        return PANEL_PIPELINES.computeIfAbsent(cacheKey, key -> {
-            float[] tintColor = GlassTheme.overlayColorRgb();
-            RenderPipeline.Builder builder = baseGuiPipeline("panel", key)
-                    .withFragmentShader(GLASS_FRAGMENT_SHADER)
-                    .withShaderDefine("GLASS_RADIUS", style.radius())
-                    .withShaderDefine("GLASS_TINT_R", style.tintR())
-                    .withShaderDefine("GLASS_TINT_G", style.tintG())
-                    .withShaderDefine("GLASS_TINT_B", style.tintB())
-                    .withShaderDefine("GLASS_TINT_A", style.tintA())
-                    .withShaderDefine("GLASS_MAX_LUMA", style.maxLuma())
-                    .withShaderDefine("GLASS_SATURATION", style.saturation())
-                    .withShaderDefine("GLASS_HIGHLIGHT", style.highlight())
-                    .withShaderDefine("GLASS_EDGE_LIGHT", style.edgeLight())
-                    .withShaderDefine("GLASS_OPACITY", style.opacity())
-                    .withShaderDefine("GLASS_BLUR", look.quantizedBlur())
-                    // 模糊层级：0 = 只用原图（1 次采样），1 = 两层（2 次），2 = 三层（3 次）。
-                    // 着色器据此做编译期静态分支，把色散路径的采样次数从 9 次压到 3~9 次中的最小值。
-                    .withShaderDefine("GLASS_BLUR_LEVEL", blurLevel(look.quantizedBlur()))
-                    // 子控件用：把"世界背景 + 窗口叠加层"合成为底色，
-                    // 等价于把所在的窗口玻璃当成背景。窗口自身这一项是 0。
-                    .withShaderDefine("GLASS_WINDOW_TINT", look.quantizedWindowTint())
-                    // 叠加层颜色由 GlassTheme 单一来源提供，避免着色器里再抄一份常量而失配
-                    .withShaderDefine("GLASS_WINDOW_TINT_R", tintColor[0])
-                    .withShaderDefine("GLASS_WINDOW_TINT_G", tintColor[1])
-                    .withShaderDefine("GLASS_WINDOW_TINT_B", tintColor[2]);
-            return builder
-                    .withBindGroupLayout(BindGroupLayouts.PROJECTION)
-                    .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
-                    .withBindGroupLayout(BindGroupLayouts.SAMPLER0_SAMPLER1_SAMPLER2)
-                    .build();
-        });
-    }
-
-    /**
-     * 把模糊度映射到"需要几层贴图"，供着色器做静态分支。
-     *
-     * <p>{@code blur = 0} 时着色器只用 Sampler0（原图），完全不需要另两张，
-     * 直接省掉 2/3 的采样；{@code blur <= 0.5} 时第三层的混合权重为 0，
-     * 也一并省掉。其余情况三层都要。</p>
-     */
-    private static int blurLevel(float quantizedBlur) {
-        if (quantizedBlur <= 0.0F) {
-            return 0;
+    /** 在客户端初始化时注册全部自定义 core shader（幂等）。 */
+    public static synchronized void registerShaders() {
+        if (registered) {
+            return;
         }
-        return quantizedBlur <= 0.5F ? 1 : 2;
-    }
-
-    /** 面板投影管线。 */
-    public static synchronized RenderPipeline shadow(GlassStyle style) {
-        GlassShadow shadow = style.shadow();
-        String key = style.pipelineKey() + "/shadow";
-        return SHADOW_PIPELINES.computeIfAbsent(key, ignored -> baseGuiPipeline("shadow", key)
-                .withFragmentShader(GLASS_FRAGMENT_SHADER)
-                .withShaderDefine("GLASS_SHADOW")
-                .withShaderDefine("GLASS_RADIUS", style.radius())
-                .withShaderDefine("GLASS_SHADOW_SIZE", shadow.size())
-                .withShaderDefine("GLASS_SHADOW_ALPHA", shadow.alpha())
-                .withShaderDefine("GLASS_SHADOW_OFFSET_X", shadow.offsetX())
-                .withShaderDefine("GLASS_SHADOW_OFFSET_Y", shadow.effectiveOffsetY())
-                // 投影四边形向外扩张的像素数。着色器要用它把四边形尺寸还原成面板尺寸，
-                // 否则 SDF 会描述扩张后的框，投影变成一圈离开面板的圆角暗环。
-                .withShaderDefine("GLASS_SHADOW_PADDING", shadow.padding())
-                .withBindGroupLayout(BindGroupLayouts.PROJECTION)
-                .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
-                .build());
-    }
-
-    /**
-     * 可分离高斯的单向管线。
-     *
-     * @param spread   扩散量（源贴图的 texel 数），0 表示纯降采样
-     * @param vertical {@code true} 纵向、{@code false} 横向
-     */
-    public static synchronized RenderPipeline blur(float spread, boolean vertical) {
-        String key = spread + "/" + vertical;
-        return BLUR_PIPELINES.computeIfAbsent(key, ignored -> {
-            boolean verticalBlur = vertical;
-            RenderPipeline.Builder builder = RenderPipeline.builder()
-                    .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE,
-                            "pipeline/glass_blur_" + Float.floatToIntBits(spread) + (verticalBlur ? "_v" : "_h")))
-                    .withVertexShader(BLUR_VERTEX_SHADER)
-                    .withFragmentShader(BLUR_FRAGMENT_SHADER)
-                    .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
-                    .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
-                    .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
-                    .withColorTargetState(new ColorTargetState(Optional.empty(), GpuFormat.RGBA8_UNORM,
-                            ColorTargetState.WRITE_ALL))
-                    // 离屏颜色目标没有深度附件，管线必须声明"不需要深度"
-                    .withDepthStencilState(Optional.<DepthStencilState>empty())
-                    .withCull(false)
-                    .withShaderDefine("GLASS_BLUR_SPREAD", spread);
-            if (verticalBlur) {
-                builder.withShaderDefine("GLASS_BLUR_VERTICAL");
-            }
-            return builder.build();
+        registered = true;
+        CoreShaderRegistrationCallback.EVENT.register(context -> {
+            context.register(id(NAMESPACE, "glass"), DefaultVertexFormat.POSITION_TEX_COLOR,
+                    shader -> glassShader = shader);
+            context.register(id(NAMESPACE, "glass_blur"), DefaultVertexFormat.POSITION_TEX,
+                    shader -> glassBlurShader = shader);
+            context.register(id(NAMESPACE, "glass_widget"), DefaultVertexFormat.POSITION_TEX_COLOR,
+                    shader -> glassWidgetShader = shader);
+            context.register(id(NAMESPACE, "idle"), DefaultVertexFormat.POSITION_TEX,
+                    shader -> idleShader = shader);
         });
     }
 
-    private static RenderPipeline.Builder baseGuiPipeline(String kind, String key) {
-        String hash = Integer.toHexString(key.hashCode());
-        return RenderPipeline.builder()
-                .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE,
-                        "pipeline/glass_" + kind + "_" + hash.toLowerCase(Locale.ROOT)))
-                .withVertexShader(GLASS_VERTEX_SHADER)
-                .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
-                // 界面元素永远是 4 个顶点一个 quad（BlitRenderState.buildVertices），
-                // 声明成 TRIANGLES 只会画出 0,1,2 这一个三角形，必须和 vanilla 一样用 QUADS
-                .withPrimitiveTopology(PrimitiveTopology.QUADS)
-                .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
-                .withDepthStencilState(Optional.<DepthStencilState>empty())
-                .withCull(false);
+    private static ResourceLocation id(String namespace, String name) {
+        return new ResourceLocation(namespace, name);
+    }
+
+    /** 玻璃本体着色器；资源重载后实例会被替换，必须每次经此获取。 */
+    public static net.minecraft.client.renderer.ShaderInstance glass() {
+        return glassShader;
+    }
+
+    /** 背景模糊着色器。 */
+    public static net.minecraft.client.renderer.ShaderInstance glassBlur() {
+        return glassBlurShader;
+    }
+
+    /** 圆角填充控件着色器。 */
+    public static net.minecraft.client.renderer.ShaderInstance glassWidget() {
+        return glassWidgetShader;
+    }
+
+    /** 纯享特效着色器。 */
+    public static net.minecraft.client.renderer.ShaderInstance idle() {
+        return idleShader;
+    }
+
+    /** 资源重载（退世界等）后着色器实例会失效，清空引用等重新注册。 */
+    public static void clearShaders() {
+        glassShader = null;
+        glassBlurShader = null;
+        glassWidgetShader = null;
+        idleShader = null;
+    }
+
+    /** 仅供旧代码引用资源路径。 */
+    public static ResourceLocation shaderPath(String name) {
+        return id(NAMESPACE, name);
+    }
+
+    /** 供 GlassPanel 判断资源是否就绪。 */
+    public static boolean shadersReady() {
+        return glassShader != null && glassWidgetShader != null;
+    }
+
+    /** 保留原 API 形状（旧调用点已全部改造，这里留一个空实现兜底）。 */
+    public static void noop(ResourceProvider provider) {
     }
 }

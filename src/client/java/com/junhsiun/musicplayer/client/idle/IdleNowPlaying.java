@@ -2,7 +2,7 @@ package com.junhsiun.musicplayer.client.idle;
 
 import com.junhsiun.musicplayer.client.ClientMusicController;
 import com.junhsiun.musicplayer.client.ClientMusicUiState;
-import net.minecraft.util.Util;
+import net.minecraft.Util;
 
 /**
  * 纯享模式读取「当前在放什么」的统一入口。

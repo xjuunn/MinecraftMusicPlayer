@@ -12,8 +12,8 @@ import javazoom.jl.player.AudioDeviceBase;
 import javazoom.jl.player.Player;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.client.Minecraft;
 import net.minecraft.sounds.SoundSource;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -170,7 +170,7 @@ public final class ClientMusicController {
         lastPositionReportTime = 0L;
         if (reason != null && !reason.isBlank()) {
             // 只有带原因的停止才算「真的停了」，供纯享模式区分换曲空档。
-            explicitStopMillis = net.minecraft.util.Util.getMillis();
+            explicitStopMillis = net.minecraft.Util.getMillis();
             MusicPlayerMod.LOGGER.info("客户端已停止播放: {}", reason);
         }
     }
@@ -332,7 +332,7 @@ public final class ClientMusicController {
         if (trackId == null || trackId.isBlank()) {
             return;
         }
-        ClientPlayNetworking.send(MusicPlaybackReportPayload.started(trackId));
+        sendReport(MusicPlaybackReportPayload.started(trackId));
     }
 
     private void reportEnded(String trackId) {
@@ -347,12 +347,6 @@ public final class ClientMusicController {
             return;
         }
         sendReport(MusicPlaybackReportPayload.failed(trackId, message));
-    }
-
-    private static void sendReport(MusicPlaybackReportPayload payload) {
-        FriendlyByteBuf buf = PacketByteBufs.create();
-        payload.encode(buf);
-        ClientPlayNetworking.send(MusicPlaybackReportPayload.ID, buf);
     }
 
     private static final class BackgroundMusicAudioDevice extends AudioDeviceBase {
@@ -518,5 +512,15 @@ public final class ClientMusicController {
             decibel = Math.max(gainControl.getMinimum(), Math.min(0.0F, decibel));
             gainControl.setValue(decibel);
         }
+    }
+
+    /** 1.20.1 老式 networking：把 payload 经 FriendlyByteBuf 编码后发给服务端。 */
+    private static void sendReport(MusicPlaybackReportPayload payload) {
+        if (!ClientPlayNetworking.canSend(MusicPlaybackReportPayload.ID)) {
+            return;
+        }
+        FriendlyByteBuf buf = PacketByteBufs.create();
+        payload.encode(buf);
+        ClientPlayNetworking.send(MusicPlaybackReportPayload.ID, buf);
     }
 }
