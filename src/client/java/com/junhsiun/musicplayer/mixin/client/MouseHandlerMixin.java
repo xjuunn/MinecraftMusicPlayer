@@ -29,13 +29,20 @@ public abstract class MouseHandlerMixin {
         IdleController.getInstance().onRawInput();
     }
 
+    /** 上一次 onMove 的指针位置，用于自行计算位移（26.2 的 onMove 不带 delta 参数）。 */
+    private double musicplayer$lastX = Double.MIN_VALUE;
+    private double musicplayer$lastY;
+
     @Inject(method = "onMove", at = @At("HEAD"))
-    private void musicplayer$onMove(long window, double x, double y, double deltaX, double deltaY,
+    private void musicplayer$onMove(long window, double x, double y,
                                     CallbackInfo callbackInfo) {
         // 鼠标锁定后窗口仍会持续派发事件，只有真实位移才算输入。
         // 阈值取半像素：既滤掉驱动偶尔给出的亚像素噪声，又能捕捉到任何真实移动。
-        if (Math.abs(deltaX) + Math.abs(deltaY) > 0.5D) {
+        if (musicplayer$lastX != Double.MIN_VALUE
+                && Math.abs(x - musicplayer$lastX) + Math.abs(y - musicplayer$lastY) > 0.5D) {
             IdleController.getInstance().onRawInput();
         }
+        musicplayer$lastX = x;
+        musicplayer$lastY = y;
     }
 }

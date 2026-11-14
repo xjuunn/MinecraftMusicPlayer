@@ -104,7 +104,7 @@ public final class GlassWidgets {
 
         /** 缓出后的进度，用于亮度。 */
         public float eased() {
-            return Mth.smoothstep(clamp01(value));
+            return (float) Mth.smoothstep(clamp01(value));
         }
     }
 

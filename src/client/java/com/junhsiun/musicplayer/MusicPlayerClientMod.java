@@ -1,4 +1,4 @@
-﻿package com.junhsiun.musicplayer;
+package com.junhsiun.musicplayer;
 
 import com.junhsiun.musicplayer.client.ClientBgmController;
 import com.junhsiun.musicplayer.client.ClientMusicUiState;
@@ -58,7 +58,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
     /** 打开音乐浏览界面的快捷键，默认 M。 */
     private static final KeyMapping OPEN_BROWSER = new KeyMapping(
             "key.musicplayer.open_browser",
-            InputConstants.Type.KEYBOARD,
+            InputConstants.Type.KEYSYM,
             InputConstants.KEY_M,
             KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music")));
 

@@ -182,7 +182,7 @@ public final class SongDetailView extends AbstractWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         Font font = Minecraft.getInstance().font;
         int centerX = getX() + width / 2;
         int contentWidth = Math.max(80, Math.min(width - 32, CONTENT_MAX_WIDTH));
@@ -299,7 +299,7 @@ public final class SongDetailView extends AbstractWidget {
         // 共享元素还在飞时不画底部：播放按钮/歌词不属于"展开成页面"的形变元素，
         // 让它等在飞行结束后整体从下方滑入，比在淡入的页面里抖出一块玻璃干净得多。
         if (!flying) {
-            drawBottom(graphics, font, centerX, dividerY + 12);
+            drawBottom(graphics, font, centerX, dividerY + 12, mouseX, mouseY);
         }
     }
 
@@ -316,7 +316,8 @@ public final class SongDetailView extends AbstractWidget {
      * 同一个矩形，只用裁剪把上下边界收干净：登场是从下方滑入、退场是向上滑出。纯几何的
      * 位移不会改变任何一个像素的取整结果，也就没有可抖的东西。</p>
      */
-    private void drawBottom(GuiGraphicsExtractor graphics, Font font, int centerX, int top) {
+    private void drawBottom(GuiGraphicsExtractor graphics, Font font, int centerX, int top,
+                            int mouseX, int mouseY) {
         // 入场进度由 extractWidgetRenderState 每帧推进，这里只读值。
         float presence = GlassWidgets.clamp01(bottomPresence.eased());
 
@@ -360,11 +361,11 @@ public final class SongDetailView extends AbstractWidget {
                 int burnWidth = showBurn ? burnButtonWidth(font) : 0;
                 int groupWidth = playWidth + (showBurn ? BUTTON_GAP + burnWidth : 0);
                 int groupLeft = centerX - groupWidth / 2;
-                drawPlayButton(graphics, font, groupLeft + playWidth / 2, buttonTop);
+                drawPlayButton(graphics, font, groupLeft + playWidth / 2, buttonTop, mouseX, mouseY);
                 if (showBurn) {
                     int burnCenter = groupLeft + playWidth + BUTTON_GAP + burnWidth / 2;
                     drawBurnButton(graphics, font, burnCenter,
-                            buttonTop + (PLAY_HEIGHT - BURN_HEIGHT) / 2);
+                            buttonTop + (PLAY_HEIGHT - BURN_HEIGHT) / 2, mouseX, mouseY);
                 }
             } else {
                 // 按钮已经不在场上：把交互弹簧归零，避免它们带着"很久以前的计时"
@@ -416,14 +417,14 @@ public final class SongDetailView extends AbstractWidget {
      * 移出视野，从不做半透明淡入淡出。玻璃底的不透明度是编译期常量，硬做淡出只能在
      * "近似填充"和"真玻璃"之间来回切材质，反而会闪。</p>
      */
-    private void drawPlayButton(GuiGraphicsExtractor graphics, Font font, int centerX, int top) {
+    private void drawPlayButton(GuiGraphicsExtractor graphics, Font font, int centerX, int top, int mouseX, int mouseY) {
         String label = Component.translatable("musicplayer.song.play").getString();
         int textWidth = Math.round(font.width(label) * PLAY_TEXT_SCALE);
         int contentWidth = PLAY_ICON_BOX + PLAY_ICON_GAP + textWidth;
         int buttonWidth = playButtonWidth(font);
 
-        boolean hovered = isMouseOver(graphics.mouseX(), graphics.mouseY())
-                && overPlayButton(graphics.mouseX(), graphics.mouseY());
+        boolean hovered = isMouseOver(mouseX, mouseY)
+                && overPlayButton(mouseX, mouseY);
         playHover.tick(hovered, GlassTheme.Motion.HOVER);
         playPress.tickSpring(playHeld, playHeld ? GlassTheme.Motion.PRESS : GlassTheme.Motion.RELEASE);
         float lift = playHover.eased();
@@ -482,14 +483,14 @@ public final class SongDetailView extends AbstractWidget {
      * <p>与播放按钮共用同一套玻璃材质与弹簧手感，但高度和最小宽度都更小，也不再铺主题色层：
      * 它是「手持唱片时顺手刻一张」的补充入口，不该抢走播放按钮的视觉重量。</p>
      */
-    private void drawBurnButton(GuiGraphicsExtractor graphics, Font font, int centerX, int top) {
+    private void drawBurnButton(GuiGraphicsExtractor graphics, Font font, int centerX, int top, int mouseX, int mouseY) {
         String label = Component.translatable("musicplayer.discmaster.burn").getString();
         int textWidth = Math.round(font.width(label) * BURN_TEXT_SCALE);
         int contentWidth = BURN_ICON_BOX + BURN_ICON_GAP + textWidth;
         int buttonWidth = burnButtonWidth(font);
 
-        boolean hovered = isMouseOver(graphics.mouseX(), graphics.mouseY())
-                && overBurnButton(graphics.mouseX(), graphics.mouseY());
+        boolean hovered = isMouseOver(mouseX, mouseY)
+                && overBurnButton(mouseX, mouseY);
         burnHover.tick(hovered, GlassTheme.Motion.HOVER);
         burnPress.tickSpring(burnHeld, burnHeld ? GlassTheme.Motion.PRESS : GlassTheme.Motion.RELEASE);
         float lift = burnHover.eased();
@@ -558,7 +559,7 @@ public final class SongDetailView extends AbstractWidget {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
         // 本控件铺满整块详情区域，不能直接把点击交给基类：那会让点空白处也响一下。
         // 只有真的点在按钮上才接受这次点击。
-        if (!isActive() || !event.isLeftMouse()) {
+        if (!isActive() || event.button() != 0) {
             return false;
         }
         if (overBurnButton(event.x(), event.y())) {

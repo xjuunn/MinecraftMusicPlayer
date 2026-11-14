@@ -49,7 +49,7 @@ public class FlatPanel extends AbstractWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         int x0 = getX();
         int y0 = getY();
         int x1 = x0 + getWidth();

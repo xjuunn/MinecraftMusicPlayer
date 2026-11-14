@@ -4,11 +4,11 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.renderpearl.api.GpuFormat;
-import com.mojang.renderpearl.api.pipeline.BlendFunction;
-import com.mojang.renderpearl.api.pipeline.ColorTargetState;
-import com.mojang.renderpearl.api.pipeline.DepthStencilState;
-import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.blaze3d.GpuFormat;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.ColorTargetState;
+import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.PrimitiveTopology;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.resources.Identifier;
 

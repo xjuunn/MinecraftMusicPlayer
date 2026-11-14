@@ -387,11 +387,9 @@ public final class DiscMasterScreen extends GlassWindowScreen implements MediaLi
     /** 回车直接搜：EditBox 自己不处理回车，落到这里。 */
     @Override
     public boolean keyPressed(KeyEvent event) {
-        // key() 是 GLFW 原始键码，keycode() 是快捷方式键码，两者对回车各有一套常量
+        // key() 是 GLFW 原始键码，回车与数字键盘回车各有一套常量
         boolean enter = event.key() == InputConstants.KEY_RETURN
-                || event.key() == InputConstants.KEY_NUMPADENTER
-                || event.keycode() == InputConstants.KEYCODE_RETURN
-                || event.keycode() == InputConstants.KEYCODE_NUMPADENTER;
+                || event.key() == InputConstants.KEY_NUMPADENTER;
         boolean typing = searchField != null && searchField.isFocused();
         if (enter && typing) {
             search(1);

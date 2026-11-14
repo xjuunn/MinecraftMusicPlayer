@@ -3,11 +3,12 @@ package com.junhsiun.musicplayer.client.idle;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
-import com.mojang.renderpearl.api.pipeline.ColorTargetState;
-import com.mojang.renderpearl.api.pipeline.DepthStencilState;
-import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
-import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.blaze3d.GpuFormat;
+import com.mojang.blaze3d.pipeline.BindGroupLayout;
+import com.mojang.blaze3d.pipeline.ColorTargetState;
+import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.PrimitiveTopology;
+import com.mojang.blaze3d.shaders.UniformType;
 import net.minecraft.resources.Identifier;
 
 import java.util.HashMap;
@@ -31,13 +32,13 @@ public final class IdlePipelines {
 
     private static final BindGroupLayout LAYOUT_PLAIN = BindGroupLayout.builder()
             .withUniform("IdleParams", UniformType.UNIFORM_BUFFER)
-            .withUniform("Sampler0", UniformType.COMBINED_IMAGE_SAMPLER)
+            .withSampler("Sampler0")
             .build();
 
     private static final BindGroupLayout LAYOUT_COVER = BindGroupLayout.builder()
             .withUniform("IdleParams", UniformType.UNIFORM_BUFFER)
-            .withUniform("Sampler0", UniformType.COMBINED_IMAGE_SAMPLER)
-            .withUniform("Sampler1", UniformType.COMBINED_IMAGE_SAMPLER)
+            .withSampler("Sampler0")
+            .withSampler("Sampler1")
             .build();
 
     private static final Map<String, RenderPipeline> PIPELINES = new HashMap<>();
@@ -56,7 +57,8 @@ public final class IdlePipelines {
                     .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
                     .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
                     .withBindGroupLayout(hasCover ? LAYOUT_COVER : LAYOUT_PLAIN)
-                    .withColorTargetState(new ColorTargetState(Optional.empty(), ColorTargetState.WRITE_ALL))
+                    .withColorTargetState(new ColorTargetState(Optional.empty(), GpuFormat.RGBA8_UNORM,
+                            ColorTargetState.WRITE_ALL))
                     .withDepthStencilState(Optional.<DepthStencilState>empty())
                     .withCull(false)
                     .withShaderDefine("IDLE_MODE", effect.shaderMode());

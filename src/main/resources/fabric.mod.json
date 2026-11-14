@@ -22,7 +22,6 @@
     ]
   },
   "mixins": [
-    "musicplayer.mixins.json",
     "musicplayer.client.mixins.json"
   ],
   "depends": {

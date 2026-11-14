@@ -4,10 +4,10 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.renderpearl.api.pipeline.BlendFunction;
-import com.mojang.renderpearl.api.pipeline.ColorTargetState;
-import com.mojang.renderpearl.api.pipeline.DepthStencilState;
-import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.ColorTargetState;
+import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.PrimitiveTopology;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.resources.Identifier;
 
@@ -69,7 +69,7 @@ public final class GlassWidgetPipelines {
     /** 界面提取阶段预编译，避免绘制期首次编译失败带崩游戏。 */
     public static boolean prepare(RenderPipeline pipeline) {
         try {
-            RenderSystem.getCompiledPipeline(pipeline);
+            RenderSystem.getDevice().precompilePipeline(pipeline);
             return true;
         } catch (Throwable throwable) {
             MusicPlayerMod.LOGGER.warn("液态玻璃控件着色器编译失败，控件退化为矩形填充", throwable);
