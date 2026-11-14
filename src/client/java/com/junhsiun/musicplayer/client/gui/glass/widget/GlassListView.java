@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.client.gui.glass.widget;
 
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -136,7 +137,8 @@ public class GlassListView extends AbstractWidget {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
-        if (!active || !visible || event.button() != 0 || !isMouseOver(event.x(), event.y())) {
+        if (!active || !visible || event.button() != InputConstants.MOUSE_BUTTON_LEFT
+                || !isMouseOver(event.x(), event.y())) {
             return false;
         }
         int index = actionRowAt(event.x(), event.y());

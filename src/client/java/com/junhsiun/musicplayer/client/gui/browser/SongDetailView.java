@@ -8,6 +8,7 @@ import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
 import com.junhsiun.musicplayer.client.gui.icon.SvgIcons;
 import com.junhsiun.musicplayer.client.gui.media.CoverFade;
 import com.junhsiun.musicplayer.model.LyricLine;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -559,7 +560,7 @@ public final class SongDetailView extends AbstractWidget {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
         // 本控件铺满整块详情区域，不能直接把点击交给基类：那会让点空白处也响一下。
         // 只有真的点在按钮上才接受这次点击。
-        if (!isActive() || event.button() != 0) {
+        if (!isActive() || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         if (overBurnButton(event.x(), event.y())) {
