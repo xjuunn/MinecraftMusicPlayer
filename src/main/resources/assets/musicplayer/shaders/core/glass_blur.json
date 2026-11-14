@@ -1,6 +1,6 @@
 {
-    "vertex": "glass_blur",
-    "fragment": "glass_blur",
+    "vertex": "musicplayer:glass_blur",
+    "fragment": "musicplayer:glass_blur",
     "samplers": [
         { "name": "Sampler0" }
     ],

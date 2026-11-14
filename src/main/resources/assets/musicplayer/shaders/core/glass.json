@@ -1,6 +1,6 @@
 {
-    "vertex": "glass",
-    "fragment": "glass",
+    "vertex": "musicplayer:glass",
+    "fragment": "musicplayer:glass",
     "samplers": [
         { "name": "Sampler0" },
         { "name": "Sampler1" },
