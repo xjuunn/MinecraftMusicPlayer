@@ -212,15 +212,21 @@ public final class MediaThumbnails {
         }
         int offsetX = x0 + (boxWidth - drawWidth) / 2;
         int offsetY = y0 + (boxHeight - drawHeight) / 2;
+        // 两个重载的参数含义（按 innerBlit 的 x0,x1,y0,y1,u0,u1,v0,v1 反推）：
+        //   12 参：(x, y, u, v, w, h, srcW, srcH, texW, texH)
+        //   13 参：同上再多一个 ARGB 颜色
+        // 它们都把 w/h 当<b>屏幕尺寸</b>，srcW/srcH 才是源纹理取样区域。
+        //
+        // 千万不要用 10 参那个 (x, y, u, v, w, h, texW, texH)：它把 srcW/srcH 直接设成
+        // w/h，等于"从纹理原点裁一块 w×h 铺满 w×h"。纹理 64px、画面 22px 时只取到纹理
+        // 左上角 34%，圆角纹理画出来就变成"只有左上角是圆角、其余三角是直角"。
         if (color == -1) {
-            // 这个重载的四个 int 是 <b>(x0, y0, x1, y1)</b>，不是 (x, y, w, h)；
-            // 四个 float 是 <b>(u0, u1, v0, v1)</b>，不是 (u0, v0, u1, v1)。
-            // 按 (x, y, w, h) 传会得到一个右下角缩到 (w, h) 的倒置矩形，画出来什么都没有
-            // ——"封面全都消失"就是这么来的。
             graphics.blit(RenderPipelines.GUI_TEXTURED, thumb.id(),
                     offsetX, offsetY, 0.0F, 0.0F,
                     drawWidth, drawHeight,
+                    thumb.width(), thumb.height(),
                     thumb.width(), thumb.height());
+            return;
         }
         // 带 tint 的版本需要按纹理注册 ID 走 TextureManager，才能把颜色（含 alpha）
         // 传给 BlitRenderState；GpuTextureView 的 blit 重载没有颜色参数。
