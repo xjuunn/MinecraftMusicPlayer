@@ -17,6 +17,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.resources.ResourceLocation;
 import org.joml.Matrix4f;
 
 import java.util.List;
@@ -78,8 +79,8 @@ public final class IdleRenderer {
             return;
         }
         INSTANCE.drawEffect(minecraft, now, fade);
-        // 纯享期间隐藏 HUD（1.21.1：Minecraft.options.hideGui）
-        com.junhsiun.musicplayer.mixin.client.HudMixin.musicplayer$updateHudHidden(minecraft);
+        // HUD 的隐藏由 HudMixin 在 Gui.render 的 HEAD 里自己接管（改 options.hideGui），
+        // 这里不再手动调用，避免两处同时写同一个字段。
         try {
             INSTANCE.drawOverlay(minecraft, now, fade);
         } catch (Throwable throwable) {
@@ -93,11 +94,6 @@ public final class IdleRenderer {
         GlassBlurQuads.reset();
         failed = false;
         timeOriginMillis = Util.getMillis();
-    }
-
-    /** 恢复 HUD 显示（退世界时由 MusicPlayerClientMod 调用）。 */
-    public void restoreHud(Minecraft minecraft) {
-        com.junhsiun.musicplayer.mixin.client.HudMixin.musicplayer$restoreHud(minecraft);
     }
 
     // ── 全屏特效 ────────────────────────────────────────────────────────
@@ -139,14 +135,23 @@ public final class IdleRenderer {
 
             // 3. 特效写回主渲染目标。这里只采样 worldTarget，不会与主目标形成采样反馈。
             RenderSystem.assertOnRenderThread();
-            shader.setSampler("Sampler0", worldTarget.getColorTextureId());
+            // drawWithShader → setDefaultUniforms 会按 shaderTextures 重写 Sampler0/1。
+            RenderSystem.setShaderTexture(0, worldTarget.getColorTextureId());
             if (hasCover) {
-                shader.setSampler("Sampler1", cover.id());
+                ResourceLocation coverId = cover.id();
+                net.minecraft.client.renderer.texture.AbstractTexture coverTexture =
+                        minecraft.getTextureManager().getTexture(coverId);
+                if (coverTexture != null) {
+                    RenderSystem.setShaderTexture(1, coverTexture.getId());
+                }
             }
             RenderSystem.enableBlend();
             RenderSystem.disableBlend();
             Matrix4f identity = new Matrix4f();
+            // 与 GlassBackdrop 同理：drawWithShader 不会绑定 VAO，必须先 bind。
+            quad.bind();
             quad.drawWithShader(identity, identity, shader);
+            VertexBuffer.unbind();
         } catch (Throwable throwable) {
             failed = true;
             MusicPlayerMod.LOGGER.warn("纯享特效初始化失败，本次仅显示文字", throwable);
@@ -165,9 +170,13 @@ public final class IdleRenderer {
         RenderSystem.viewport(0, 0, worldTarget.width, worldTarget.height);
         blur.safeGetUniform("SamplerSize").set((float) main.width, (float) main.height);
         blur.safeGetUniform("SpreadVertical").set(0.0F, 0.0F);
-        blur.setSampler("Sampler0", main.getColorTextureId());
+        // drawWithShader → setDefaultUniforms 会按 shaderTextures 重写 Sampler0，
+        // 所以必须走 RenderSystem 而不是 shader.setSampler。
+        RenderSystem.setShaderTexture(0, main.getColorTextureId());
         Matrix4f identity = new Matrix4f();
+        quad.bind();
         quad.drawWithShader(identity, identity, blur);
+        VertexBuffer.unbind();
         Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
         RenderSystem.viewport(0, 0,
                 Minecraft.getInstance().getMainRenderTarget().width,

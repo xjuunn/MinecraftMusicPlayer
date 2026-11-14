@@ -213,22 +213,25 @@ public final class GlassPanel {
 
         // 材质常量 → uniforms（26.x 用 shader define，这里逐帧写入，成本可忽略）
         setStyleUniforms(shader, style, useLook);
-        shader.safeGetUniform("ShadowMode").set(shadow ? 1.0F : 0.0F);
-        shader.safeGetUniform("GuiSize").set(
-                (float) graphics.guiWidth(), (float) graphics.guiHeight());
+        // 1.21.1 的片元着色器里这个开关叫 GlassShadowMode；写 ShadowMode 会命中空壳 uniform，
+        // 投影会被当成普通玻璃再画一遍。
+        shader.safeGetUniform("GlassShadowMode").set(shadow ? 1.0F : 0.0F);
 
-        // 三层背景贴图
-        shader.setSampler("Sampler0", shadow ? 0
+        // 三层背景贴图。
+        // 注意：`drawWithShader()` 内部会先调 `setDefaultUniforms()`，它按
+        // `RenderSystem.getShaderTexture(i)` 重写 Sampler0..11，所以这里必须写
+        // `RenderSystem.setShaderTexture`；用 `shader.setSampler` 会在下一步被抹掉，
+        // 采到纹理 0（黑）。
+        int saved0 = RenderSystem.getShaderTexture(0);
+        int saved1 = RenderSystem.getShaderTexture(1);
+        int saved2 = RenderSystem.getShaderTexture(2);
+        int baseTexture = shadow ? 0
                 : (useLook.quantizedBlur() <= 0.0F ? backdrop.sharpTextureId()
-                : backdrop.softTextureId()));
+                : backdrop.softTextureId());
+        RenderSystem.setShaderTexture(0, baseTexture);
         if (!shadow) {
-            shader.setSampler("Sampler1", backdrop.frostTextureId());
-            shader.setSampler("Sampler2", backdrop.heavyTextureId());
-            shader.safeGetUniform("SamplerSizes").set(
-                    backdrop.softWidth(), backdrop.softHeight(),
-                    backdrop.frostWidth(), backdrop.frostHeight());
-            shader.safeGetUniform("Sampler2Size").set(
-                    (float) backdrop.heavyWidth(), (float) backdrop.heavyHeight());
+            RenderSystem.setShaderTexture(1, backdrop.frostTextureId());
+            RenderSystem.setShaderTexture(2, backdrop.heavyTextureId());
         }
 
         // 四个顶点的 GUI 坐标（着色器 vsh 里经 ProjMat * ModelViewMat 变换）
@@ -256,6 +259,10 @@ public final class GlassPanel {
             }
             VertexBuffer.unbind();
         }
+        // shaderTextures 是全局状态，画完立刻还原，避免污染后续 GUI 绘制。
+        RenderSystem.setShaderTexture(0, saved0);
+        RenderSystem.setShaderTexture(1, saved1);
+        RenderSystem.setShaderTexture(2, saved2);
         RenderSystem.disableBlend();
     }
 
@@ -273,7 +280,8 @@ public final class GlassPanel {
         shader.safeGetUniform("GlassBlur").set(useLook.quantizedBlur());
         shader.safeGetUniform("GlassWindowTint").set(useLook.quantizedWindowTint());
         float[] tint = GlassTheme.overlayColorRgb();
-        shader.safeGetUniform("GlassWindowTintColor").set(tint[0], tint[1], tint[2], 0.0F);
+        // 着色器里是 vec3，json 也声明 count=3；多传一个分量会写爆 Uniform 的 FloatBuffer。
+        shader.safeGetUniform("GlassWindowTintColor").set(tint[0], tint[1], tint[2]);
         shader.safeGetUniform("GlassShadowMode").set(0.0F);
         shader.safeGetUniform("GlassShadowSize").set(shadow.size());
         shader.safeGetUniform("GlassShadowAlpha").set(shadow.alpha());

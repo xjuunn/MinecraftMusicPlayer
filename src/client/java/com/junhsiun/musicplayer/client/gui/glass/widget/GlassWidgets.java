@@ -203,8 +203,6 @@ public final class GlassWidgets {
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(() -> shader);
         writeWidgetUniforms(shader, fill, border, radius, alpha);
-        shader.safeGetUniform("GuiSize").set(
-                (float) graphics.guiWidth(), (float) graphics.guiHeight());
 
         BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS,
                 DefaultVertexFormat.POSITION_TEX_COLOR);

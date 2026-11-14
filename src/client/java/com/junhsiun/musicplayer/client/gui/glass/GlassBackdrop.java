@@ -4,6 +4,7 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.VertexBuffer;
 import net.minecraft.client.Minecraft;
 import org.joml.Matrix4f;
 
@@ -254,9 +255,17 @@ public final class GlassBackdrop {
         RenderSystem.viewport(0, 0, destination.width, destination.height);
         shader.safeGetUniform("SamplerSize").set((float) source.width, (float) source.height);
         shader.safeGetUniform("SpreadVertical").set(spread, vertical ? 1.0F : 0.0F);
-        shader.setSampler("Sampler0", source.getColorTextureId());
+        // drawWithShader → setDefaultUniforms 会按 shaderTextures 重写 Sampler0，
+        // 所以必须走 RenderSystem 而不是 shader.setSampler。
+        RenderSystem.setShaderTexture(0, source.getColorTextureId());
         Matrix4f identity = new Matrix4f();
+        // drawWithShader 只负责 apply() + draw()，不会绑定 VAO。
+        // 共享 quad 在创建时已经 unbind 过，这里必须重新 bind，否则
+        // glDrawElements 在没有活动 VAO 时被调用（GL_INVALID_OPERATION），
+        // 目标贴图只会留下 clear 后的黑色。
+        quad.bind();
         quad.drawWithShader(identity, identity, shader);
+        VertexBuffer.unbind();
         minecraft.getMainRenderTarget().bindWrite(true);
         RenderSystem.viewport(0, 0, minecraft.getMainRenderTarget().width,
                 minecraft.getMainRenderTarget().height);

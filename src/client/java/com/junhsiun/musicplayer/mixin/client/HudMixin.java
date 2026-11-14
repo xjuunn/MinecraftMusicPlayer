@@ -2,47 +2,57 @@ package com.junhsiun.musicplayer.mixin.client;
 
 import com.junhsiun.musicplayer.client.idle.IdleController;
 import net.minecraft.Util;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.Options;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.GuiGraphics;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * 纯享模式期间隐藏 HUD，效果等同于按住 F1。
  *
- * <p>1.21.1 里 F1 开关是 {@code Minecraft.options.hideGui}（26.x 才移到 {@code Hud.isHidden}）。
- * 特效出现前把它置真、淡出后恢复。这里做成挂靠在 {@code Options} 上的静态工具类，
- * 由 {@code IdleRenderer.beforeGui} 每帧调用。</p>
- *
- * <p>玩家自己按 F1 会把 {@code hideGui} 改成常驻状态，所以接管前必须先记下原值，
- * 结束纯享时还原，否则「退出纯享后强制显示 HUD」会覆盖玩家原本的设置。</p>
+ * <p>1.21.1 里 F1 开关是 {@code Options.hideGui}（26.x 才移到 {@code Hud.isHidden}），
+ * 在 {@code Gui.render} 开头改掉、并在返回后恢复，避免永久改变玩家设置。HUD 各层是
+ * 由 {@code LayeredDraw} 按 {@code hideGui} 每帧判断要不要画的，所以改在
+ * {@code Gui.render} 的 HEAD 就能影响同一帧。</p>
  */
-@Mixin(Options.class)
+@Mixin(Gui.class)
 public abstract class HudMixin {
 
-    /** 接管前玩家自己的 {@code hideGui}：{@code -1} 表示当前没有接管。 */
     @Unique
-    private static int musicplayer$savedHideGui = -1;
+    private boolean musicplayer$restoreHud;
 
-    /** 每帧调用：纯享期间隐藏 HUD，其余时间保持玩家自己的 F1 状态不动。 */
-    public static void musicplayer$updateHudHidden(Minecraft minecraft) {
-        boolean shouldHide = IdleController.getInstance().shouldHideHud(Util.getMillis());
-        if (!shouldHide) {
-            musicplayer$restoreHud(minecraft);
+    @Inject(method = "render", at = @At("HEAD"))
+    private void musicplayer$hideHudForIdle(GuiGraphics graphics, DeltaTracker deltaTracker,
+                                            CallbackInfo callbackInfo) {
+        var options = Minecraft.getInstance().options;
+        // 上一帧如果在 RETURN 之前抛了异常（界面代码崩溃），标记会残留。
+        // 这里先把 HUD 恢复回去，避免一次崩溃让 HUD 永久消失、还带进下一局。
+        if (musicplayer$restoreHud) {
+            options.hideGui = false;
+            musicplayer$restoreHud = false;
+        }
+        // 从特效出现的第一帧到淡出结束都保持隐藏，避免 HUD 叠在半透明特效上。
+        if (!IdleController.getInstance().shouldHideHud(Util.getMillis())) {
             return;
         }
-        if (musicplayer$savedHideGui < 0) {
-            musicplayer$savedHideGui = minecraft.options.hideGui ? 1 : 0;
+        // 玩家自己按 F1 时 hideGui 已经是 true，不去接管，也不在结束时把它的设置改掉。
+        if (!options.hideGui) {
+            options.hideGui = true;
+            musicplayer$restoreHud = true;
         }
-        minecraft.options.hideGui = true;
     }
 
-    /** 退还 HUD 控制权：恢复成接管前玩家自己的 F1 状态；从未接管时什么都不做。 */
-    public static void musicplayer$restoreHud(Minecraft minecraft) {
-        if (musicplayer$savedHideGui < 0) {
-            return;
+    @Inject(method = "render", at = @At("RETURN"))
+    private void musicplayer$restoreHudAfterIdle(GuiGraphics graphics, DeltaTracker deltaTracker,
+                                                 CallbackInfo callbackInfo) {
+        if (musicplayer$restoreHud) {
+            Minecraft.getInstance().options.hideGui = false;
+            musicplayer$restoreHud = false;
         }
-        minecraft.options.hideGui = musicplayer$savedHideGui == 1;
-        musicplayer$savedHideGui = -1;
     }
 }
