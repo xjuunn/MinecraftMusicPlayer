@@ -5,7 +5,7 @@
 ## 分支与工作流
 
 - 每个适配版本使用独立分支，分支名即 Minecraft 版本号（如 `1.19.2`、`1.20.1`、`26.2`、`26.3`）。
-- `master` 为最新版本主分支（当前 `26.4-snapshot-5`）。
+- `master` 为最新版本主分支（当前 `26.4-snapshot-8`）。
 - 适配新版本时，从**最接近的目标版本分支**切出新分支（例如适配 1.19.2 基于 `1.20.1`，适配 1.20.1 基于 `1.21.11`），而不是直接基于 master。
 - 适配操作全部在新分支上完成。
 - **默认禁止切换或修改其他分支。** 后续功能更新如需同步到各版本分支，使用 `cherry-pick` 将主分支提交挑选到目标分支，但必须由用户明确要求后才执行。
@@ -74,7 +74,7 @@
 
 | API | 新版本 | 旧版本 |
 |---|---|---|
-| 动态纹理 | 26.4+ 移除 `DynamicTexture`，改用 `TextureResources.from2dImage(Supplier<String>, NativeImage)` 后 `TextureManager.register(id, resources)`，不再调用 `upload()` | `new DynamicTexture(supplier, image)` + `texture.upload()` |
+| 动态纹理 | 26.4-snapshot-8+ 移除 `TextureManager.register(Identifier, TextureResources)`，只能用 `registerProvider(id, new ExternalTextureProvider(resources))`；`ExternalTextureProvider.createTexture` 原样返回传入句柄，`releaseTexture` 是空实现，因此 `release(id)` **不再**释放纹理，淘汰/清空时必须自己 `TextureResources.close()`。26.4-snapshot-5～7 用 `TextureResources.from2dImage(Supplier<String>, NativeImage[, GpuSampler])` + `register(id, resources)`，不再调用 `upload()` | `new DynamicTexture(supplier, image)` + `texture.upload()` |
 | `com.mojang.math.Axis` | `Axis.YP.rotationDegrees(...)`（1.19.3+） | 1.19.2 用 `com.mojang.math.Vector3f.YP` 等 |
 | `ConfirmLinkScreen.confirmLinkNow(url, parent, warn)` | 存在 | 用构造器 `new ConfirmLinkScreen(accepted -> { if (accepted) openUri(...); setScreen(parent); }, url, false)`；**回调必须在 accepted 为 true 时真正打开 URL 并恢复父屏幕** |
 | `Util.getPlatform().openUri` | 顶层 `net.minecraft.Util` | 同左 |
@@ -82,6 +82,36 @@
 | `WorldRenderContext` | `matrixStack()` / `consumers()`（fabric-rendering-v1） | 1.19.2 实测可用 |
 | `RenderType` / `BufferUploader` | `entityCutoutNoCull(ResourceLocation)`、`setupRenderState`/`clearRenderState`、`drawWithShader` | 1.19.2/1.20.1 实测可用 |
 | `VertexConsumer` | 旧式 `vertex...color/uv/overlayCoords/uv2/normal/endVertex` | 1.21.2+ 改为 `addVertex` 风格，按目标版本选 |
+| 命令补全 | 26.4-snapshot-8+ 移除 `net.minecraft.commands.SharedSuggestionProvider`，静态方法迁到 `net.minecraft.commands.suggestions.SuggestionContext`（`suggest`/`suggestResource` 签名一致） | `net.minecraft.commands.SharedSuggestionProvider.suggest(...)` |
+
+### 命令树必须可序列化（26.4-snapshot-8+）
+
+26.4-snapshot-8 新增 `net.minecraft.commands.SuggestionBox` / `ParseBox` / `SerializableArgument`。`Commands` 构造时会调用 `SuggestionBox.fromFullTree(dispatcher)` **遍历整棵命令树**做转换校验，任何节点不合规都会抛 `UnsupportedOperationException`，表现为**创建新世界/启动服务器即崩溃**（与具体命令是否被执行无关）。
+
+三个约束，缺一即崩：
+
+| 位置 | 崩溃信息 | 必须改成 |
+|---|---|---|
+| `.requires(predicate)` | `Unsupported predicate: ...use PermissionProviderCheck instead` | `Commands.hasPermission(CommandPermissionLevels.LEVEL_*)`，它返回 `PermissionProviderCheck` |
+| `Commands.argument(name, type)` | `Invalid argument type: string()` / `word()` / `integer()` | MC 包装类 `StringArgument.word()`、`IntegerArgument.integer()`、`DoubleArgument.doubleArg()`、`BooleanArgument.bool()`；`EntityArgument` 天然合规 |
+| `.suggests(provider)` | 与上同类，裸 lambda 不可序列化 | `SuggestLiteralString.suggestLiteral("a", "b")`；复杂补全需实现 `SerializableCustomSuggestion` |
+
+要点：
+
+- `CommandBox.convertNodePermissionCheck` 只接受 `PermissionProviderCheck`，裸 lambda（即使内部只是查权限）一律拒绝。
+- `PermissionProviderCheck` 只能承载 `PermissionCheck`，而 `PermissionCheckTypes` 只注册了 `always_pass` 与 `require` 两种，**没有 AND/OR/NOT 组合**。像「玩家 **或** 管理员」这种复合条件无法表达，只能退化为 `LEVEL_ALL`（所有人可见）后把分流逻辑放进 `executes` 里判断，或直接改成单一权限级别。
+- `StringArgument` / `IntegerArgument` 等的 `word()` / `string()` / `integer()` / `getString()` / `getInteger()` 返回的仍是 brigadier `ArgumentType`，取值方法签名与原写法一致，所以调用方取证代码不用动，只换静态方法名。
+- 判定某个分支是否受影响：查目标版本 jar 里是否存在 `net/minecraft/commands/SuggestionBox.class`。26.4-snapshot-7 及更早、1.21.x、26.1～26.3 都没有该类，**不需要改**。
+
+#### 这是 mod 不合规，不是原版 bug
+
+遇到这类崩溃时容易误判成"原版校验过严"。实测证据表明是**我们自己的命令树不合规**，必须修，不能因为"是原版的问题"而放过：
+
+- `SerializableArgumentTypes` 注册了 **61 种**可序列化参数类型，`string` / `integer` / `double` / `bool` 全在内。这是 MC 为"命令树可序列化下发"做的系统性改造，不是疏漏。
+- 扫描 `net/minecraft/server/commands/**` 与 `gametest/**` 全部原版命令类，**没有任何一处**把裸 `ArgumentType` 传给 `Commands.argument(...)`；原版 `.requires` 一律走 `Commands.hasPermission(...)`。原版命令树 100% 合规，`fromFullTree` 能顺利跑完，所以原版建世界不会崩。
+- 唯一扫描命中 `StringArgumentType` 的 `DataPackCommand`，实际只是调用 `StringArgumentType.escapeIfRequired(String)` 这个字符串转义工具方法，没有当作参数类型使用，不构成反例。
+- 异常信息直接带我方类名，可作为归属依据：`Unsupported predicate: com.junhsiun.musicplayer.command.MusicCommands$$Lambda/...`
+- 危害等级：`fromFullTree` 遍历整棵树，**一个不合规节点就让整个 `Commands` 构造失败**，表现为玩家无法创建任何世界、服务器完全起不来，而不是"某条命令不可用"。
 
 ### Mixin
 
@@ -125,7 +155,11 @@
 
 | 分支 | Minecraft | Java | Fabric API（示例） |
 |---|---|---|---|
-| `master` | 26.4-snapshot-5 | 25 | 随分支更新 |
+| `master` | 26.4-snapshot-8 | 25 | `0.166.2+26.4` |
+| `26.4-snapshot-8` | 26.4-snapshot-8 | 25 | `0.166.2+26.4` |
+| `26.4-snapshot-7` | 26.4-snapshot-7 | 25 | `0.165.4+26.4` |
+| `26.4-snapshot-5` | 26.4-snapshot-5 | 25 | — |
+| `26.3` | 26.3 | 25 | — |
 | `26.2` | 26.2 | 25 | — |
 | `26.1` | 26.1 | 25 | — |
 | `1.21.11` | 1.21.11 | 21+ | — |

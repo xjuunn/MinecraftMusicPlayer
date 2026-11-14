@@ -442,6 +442,7 @@
   "musicplayer.vote.passed": "投票が成立したため、次の曲に切り替えます。",
   "musicplayer.vote.progress": "スキップ投票: %s/%s",
   "musicplayer.vote.requester_skipped": "リクエスト者が自分の曲をスキップしました。",
+  "musicplayer.vote.player_only": "プレイヤーのみが投票でスキップできます。",
   "soundCategory.music": "リクエスト音楽",
   "key.category.musicplayer.music": "ミュージックプレイヤー",
   "key.musicplayer.open_browser": "音楽ブラウザを開く",

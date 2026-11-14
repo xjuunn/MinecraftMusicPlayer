@@ -442,6 +442,7 @@
   "musicplayer.vote.passed": "Vote passed; skipping to the next song.",
   "musicplayer.vote.progress": "Vote to skip: %s/%s",
   "musicplayer.vote.requester_skipped": "The requester skipped their own song.",
+  "musicplayer.vote.player_only": "Only players can vote to skip songs.",
   "soundCategory.music": "Requested Music",
   "key.category.musicplayer.music": "Music Player",
   "key.musicplayer.open_browser": "Open Music Browser",

@@ -16,17 +16,19 @@ import com.junhsiun.musicplayer.network.OpenUrlPayload;
 import com.junhsiun.musicplayer.platform.api.MusicApiMode;
 import com.junhsiun.musicplayer.util.Messages;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.BoolArgumentType;
-import com.mojang.brigadier.arguments.DoubleArgumentType;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.commands.CommandBuildContext;
+import net.minecraft.commands.CommandPermissionLevels;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.BooleanArgument;
+import net.minecraft.commands.arguments.DoubleArgument;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.IntegerArgument;
+import net.minecraft.commands.arguments.StringArgument;
+import net.minecraft.commands.suggestions.SuggestLiteralString;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.network.chat.Component;
@@ -84,8 +86,8 @@ public final class MusicCommands {
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> help() {
         return Commands.literal("help")
                 .executes(context -> sendHelpOverview(context.getSource()))
-                .then(Commands.argument("subcommand", StringArgumentType.word()).executes(context -> {
-                    String sub = StringArgumentType.getString(context, "subcommand");
+                .then(Commands.argument("subcommand", StringArgument.word()).executes(context -> {
+                    String sub = StringArgument.getString(context, "subcommand");
                     return sendHelpFor(context.getSource(), sub);
                 }));
     }
@@ -330,8 +332,8 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> seek() {
         return Commands.literal("seek")
-                .then(Commands.argument("delta", IntegerArgumentType.integer()).executes(context -> {
-                    int delta = IntegerArgumentType.getInteger(context, "delta");
+                .then(Commands.argument("delta", IntegerArgument.integer()).executes(context -> {
+                    int delta = IntegerArgument.getInteger(context, "delta");
                     MusicPlayerMod.queueService().seek(context.getSource().getServer(), delta);
                     if (context.getSource().getEntity() instanceof ServerPlayer player) {
                         String icon = delta >= 0 ? "⏩" : "⏪";
@@ -344,7 +346,7 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> pause() {
         return Commands.literal("pause")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(Commands.hasPermission(CommandPermissionLevels.LEVEL_ADMINS))
                 .executes(context -> {
                     CommandSourceStack source = context.getSource();
                     if (MusicPlayerMod.queueService().currentTrack() == null) {
@@ -363,7 +365,7 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> resume() {
         return Commands.literal("resume")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(Commands.hasPermission(CommandPermissionLevels.LEVEL_ADMINS))
                 .executes(context -> {
                     CommandSourceStack source = context.getSource();
                     if (MusicPlayerMod.queueService().currentTrack() == null) {
@@ -384,8 +386,8 @@ public final class MusicCommands {
         return Commands.literal("queue")
                 .executes(context -> showQueue(context.getSource(), 1))
                 .then(Commands.literal("promote")
-                        .then(Commands.argument("song_id", StringArgumentType.string()).executes(context -> {
-                            String songId = StringArgumentType.getString(context, "song_id");
+                        .then(Commands.argument("song_id", StringArgument.string()).executes(context -> {
+                            String songId = StringArgument.getString(context, "song_id");
                             if (!MusicPlayerMod.queueService().moveQueuedTrackToFront(songId)) {
                                 Messages.warning(context.getSource(), Component.translatable("musicplayer.queue.promote_not_found"));
                                 return 0;
@@ -394,8 +396,8 @@ public final class MusicCommands {
                             return showQueue(context.getSource(), 1);
                         })))
                 .then(Commands.literal("remove")
-                        .then(Commands.argument("song_id", StringArgumentType.string()).executes(context -> {
-                            String songId = StringArgumentType.getString(context, "song_id");
+                        .then(Commands.argument("song_id", StringArgument.string()).executes(context -> {
+                            String songId = StringArgument.getString(context, "song_id");
                             if (!MusicPlayerMod.queueService().removeFromQueue(songId)) {
                                 Messages.warning(context.getSource(), Component.translatable("musicplayer.queue.not_found"));
                                 return 0;
@@ -404,13 +406,13 @@ public final class MusicCommands {
                             return showQueue(context.getSource(), 1);
                         })))
                 .then(Commands.literal("clear")
-                        .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                        .requires(Commands.hasPermission(CommandPermissionLevels.LEVEL_ADMINS))
                         .executes(context -> {
                             MusicPlayerMod.queueService().clearQueue(context.getSource());
                             return showQueue(context.getSource(), 1);
                         }))
-                .then(Commands.argument("page", IntegerArgumentType.integer(1))
-                        .executes(context -> showQueue(context.getSource(), IntegerArgumentType.getInteger(context, "page"))));
+                .then(Commands.argument("page", IntegerArgument.integer(1))
+                        .executes(context -> showQueue(context.getSource(), IntegerArgument.getInteger(context, "page"))));
     }
 
     private static int showQueue(CommandSourceStack source, int requestedPage) {
@@ -653,13 +655,20 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> skip() {
         return Commands.literal("skip")
-                .requires(source -> source.getEntity() instanceof ServerPlayer || source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                // 26.4-snapshot-8 起 requires 只能承载可序列化的 PermissionCheck（仅 always_pass /
+                // require 两种，无 OR 组合），原「玩家或管理员」无法表达。管理员本身也是玩家，
+                // 控制台管理员走 skipNow 分支，因此这里放开到所有人，具体分流仍在下方 executes 判定。
+                .requires(Commands.hasPermission(CommandPermissionLevels.LEVEL_ALL))
                 .executes(context -> {
                     MinecraftServer server = context.getSource().getServer();
                     if (context.getSource().permissions().hasPermission(Permissions.COMMANDS_ADMIN)) {
                         MusicPlayerMod.queueService().skipNow(server, context.getSource());
+                    } else if (context.getSource().getPlayer() instanceof ServerPlayer voter) {
+                        MusicPlayerMod.queueService().voteSkip(server, voter);
                     } else {
-                        MusicPlayerMod.queueService().voteSkip(server, context.getSource().getPlayerOrException());
+                        // 非管理员且不是玩家（如命令方块/控制台）：原先 requires 已拦下，这里补同样的提示。
+                        Messages.warning(context.getSource(),
+                                Component.translatable("musicplayer.vote.player_only"));
                     }
                     return 1;
                 });
@@ -668,45 +677,45 @@ public final class MusicCommands {
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> play() {
         return Commands.literal("play")
                 .then(Commands.literal("song")
-                        .then(Commands.argument("song_id", StringArgumentType.string()).executes(context -> {
+                        .then(Commands.argument("song_id", StringArgument.string()).executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
-                            String songId = StringArgumentType.getString(context, "song_id");
+                            String songId = StringArgument.getString(context, "song_id");
                             loading(context.getSource(), MusicPlayerMod.queueService().isPlaying() ? Component.translatable("musicplayer.play.loading_queue") : Component.translatable("musicplayer.play.loading_prepare"));
                             MusicPlayerMod.queueService().requestSong(context.getSource().getServer(), context.getSource(), player, songId);
                             return 1;
                         })))
                     .then(Commands.literal("playlist")
-                            .then(Commands.argument("playlist_id", StringArgumentType.string()).executes(context -> {
+                            .then(Commands.argument("playlist_id", StringArgument.string()).executes(context -> {
                                 ServerPlayer player = context.getSource().getPlayerOrException();
-                                String playlistId = StringArgumentType.getString(context, "playlist_id");
+                                String playlistId = StringArgument.getString(context, "playlist_id");
                                 loading(context.getSource(), Component.translatable("musicplayer.play.loading_playlist"));
                                 MusicPlayerMod.queueService().requestPlaylist(context.getSource().getServer(), context.getSource(), player, playlistId);
                                 return 1;
                             }).then(Commands.literal("reverse").executes(context -> {
                                 ServerPlayer player = context.getSource().getPlayerOrException();
-                                String playlistId = StringArgumentType.getString(context, "playlist_id");
+                                String playlistId = StringArgument.getString(context, "playlist_id");
                                 loading(context.getSource(), Component.translatable("musicplayer.play.loading_playlist_reverse"));
                                 MusicPlayerMod.queueService().requestPlaylist(context.getSource().getServer(), context.getSource(), player, playlistId, true);
                                 return 1;
                             }))))
                     .then(Commands.literal("program")
-                            .then(Commands.argument("program_id", StringArgumentType.string()).executes(context -> {
+                            .then(Commands.argument("program_id", StringArgument.string()).executes(context -> {
                                 ServerPlayer player = context.getSource().getPlayerOrException();
-                                String programId = StringArgumentType.getString(context, "program_id");
+                                String programId = StringArgument.getString(context, "program_id");
                                 loading(context.getSource(), Component.translatable("musicplayer.play.loading_program"));
                                 MusicPlayerMod.queueService().requestProgram(context.getSource().getServer(), context.getSource(), player, programId);
                                 return 1;
                             })))
                     .then(Commands.literal("radio")
-                            .then(Commands.argument("radio_id", StringArgumentType.string()).executes(context -> {
+                            .then(Commands.argument("radio_id", StringArgument.string()).executes(context -> {
                                 ServerPlayer player = context.getSource().getPlayerOrException();
-                                String radioId = StringArgumentType.getString(context, "radio_id");
+                                String radioId = StringArgument.getString(context, "radio_id");
                                 loading(context.getSource(), Component.translatable("musicplayer.play.loading_radio"));
                                 MusicPlayerMod.queueService().requestRadio(context.getSource().getServer(), context.getSource(), player, radioId, false);
                                 return 1;
                             }).then(Commands.literal("reverse").executes(context -> {
                                 ServerPlayer player = context.getSource().getPlayerOrException();
-                                String radioId = StringArgumentType.getString(context, "radio_id");
+                                String radioId = StringArgument.getString(context, "radio_id");
                                 loading(context.getSource(), Component.translatable("musicplayer.play.loading_radio_reverse"));
                                 MusicPlayerMod.queueService().requestRadio(context.getSource().getServer(), context.getSource(), player, radioId, true);
                                 return 1;
@@ -716,13 +725,13 @@ public final class MusicCommands {
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> burn() {
         return Commands.literal("burn")
                 .then(Commands.literal("song")
-                        .then(Commands.argument("song_id", StringArgumentType.string()).executes(context -> {
+                        .then(Commands.argument("song_id", StringArgument.string()).executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
                             if (!MusicDiscHelper.isBurnableDisc(player.getItemInHand(InteractionHand.MAIN_HAND))) {
                                 Messages.warning(context.getSource(), Component.translatable("musicplayer.burn.need_disc"));
                                 return 0;
                             }
-                            String songId = StringArgumentType.getString(context, "song_id");
+                            String songId = StringArgument.getString(context, "song_id");
                             loading(context.getSource(), Component.translatable("musicplayer.burn.loading"));
                             MinecraftServer server = context.getSource().getServer();
                             MusicPlayerMod.netease().resolveSong(songId).whenComplete((track, throwable) -> server.execute(() -> {
@@ -758,8 +767,8 @@ public final class MusicCommands {
                     return 1;
                 })
                 .then(Commands.literal("hot")
-                        .then(Commands.argument("page", IntegerArgumentType.integer(1)).executes(context -> {
-                            int page = IntegerArgumentType.getInteger(context, "page");
+                        .then(Commands.argument("page", IntegerArgument.integer(1)).executes(context -> {
+                            int page = IntegerArgument.getInteger(context, "page");
                             showHotRadios(context.getSource(), page);
                             return 1;
                         }))
@@ -875,8 +884,8 @@ public final class MusicCommands {
     private static final Pattern URL_ID_PATTERN = Pattern.compile("[?&]id=(\\d+)");
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> viewUrl() {
-        return Commands.argument("url", StringArgumentType.greedyString()).executes(context -> {
-            String url = StringArgumentType.getString(context, "url");
+        return Commands.argument("url", StringArgument.greedyString()).executes(context -> {
+            String url = StringArgument.getString(context, "url");
             Matcher m = URL_ID_PATTERN.matcher(url);
             if (!m.find()) {
                 Messages.warning(context.getSource(), Component.translatable("musicplayer.view.url_no_id"));
@@ -914,8 +923,8 @@ public final class MusicCommands {
                         .then(sharePagedView("author"))
                         .then(sharePagedView("radio"))
                         .then(sharePagedView("program"))
-                        .then(Commands.argument("url", StringArgumentType.greedyString()).executes(context -> {
-                            String url = StringArgumentType.getString(context, "url");
+                        .then(Commands.argument("url", StringArgument.greedyString()).executes(context -> {
+                            String url = StringArgument.getString(context, "url");
                             Collection<ServerPlayer> targets = EntityArgument.getPlayers(context, "targets");
                             sendShare(context.getSource(), targets, "/music view " + url);
                             return targets.size();
@@ -926,15 +935,15 @@ public final class MusicCommands {
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> sharePagedView(String literal) {
         String argumentName = literal + "_id";
         return Commands.literal(literal)
-                .then(Commands.argument(argumentName, StringArgumentType.string()).executes(context -> {
-                    String id = StringArgumentType.getString(context, argumentName);
+                .then(Commands.argument(argumentName, StringArgument.string()).executes(context -> {
+                    String id = StringArgument.getString(context, argumentName);
                     Collection<ServerPlayer> targets = EntityArgument.getPlayers(context, "targets");
                     sendShare(context.getSource(), targets, "/music view " + literal + " " + id);
                     return targets.size();
                 }).then(Commands.literal("page")
-                        .then(Commands.argument("page", IntegerArgumentType.integer(1)).executes(context -> {
-                            String id = StringArgumentType.getString(context, argumentName);
-                            int page = IntegerArgumentType.getInteger(context, "page");
+                        .then(Commands.argument("page", IntegerArgument.integer(1)).executes(context -> {
+                            String id = StringArgument.getString(context, argumentName);
+                            int page = IntegerArgument.getInteger(context, "page");
                             Collection<ServerPlayer> targets = EntityArgument.getPlayers(context, "targets");
                             sendShare(context.getSource(), targets, "/music view " + literal + " " + id + " page " + page);
                             return targets.size();
@@ -960,7 +969,7 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> config() {
         return Commands.literal("config")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                .requires(Commands.hasPermission(CommandPermissionLevels.LEVEL_ADMINS))
                 .then(Commands.literal("reload").executes(context -> {
                     MusicPlayerConfigManager.reload();
                     MusicPlayerMod.queueService().clearTrackCache();
@@ -1002,9 +1011,9 @@ public final class MusicCommands {
                     return 1;
                 }))
                 .then(Commands.literal("set")
-                        .then(Commands.literal("baseUrl").then(Commands.argument("value", StringArgumentType.greedyString()).executes(context -> {
+                        .then(Commands.literal("baseUrl").then(Commands.argument("value", StringArgument.greedyString()).executes(context -> {
                             MusicPlayerConfig config = MusicPlayerConfigManager.get();
-                            String value = MusicPlayerConfig.normalizeBaseUrl(StringArgumentType.getString(context, "value"));
+                            String value = MusicPlayerConfig.normalizeBaseUrl(StringArgument.getString(context, "value"));
                             if (value.isEmpty()) {
                                 Messages.warning(context.getSource(), Component.translatable("musicplayer.error.invalid_api_url"));
                                 return 0;
@@ -1021,11 +1030,12 @@ public final class MusicCommands {
                             return 1;
                         })))
                         .then(boolSetting("allowCustomServer", value -> MusicPlayerConfigManager.get().allowCustomServer = value))
-                        .then(Commands.literal("apiMode").then(Commands.argument("value", StringArgumentType.word())
-                                .suggests((context, builder) -> net.minecraft.commands.SharedSuggestionProvider.suggest(
-                                        new String[]{"auto", "direct", "proxy"}, builder))
+                        .then(Commands.literal("apiMode").then(Commands.argument("value", StringArgument.word())
+                                // 26.4-snapshot-8 起自定义补全必须可序列化（服务端会把整棵命令树
+                                // 转成 SuggestionBox，裸 lambda 会抛 UnsupportedOperationException）。
+                                .suggests(SuggestLiteralString.suggestLiteral("auto", "direct", "proxy"))
                                 .executes(context -> {
-                                    String value = MusicApiMode.normalize(StringArgumentType.getString(context, "value"));
+                                    String value = MusicApiMode.normalize(StringArgument.getString(context, "value"));
                                     if (value == null) {
                                         Messages.warning(context.getSource(), Component.translatable("musicplayer.config.api_mode_invalid"));
                                         return 0;
@@ -1047,15 +1057,15 @@ public final class MusicCommands {
                         .then(boolSetting("showLyrics", value -> MusicPlayerConfigManager.get().showLyrics = value))
                         .then(boolSetting("useSystemProxy", value -> MusicPlayerConfigManager.get().useSystemProxy = value))
                         .then(boolSetting("preferIpv4", value -> MusicPlayerConfigManager.get().preferIpv4 = value))
-                        .then(Commands.literal("proxy").then(Commands.argument("value", StringArgumentType.greedyString()).executes(context -> {
-                            String value = StringArgumentType.getString(context, "value").trim();
+                        .then(Commands.literal("proxy").then(Commands.argument("value", StringArgument.greedyString()).executes(context -> {
+                            String value = StringArgument.getString(context, "value").trim();
                             MusicPlayerConfigManager.get().proxy = "none".equalsIgnoreCase(value) ? "" : value;
                             MusicPlayerConfigManager.save();
                             Messages.success(context.getSource(), Component.translatable("musicplayer.config.proxy_updated", MusicPlayerConfigManager.get().proxy.isBlank() ? "<none>" : MusicPlayerConfigManager.get().proxy));
                             return 1;
                         })))
-                        .then(Commands.literal("bgmPlaylist").then(Commands.argument("value", StringArgumentType.string()).executes(context -> {
-                            String value = StringArgumentType.getString(context, "value").trim();
+                        .then(Commands.literal("bgmPlaylist").then(Commands.argument("value", StringArgument.string()).executes(context -> {
+                            String value = StringArgument.getString(context, "value").trim();
                             String normalized;
                             if ("off".equalsIgnoreCase(value)) {
                                 normalized = "";
@@ -1138,31 +1148,31 @@ public final class MusicCommands {
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> pagedSearch(String literal, Component loadingText, PagedSearchExecutor executor) {
         return Commands.literal(literal)
-                .then(Commands.argument("keyword", StringArgumentType.string()).executes(context -> {
+                .then(Commands.argument("keyword", StringArgument.string()).executes(context -> {
                     loading(context.getSource(), loadingText);
-                    executor.execute(context.getSource(), StringArgumentType.getString(context, "keyword"), 1, literal);
+                    executor.execute(context.getSource(), StringArgument.getString(context, "keyword"), 1, literal);
                     return 1;
                 })
                 .then(Commands.literal("page")
-                        .then(Commands.argument("page", IntegerArgumentType.integer(1)).executes(context -> {
-                            int page = IntegerArgumentType.getInteger(context, "page");
+                        .then(Commands.argument("page", IntegerArgument.integer(1)).executes(context -> {
+                            int page = IntegerArgument.getInteger(context, "page");
                             loading(context.getSource(), loadingText);
-                            executor.execute(context.getSource(), StringArgumentType.getString(context, "keyword"), page, literal);
+                            executor.execute(context.getSource(), StringArgument.getString(context, "keyword"), page, literal);
                             return 1;
                         }))));
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> pagedView(String literal, String idArgument, Component loadingText, PagedViewExecutor executor) {
         return Commands.literal(literal)
-                .then(Commands.argument(idArgument, StringArgumentType.string()).executes(context -> {
+                .then(Commands.argument(idArgument, StringArgument.string()).executes(context -> {
                     loading(context.getSource(), loadingText);
-                    executor.execute(context.getSource(), StringArgumentType.getString(context, idArgument), 1);
+                    executor.execute(context.getSource(), StringArgument.getString(context, idArgument), 1);
                     return 1;
                 })
                         .then(Commands.literal("page")
-                                .then(Commands.argument("page", IntegerArgumentType.integer(1)).executes(context -> {
+                                .then(Commands.argument("page", IntegerArgument.integer(1)).executes(context -> {
                                     loading(context.getSource(), loadingText);
-                                    executor.execute(context.getSource(), StringArgumentType.getString(context, idArgument), IntegerArgumentType.getInteger(context, "page"));
+                                    executor.execute(context.getSource(), StringArgument.getString(context, idArgument), IntegerArgument.getInteger(context, "page"));
                                     return 1;
                                 }))));
     }
@@ -1186,8 +1196,8 @@ public final class MusicCommands {
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> boolSetting(String name, Consumer<Boolean> setter, Consumer<com.mojang.brigadier.context.CommandContext<CommandSourceStack>> afterSet) {
-        return Commands.literal(name).then(Commands.argument("value", BoolArgumentType.bool()).executes(context -> {
-            boolean value = BoolArgumentType.getBool(context, "value");
+        return Commands.literal(name).then(Commands.argument("value", BooleanArgument.bool()).executes(context -> {
+            boolean value = BooleanArgument.getBool(context, "value");
             setter.accept(value);
             MusicPlayerConfigManager.save();
             afterSet.accept(context);
@@ -1197,8 +1207,8 @@ public final class MusicCommands {
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> intSetting(String name, int min, int max, IntConsumer setter) {
-        return Commands.literal(name).then(Commands.argument("value", IntegerArgumentType.integer(min, max)).executes(context -> {
-            int value = IntegerArgumentType.getInteger(context, "value");
+        return Commands.literal(name).then(Commands.argument("value", IntegerArgument.integer(min, max)).executes(context -> {
+            int value = IntegerArgument.getInteger(context, "value");
             setter.accept(value);
             MusicPlayerConfigManager.save();
             Messages.success(context.getSource(), Component.translatable("musicplayer.config.updated", name, value));
@@ -1207,8 +1217,8 @@ public final class MusicCommands {
     }
 
     private static com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, ?> doubleSetting(String name, double min, double max, DoubleConsumer setter) {
-        return Commands.literal(name).then(Commands.argument("value", DoubleArgumentType.doubleArg(min, max)).executes(context -> {
-            double value = DoubleArgumentType.getDouble(context, "value");
+        return Commands.literal(name).then(Commands.argument("value", DoubleArgument.doubleArg(min, max)).executes(context -> {
+            double value = DoubleArgument.getDouble(context, "value");
             setter.accept(value);
             MusicPlayerConfigManager.save();
             Messages.success(context.getSource(), Component.translatable("musicplayer.config.updated", name, value));
