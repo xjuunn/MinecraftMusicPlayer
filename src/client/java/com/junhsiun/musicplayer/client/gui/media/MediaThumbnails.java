@@ -204,20 +204,24 @@ public final class MediaThumbnails {
         }
         int offsetX = x0 + (boxWidth - drawWidth) / 2;
         int offsetY = y0 + (boxHeight - drawHeight) / 2;
+        // 不能用 9 参重载 blit(id, x, y, u, v, w, h, texW, texH)：它把 w/h 同时
+        // 当作源区域尺寸，等于"从纹理原点裁一块 drawWidth×drawHeight 铺满同尺寸"。
+        // 纹理 64px、显示 22px 时只取到整图的 1/3，看起来就是封面被放大并裁切。
+        // 11 参重载把源区域与显示尺寸分开，源区域显式写成整张纹理。
         if (color == -1) {
-            graphics.blit(thumb.id(), offsetX, offsetY, 0.0F, 0.0F,
-                    drawWidth, drawHeight, thumb.width(), thumb.height());
+            graphics.blit(thumb.id(), offsetX, offsetY, drawWidth, drawHeight, 0.0F, 0.0F,
+                    thumb.width(), thumb.height(), thumb.width(), thumb.height());
             return;
         }
-        // 1.21.1 的 blit 没有颜色参数：用 graphics.setColor 包裹，把 tint（含 alpha）
+        // 这个版本的 blit 没有颜色参数：用 graphics.setColor 包裹，把 tint（含 alpha）
         // 作用到随后的 blit 上，实现交叉淡入。
         float r = ((color >> 16) & 0xFF) / 255.0F;
         float g = ((color >> 8) & 0xFF) / 255.0F;
         float b = (color & 0xFF) / 255.0F;
         float a = ((color >>> 24) & 0xFF) / 255.0F;
         graphics.setColor(r, g, b, a);
-        graphics.blit(thumb.id(), offsetX, offsetY, 0.0F, 0.0F,
-                drawWidth, drawHeight, thumb.width(), thumb.height());
+        graphics.blit(thumb.id(), offsetX, offsetY, drawWidth, drawHeight, 0.0F, 0.0F,
+                thumb.width(), thumb.height(), thumb.width(), thumb.height());
         graphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
