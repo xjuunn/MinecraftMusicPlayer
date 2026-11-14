@@ -941,7 +941,8 @@ public final class NeteaseApiClient {
             String body = Objects.requireNonNull(response.body()).string();
             return JsonParser.parseString(body).getAsJsonObject();
         } catch (Exception exception) {
-            MusicPlayerMod.LOGGER.warn("请求音乐接口失败: {} - {}", request.method(), Messages.sanitizeForLog(request.url().toString()), exception.getMessage());
+            MusicPlayerMod.LOGGER.warn("请求音乐接口失败: {} - {} - {}", request.method(),
+                    Messages.sanitizeForLog(request.url().toString()), exception.getMessage());
             MusicPlayerMod.LOGGER.debug("请求音乐接口失败详情", exception);
             throw new RuntimeException(exception);
         }
