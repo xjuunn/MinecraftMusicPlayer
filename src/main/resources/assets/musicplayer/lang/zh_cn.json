@@ -442,6 +442,7 @@
   "musicplayer.vote.passed": "投票通过，正在切换到下一首。",
   "musicplayer.vote.progress": "投票跳过: %s/%s",
   "musicplayer.vote.requester_skipped": "点歌人跳过了自己的歌曲。",
+  "musicplayer.vote.player_only": "只有玩家可以进行投票切歌。",
   "soundCategory.music": "点播音乐",
   "key.category.musicplayer.music": "音乐播放器",
   "key.musicplayer.open_browser": "打开音乐浏览",

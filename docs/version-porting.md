@@ -84,6 +84,35 @@
 | `VertexConsumer` | 旧式 `vertex...color/uv/overlayCoords/uv2/normal/endVertex` | 1.21.2+ 改为 `addVertex` 风格，按目标版本选 |
 | 命令补全 | 26.4-snapshot-8+ 移除 `net.minecraft.commands.SharedSuggestionProvider`，静态方法迁到 `net.minecraft.commands.suggestions.SuggestionContext`（`suggest`/`suggestResource` 签名一致） | `net.minecraft.commands.SharedSuggestionProvider.suggest(...)` |
 
+### 命令树必须可序列化（26.4-snapshot-8+）
+
+26.4-snapshot-8 新增 `net.minecraft.commands.SuggestionBox` / `ParseBox` / `SerializableArgument`。`Commands` 构造时会调用 `SuggestionBox.fromFullTree(dispatcher)` **遍历整棵命令树**做转换校验，任何节点不合规都会抛 `UnsupportedOperationException`，表现为**创建新世界/启动服务器即崩溃**（与具体命令是否被执行无关）。
+
+三个约束，缺一即崩：
+
+| 位置 | 崩溃信息 | 必须改成 |
+|---|---|---|
+| `.requires(predicate)` | `Unsupported predicate: ...use PermissionProviderCheck instead` | `Commands.hasPermission(CommandPermissionLevels.LEVEL_*)`，它返回 `PermissionProviderCheck` |
+| `Commands.argument(name, type)` | `Invalid argument type: string()` / `word()` / `integer()` | MC 包装类 `StringArgument.word()`、`IntegerArgument.integer()`、`DoubleArgument.doubleArg()`、`BooleanArgument.bool()`；`EntityArgument` 天然合规 |
+| `.suggests(provider)` | 与上同类，裸 lambda 不可序列化 | `SuggestLiteralString.suggestLiteral("a", "b")`；复杂补全需实现 `SerializableCustomSuggestion` |
+
+要点：
+
+- `CommandBox.convertNodePermissionCheck` 只接受 `PermissionProviderCheck`，裸 lambda（即使内部只是查权限）一律拒绝。
+- `PermissionProviderCheck` 只能承载 `PermissionCheck`，而 `PermissionCheckTypes` 只注册了 `always_pass` 与 `require` 两种，**没有 AND/OR/NOT 组合**。像「玩家 **或** 管理员」这种复合条件无法表达，只能退化为 `LEVEL_ALL`（所有人可见）后把分流逻辑放进 `executes` 里判断，或直接改成单一权限级别。
+- `StringArgument` / `IntegerArgument` 等的 `word()` / `string()` / `integer()` / `getString()` / `getInteger()` 返回的仍是 brigadier `ArgumentType`，取值方法签名与原写法一致，所以调用方取证代码不用动，只换静态方法名。
+- 判定某个分支是否受影响：查目标版本 jar 里是否存在 `net/minecraft/commands/SuggestionBox.class`。26.4-snapshot-7 及更早、1.21.x、26.1～26.3 都没有该类，**不需要改**。
+
+#### 这是 mod 不合规，不是原版 bug
+
+遇到这类崩溃时容易误判成"原版校验过严"。实测证据表明是**我们自己的命令树不合规**，必须修，不能因为"是原版的问题"而放过：
+
+- `SerializableArgumentTypes` 注册了 **61 种**可序列化参数类型，`string` / `integer` / `double` / `bool` 全在内。这是 MC 为"命令树可序列化下发"做的系统性改造，不是疏漏。
+- 扫描 `net/minecraft/server/commands/**` 与 `gametest/**` 全部原版命令类，**没有任何一处**把裸 `ArgumentType` 传给 `Commands.argument(...)`；原版 `.requires` 一律走 `Commands.hasPermission(...)`。原版命令树 100% 合规，`fromFullTree` 能顺利跑完，所以原版建世界不会崩。
+- 唯一扫描命中 `StringArgumentType` 的 `DataPackCommand`，实际只是调用 `StringArgumentType.escapeIfRequired(String)` 这个字符串转义工具方法，没有当作参数类型使用，不构成反例。
+- 异常信息直接带我方类名，可作为归属依据：`Unsupported predicate: com.junhsiun.musicplayer.command.MusicCommands$$Lambda/...`
+- 危害等级：`fromFullTree` 遍历整棵树，**一个不合规节点就让整个 `Commands` 构造失败**，表现为玩家无法创建任何世界、服务器完全起不来，而不是"某条命令不可用"。
+
 ### Mixin
 
 - 低版本可能缺少高版本依赖的事件/mixin 目标（如 `LevelEventHandler` 播唱片 LevelEvent 1010）。服务器侧若改用 `setRecordWithoutPlaying`/`setRecord`（不触发原版唱片事件与声音），对应 LevelEvent mixin 可整体删除，并同步精简 `mixins.json`。
