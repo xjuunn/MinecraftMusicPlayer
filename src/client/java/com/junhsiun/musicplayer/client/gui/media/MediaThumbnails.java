@@ -4,13 +4,13 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.util.HttpClientFactory;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.renderpearl.api.textures.FilterMode;
-import com.mojang.renderpearl.api.textures.GpuSampler;
-import com.mojang.renderpearl.api.textures.GpuTextureView;
+import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.GuiPipeline;
-import net.minecraft.client.renderer.texture.TextureResources;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -224,7 +224,7 @@ public final class MediaThumbnails {
         }
         // 带 tint 的版本需要按纹理注册 ID 走 TextureManager，才能把颜色（含 alpha）
         // 传给 BlitRenderState；GpuTextureView 的 blit 重载没有颜色参数。
-        graphics.blit(GuiPipeline.TEXTURED, thumb.id(),
+        graphics.blit(RenderPipelines.GUI_TEXTURED, thumb.id(),
                 offsetX, offsetY, 0.0F, 0.0F,
                 drawWidth, drawHeight,
                 thumb.width(), thumb.height(),
@@ -349,14 +349,13 @@ public final class MediaThumbnails {
             // 线性采样：纹理比显示尺寸大得多，靠它把降采样做平滑；
             // 用默认的最近邻会在缩小的时候丢像素，看起来"像素很低、有锯齿"。
             GpuSampler sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
-            TextureResources resources = TextureResources.from2dImage(
-                    () -> "musicplayer_thumb", image, sampler);
-            client.getTextureManager().register(textureId, resources);
+                        DynamicTexture texture = new DynamicTexture(() -> "musicplayer_thumb", image);
+            client.getTextureManager().register(textureId, texture);
             // from2dImage 只把像素写进命令缓冲，<b>不会</b>关掉 NativeImage，得由我们自己释放。
             // 但不能立刻关：写入是录进命令缓冲、帧末才提交的，提前 close 会让上传读到已释放的
             // 内存。所以把它挂在缓存条目上，等这张纹理被淘汰/清空时再释放——那时早就提交完了。
             map.put(url, Entry.ready(
-                    new Thumb(textureId, resources.textureView(), sampler, width, height), image));
+                    new Thumb(textureId, texture.getTextureView(), sampler, width, height), image));
             while (map.size() > MAX_ENTRIES) {
                 String eldestKey = map.keySet().iterator().next();
                 Entry eldest = map.remove(eldestKey);

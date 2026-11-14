@@ -8,26 +8,25 @@ import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.model.LyricLine;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.renderpearl.api.GpuFormat;
-import com.mojang.renderpearl.api.buffers.GpuBuffer;
-import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
-import com.mojang.renderpearl.api.commands.CommandEncoder;
-import com.mojang.renderpearl.api.commands.RenderPass;
-import com.mojang.renderpearl.api.device.GpuDevice;
-import com.mojang.renderpearl.api.textures.GpuSampler;
-import com.mojang.renderpearl.api.textures.GpuTexture;
-import com.mojang.renderpearl.api.textures.GpuTextureView;
+import com.mojang.blaze3d.textures.TextureFormat;
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.systems.CommandEncoder;
+import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPassLayouts;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.util.Util;
 import org.lwjgl.BufferUtils;
 
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.Optional;
+import java.util.OptionalInt;
 
 /**
  * 挂机「纯享」模式的渲染层。
@@ -88,7 +87,7 @@ public final class IdleRenderer {
         // 界面/覆盖层打开时不出特效：此时画面主体是界面，全屏着色会把界面压花。
         // 顺便把状态收掉——单机暂停时客户端 tick 不跑，不在这里收的话关掉菜单的
         // 第一帧会把特效整块弹回来。
-        if (minecraft.gui.screen() != null || minecraft.gui.overlay() != null) {
+        if (minecraft.screen != null || minecraft.getOverlay() != null) {
             controller.cancelImmediate();
             return;
         }
@@ -124,7 +123,7 @@ public final class IdleRenderer {
         if (failed) {
             return;
         }
-        RenderTarget main = minecraft.gameRenderer.mainRenderTarget();
+        RenderTarget main = minecraft.getMainRenderTarget();
         if (main == null || main.width <= 0 || main.height <= 0) {
             return;
         }
@@ -142,19 +141,18 @@ public final class IdleRenderer {
             boolean hasCover = cover != null && cover.view() != null && !cover.view().isClosed();
 
             GpuSampler linear = RenderSystem.getSamplerCache().getClampToEdge(
-                    com.mojang.renderpearl.api.textures.FilterMode.LINEAR);
+                    com.mojang.blaze3d.textures.FilterMode.LINEAR);
             CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
 
             // 1. 世界降采样：复用液态玻璃的模糊管线，spread = 0 等价于一次双线性采样。
             RenderPass downsample = encoder.createRenderPass(
-                    () -> "musicplayer idle world", RenderPassLayouts.COLOR_ONLY,
-                    worldView, Optional.empty());
+                    () -> "musicplayer idle world",
+                    worldView, OptionalInt.empty());
             try {
-                downsample.setPipeline(RenderSystem.getCompiledPipeline(
-                        GlassPipelines.blur(0.0F, false), downsample.activeSubpass()));
-                downsample.setUniform("Sampler0", main.getColorTextureView(), linear);
-                downsample.setVertexBuffer(0, quadBuffer.slice());
-                downsample.draw(6, 1, 0, 0);
+                downsample.setPipeline(GlassPipelines.blur(0.0F, false));
+                downsample.bindTexture("Sampler0", main.getColorTextureView(), linear);
+                downsample.setVertexBuffer(0, quadBuffer);
+                downsample.draw(6, 1);
             } finally {
                 downsample.close();
             }
@@ -166,22 +164,20 @@ public final class IdleRenderer {
 
             // 3. 特效写回主渲染目标。这里只读取 worldView，不会与主目标形成采样反馈。
             RenderPass pass = encoder.createRenderPass(
-                    () -> "musicplayer idle effect", RenderPassLayouts.COLOR_ONLY,
-                    main.getColorTextureView(), Optional.empty());
+                    () -> "musicplayer idle effect",
+                    main.getColorTextureView(), OptionalInt.empty());
             try {
-                pass.setPipeline(RenderSystem.getCompiledPipeline(
-                        IdlePipelines.effect(effect, hasCover), pass.activeSubpass()));
-                pass.setUniform("Sampler0", worldView, linear);
+                pass.setPipeline(IdlePipelines.effect(effect, hasCover));
+                pass.bindTexture("Sampler0", worldView, linear);
                 if (hasCover) {
-                    pass.setUniform("Sampler1", cover.view(), cover.sampler());
+                    pass.bindTexture("Sampler1", cover.view(), cover.sampler());
                 }
                 pass.setUniform("IdleParams", paramSlice);
-                pass.setVertexBuffer(0, quadBuffer.slice());
-                pass.draw(6, 1, 0, 0);
+                pass.setVertexBuffer(0, quadBuffer);
+                pass.draw(6, 1);
             } finally {
                 pass.close();
             }
-            encoder.submit();
         } catch (Throwable throwable) {
             failed = true;
             MusicPlayerMod.LOGGER.warn("纯享特效初始化失败，本次仅显示文字", throwable);
@@ -247,7 +243,7 @@ public final class IdleRenderer {
                 () -> "musicplayer idle world",
                 GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_RENDER_ATTACHMENT
                         | GpuTexture.USAGE_COPY_DST,
-                GpuFormat.RGBA8_UNORM,
+                TextureFormat.RGBA8,
                 nextWidth,
                 nextHeight,
                 1,

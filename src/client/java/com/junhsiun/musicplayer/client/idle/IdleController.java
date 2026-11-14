@@ -303,7 +303,7 @@ public final class IdleController {
         if (client == null || client.player == null || client.level == null) {
             return false;
         }
-        if (client.gui.screen() != null || client.gui.overlay() != null) {
+        if (client.screen != null || client.getOverlay() != null) {
             return false;
         }
         LocalPlayer player = client.player;

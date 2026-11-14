@@ -1112,7 +1112,7 @@ public class MediaListView extends AbstractWidget {
     // ── 绘制 ────────────────────────────────────────────────────────────
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         if (width <= 0 || height <= 0) {
             return;
         }
@@ -1134,7 +1134,7 @@ public class MediaListView extends AbstractWidget {
         graphics.pose().pushMatrix();
         graphics.pose().translate(shift, 0.0F);
 
-        drawContent(graphics, font);
+        drawContent(graphics, font, (int) mouseX, (int) mouseY);
 
         graphics.pose().popMatrix();
         GlassWidgets.endClip(graphics);
@@ -1175,10 +1175,10 @@ public class MediaListView extends AbstractWidget {
         }
     }
 
-    private void drawContent(GuiGraphicsExtractor graphics, Font font) {
+    private void drawContent(GuiGraphicsExtractor graphics, Font font, int mouseX, int mouseY) {
         prefetchCovers();
-        double mouseX = graphics.mouseX();
-        double mouseY = graphics.mouseY();
+        int mx = (int) mouseX;
+        int my = (int) mouseY;
         int hoverIndex = isMouseOver(mouseX, mouseY) ? rowAt(mouseX, mouseY) : -1;
         int hoverPlay = isMouseOver(mouseX, mouseY) ? playRowAt(mouseX, mouseY) : -1;
         int hoverSecondary = isMouseOver(mouseX, mouseY) ? secondaryRowAt(mouseX, mouseY) : -1;
@@ -1188,7 +1188,7 @@ public class MediaListView extends AbstractWidget {
 
         // 越界部分由外层的 GlassWidgets.beginClip 统一遮挡（文字走原版 scissor，
         // 玻璃走 scissorArea），这里只做整行的剔除，省掉看不见的那些行的排版开销。
-        drawHeader(graphics, font);
+        drawHeader(graphics, font, mouseX, mouseY);
         long now = Util.getMillis();
         for (int index = 0; index < items.size(); index++) {
             int top = rowTop(index);
@@ -1241,7 +1241,7 @@ public class MediaListView extends AbstractWidget {
 
     // ── 头部 ────────────────────────────────────────────────────────────
 
-    private void drawHeader(GuiGraphicsExtractor graphics, Font font) {
+    private void drawHeader(GuiGraphicsExtractor graphics, Font font, int mouseX, int mouseY) {
         if (header == null) {
             return;
         }
@@ -1290,7 +1290,7 @@ public class MediaListView extends AbstractWidget {
             drawStats(graphics, font, header.stats(), textLeft, top + 25, statsWidth);
         }
         if (header.playAll()) {
-            drawHeaderAction(graphics, font);
+            drawHeaderAction(graphics, font, mouseX, mouseY);
         }
 
         if (reveal > 0.01F && !descriptionLines.isEmpty()) {
@@ -1339,13 +1339,13 @@ public class MediaListView extends AbstractWidget {
      * <p>歌单动辄几百首，逐首点播放按钮不现实；这里给它一个入口，走的是同一条点播命令
      * （{@code /music play playlist <id>}），和聊天栏点播完全等价。</p>
      */
-    private void drawHeaderAction(GuiGraphicsExtractor graphics, Font font) {
+    private void drawHeaderAction(GuiGraphicsExtractor graphics, Font font, int mouseX, int mouseY) {
         int left = headerActionLeft();
         int top = headerActionTop();
         int right = left + HEADER_ACTION_WIDTH;
         int bottom = top + HEADER_ACTION_HEIGHT;
-        boolean hovered = isMouseOver(graphics.mouseX(), graphics.mouseY())
-                && overHeaderAction(graphics.mouseX(), graphics.mouseY());
+        boolean hovered = isMouseOver(mouseX, mouseY)
+                && overHeaderAction(mouseX, mouseY);
         float lift = hovered ? 1.0F : 0.30F;
         // 液态玻璃胶囊：和别处的玻璃按钮走同一套材质，悬停时提亮、边缘折射更明显。
         if (!GlassWidgets.glassBackground(graphics, left, top, right, bottom,

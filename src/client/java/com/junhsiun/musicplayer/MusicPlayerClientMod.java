@@ -58,7 +58,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
     /** 打开音乐浏览界面的快捷键，默认 M。 */
     private static final KeyMapping OPEN_BROWSER = new KeyMapping(
             "key.musicplayer.open_browser",
-            InputConstants.Type.KEYBOARD,
+            InputConstants.Type.KEYSYM,
             InputConstants.KEY_M,
             KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music")));
 
@@ -112,7 +112,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
         );
         ClientPlayNetworking.registerGlobalReceiver(DiscMasterBurnResultPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> {
-                    if (context.client().gui.screen() instanceof DiscMasterScreen screen) {
+                    if (context.client().screen instanceof DiscMasterScreen screen) {
                         screen.handleBurnResult(payload);
                     }
                 })
@@ -128,7 +128,7 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
             prefetchHeldCover(client);
             // consumeClick 会把一次按下消费成一次打开，长按不会连续弹窗
             while (OPEN_BROWSER.consumeClick()) {
-                if (client.gui.screen() == null && client.player != null) {
+                if (client.screen == null && client.player != null) {
                     // 打开玻璃界面的唯一正确入口（预编译 + 不强制渲染一帧），见 GlassWindowScreen#open
                     GlassWindowScreen.open(new MusicBrowserScreen());
                 }

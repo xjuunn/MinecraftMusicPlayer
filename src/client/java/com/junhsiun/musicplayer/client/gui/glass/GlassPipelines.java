@@ -2,14 +2,14 @@ package com.junhsiun.musicplayer.client.gui.glass;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.ColorTargetState;
+import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.textures.TextureFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.renderpearl.api.GpuFormat;
-import com.mojang.renderpearl.api.pipeline.BlendFunction;
-import com.mojang.renderpearl.api.pipeline.ColorTargetState;
-import com.mojang.renderpearl.api.pipeline.DepthStencilState;
-import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
-import net.minecraft.client.renderer.BindGroupLayouts;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 
 import java.util.HashMap;
@@ -86,11 +86,7 @@ public final class GlassPipelines {
                     .withShaderDefine("GLASS_WINDOW_TINT_R", tintColor[0])
                     .withShaderDefine("GLASS_WINDOW_TINT_G", tintColor[1])
                     .withShaderDefine("GLASS_WINDOW_TINT_B", tintColor[2]);
-            return builder
-                    .withBindGroupLayout(BindGroupLayouts.PROJECTION)
-                    .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
-                    .withBindGroupLayout(BindGroupLayouts.SAMPLER0_SAMPLER1_SAMPLER2)
-                    .build();
+            return builder.build();
         });
     }
 
@@ -123,8 +119,6 @@ public final class GlassPipelines {
                 // 投影四边形向外扩张的像素数。着色器要用它把四边形尺寸还原成面板尺寸，
                 // 否则 SDF 会描述扩张后的框，投影变成一圈离开面板的圆角暗环。
                 .withShaderDefine("GLASS_SHADOW_PADDING", shadow.padding())
-                .withBindGroupLayout(BindGroupLayouts.PROJECTION)
-                .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
                 .build());
     }
 
@@ -143,11 +137,9 @@ public final class GlassPipelines {
                             "pipeline/glass_blur_" + Float.floatToIntBits(spread) + (verticalBlur ? "_v" : "_h")))
                     .withVertexShader(BLUR_VERTEX_SHADER)
                     .withFragmentShader(BLUR_FRAGMENT_SHADER)
-                    .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
-                    .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
-                    .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
-                    .withColorTargetState(new ColorTargetState(Optional.empty(), GpuFormat.RGBA8_UNORM,
-                            ColorTargetState.WRITE_ALL))
+                    .withSampler("Sampler0")
+                    .withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.TRIANGLES)
+                    .withColorTargetState(new ColorTargetState(Optional.empty(), ColorTargetState.WRITE_ALL))
                     // 离屏颜色目标没有深度附件，管线必须声明"不需要深度"
                     .withDepthStencilState(Optional.<DepthStencilState>empty())
                     .withCull(false)
@@ -161,14 +153,11 @@ public final class GlassPipelines {
 
     private static RenderPipeline.Builder baseGuiPipeline(String kind, String key) {
         String hash = Integer.toHexString(key.hashCode());
-        return RenderPipeline.builder()
+        return RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
                 .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE,
                         "pipeline/glass_" + kind + "_" + hash.toLowerCase(Locale.ROOT)))
                 .withVertexShader(GLASS_VERTEX_SHADER)
-                .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
-                // 界面元素永远是 4 个顶点一个 quad（BlitRenderState.buildVertices），
-                // 声明成 TRIANGLES 只会画出 0,1,2 这一个三角形，必须和 vanilla 一样用 QUADS
-                .withPrimitiveTopology(PrimitiveTopology.QUADS)
+                .withVertexFormat(DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS)
                 .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
                 .withDepthStencilState(Optional.<DepthStencilState>empty())
                 .withCull(false);

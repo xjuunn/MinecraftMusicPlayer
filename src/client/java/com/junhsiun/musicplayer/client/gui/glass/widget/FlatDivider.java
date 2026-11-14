@@ -28,7 +28,7 @@ public final class FlatDivider extends AbstractWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         FlatTheme.divider(graphics, getX(), getY(), getX() + getWidth(), getY() + getHeight());
     }
 }

@@ -53,7 +53,7 @@ public class GlassLabel extends AbstractWidget {
      * 保证标签永远不会越界。</p>
      */
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         Font font = Minecraft.getInstance().font;
         Component text = getMessage();
         // 控件宽度是屏幕像素，文字按 scale 缩小后画，可用宽度要换算回字体像素

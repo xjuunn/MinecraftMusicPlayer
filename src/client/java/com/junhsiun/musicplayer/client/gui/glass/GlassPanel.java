@@ -5,8 +5,8 @@ import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.renderpearl.api.textures.GpuSampler;
-import com.mojang.renderpearl.api.textures.GpuTextureView;
+import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
@@ -21,7 +21,7 @@ import org.joml.Matrix3x2f;
  * {@link BlitRenderState}，几何上永远是一个矩形四边形，圆角、折射、高光、投影全部在
  * {@code glass.fsh} 里按 SDF 计算。</p>
  *
- * <p>注意管线必须声明 {@link com.mojang.renderpearl.api.pipeline.PrimitiveTopology#QUADS}：
+ * <p>注意管线必须声明 {@link com.mojang.blaze3d.PrimitiveTopology#QUADS}：
  * {@code BlitRenderState.buildVertices} 只写 4 个顶点，声明成 {@code TRIANGLES} 只会画出
  * 索引 0,1,2 对应的那一个三角形。</p>
  *
@@ -126,14 +126,14 @@ public final class GlassPanel {
             return;
         }
         try {
-            RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, look));
+            RenderSystem.getDevice().precompilePipeline(GlassPipelines.panel(style, look));
             // 子控件用的是带窗口叠加的变体，一并编译，避免首次画按钮时才编译
-            RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, childLook));
+            RenderSystem.getDevice().precompilePipeline(GlassPipelines.panel(style, childLook));
             // 控件材质一次编译完：它们都是固定风格，一次性把 GPU 程序编译掉，
             // 免得界面首帧在渲染中途才开始编译（那会打断当前帧）
             for (GlassStyle control : CONTROL_STYLES) {
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(control, look));
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(control, childLook));
+                RenderSystem.getDevice().precompilePipeline(GlassPipelines.panel(control, look));
+                RenderSystem.getDevice().precompilePipeline(GlassPipelines.panel(control, childLook));
             }
             prepared = true;
             compileShadowPipeline(style);
@@ -166,8 +166,8 @@ public final class GlassPanel {
         }
         if (!prepared) {
             try {
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, look));
-                RenderSystem.getCompiledPipeline(GlassPipelines.panel(style, childLook));
+                RenderSystem.getDevice().precompilePipeline(GlassPipelines.panel(style, look));
+                RenderSystem.getDevice().precompilePipeline(GlassPipelines.panel(style, childLook));
                 prepared = true;
             } catch (Throwable throwable) {
                 unavailable = true;
@@ -192,7 +192,7 @@ public final class GlassPanel {
     private static void compileShadowPipeline(GlassStyle style) {
         String key = style.pipelineKey();
         try {
-            RenderSystem.getCompiledPipeline(GlassPipelines.shadow(style));
+            RenderSystem.getDevice().precompilePipeline(GlassPipelines.shadow(style));
             compiledShadowKey = key;
         } catch (Throwable throwable) {
             // 投影失败不至于让整个界面不可用，退化成不带投影的面板

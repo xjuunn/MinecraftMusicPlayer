@@ -136,7 +136,7 @@ public class GlassListView extends AbstractWidget {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
-        if (!active || !visible || !event.isLeftMouse() || !isMouseOver(event.x(), event.y())) {
+        if (!active || !visible || event.button() != 0 || !isMouseOver(event.x(), event.y())) {
             return false;
         }
         int index = actionRowAt(event.x(), event.y());
@@ -181,7 +181,7 @@ public class GlassListView extends AbstractWidget {
     // ── 绘制 ────────────────────────────────────────────────────────────
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         if (rows.isEmpty()) {
             return;
         }
@@ -192,9 +192,6 @@ public class GlassListView extends AbstractWidget {
         int y0 = getY();
         int x1 = x0 + width;
         int y1 = y0 + height;
-
-        int mouseX = graphics.mouseX();
-        int mouseY = graphics.mouseY();
         int hoverRow = rowAt(mouseX, mouseY);
         int hoverAction = actionRowAt(mouseX, mouseY);
         hover.tick(hoverRow >= 0, GlassTheme.Motion.HOVER);
