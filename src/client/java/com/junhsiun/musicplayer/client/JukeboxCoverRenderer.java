@@ -11,6 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.world.level.block.JukeboxBlock;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
@@ -120,6 +121,13 @@ public final class JukeboxCoverRenderer {
             String target = targets.get(pos);
             CoverAnimation animation = ANIMATIONS.get(pos);
 
+            // 方块没了（被破坏、被替换、区块卸载）时，封面应该立刻消失，不能再播滑出动画。
+            // 否则会出现"方块已经没了，封面还在原地收上去"的画面。
+            if (isJukeboxGone(level, pos)) {
+                ANIMATIONS.remove(pos);
+                continue;
+            }
+
             if (animation == null) {
                 if (target == null) {
                     continue;
@@ -154,6 +162,19 @@ public final class JukeboxCoverRenderer {
 
             renderSides(collector, camera, pos, animation.texture, slide);
         }
+    }
+
+    /**
+     * 方块是否已经不属于唱片机：被破坏、被替换成别的方块，或者区块已经卸载。
+     *
+     * <p>唱片被取出时方块仍然是唱片机，只是 {@code HAS_RECORD} 变 false，那种情况仍然要播
+     * 滑出动画。所以这里只判断"方块本身还在不在"，不看里面的唱片。</p>
+     */
+    private static boolean isJukeboxGone(ClientLevel level, BlockPos pos) {
+        if (level == null || !level.isLoaded(pos)) {
+            return true;
+        }
+        return !(level.getBlockState(pos).getBlock() instanceof JukeboxBlock);
     }
 
     /**
