@@ -76,6 +76,29 @@ public final class MusicDiscHelper {
         return stack.hasTag() && stack.getTag().getBoolean(MASTER_KEY);
     }
 
+    /**
+     * 把刚合成的原版唱片转成唱片母版。
+     *
+     * <p>1.20.1 及更早版本的配方 JSON 无法写 NBT，所以只能在合成结果写入结果槽时补标记。
+     * 只处理「没有任何自定义数据」的原版音乐唱片，避免影响玩家自己命名过的唱片。</p>
+     */
+    public static void markAsMaster(ItemStack stack) {
+        if (stack == null || stack.isEmpty() || stack.hasTag()) {
+            return;
+        }
+        if (!SUPPORTED_DISCS.contains(stack.getItem())) {
+            return;
+        }
+        CompoundTag tag = stack.getOrCreateTag();
+        tag.putBoolean(MASTER_KEY, true);
+        stack.setHoverName(Component.translatable("musicplayer.disc.master")
+                .withStyle(ChatFormatting.LIGHT_PURPLE));
+        ListTag lore = new ListTag();
+        lore.add(StringTag.valueOf(Component.Serializer.toJson(
+                Component.translatable("musicplayer.disc.master_lore").withStyle(ChatFormatting.DARK_GRAY))));
+        stack.getOrCreateTagElement("display").put("Lore", lore);
+    }
+
     public static String getPendingToken(ItemStack stack) {
         if (!isPendingDisc(stack)) {
             return "";
