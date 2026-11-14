@@ -119,7 +119,8 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
                     }
                 })
         );
-        WorldRenderEvents.AFTER_ENTITIES.register(JukeboxCoverRenderer::render);
+        // 唱片机侧面的封面：必须在世界渲染阶段注册，否则每一帧都不会调用渲染器，
+        // 表现为唱片机上方/侧面的封面整体消失（只剩唱片机本体）。
         WorldRenderEvents.AFTER_ENTITIES.register(JukeboxCoverRenderer::render);
         // 快捷键默认 M，玩家可在「选项 → 控制」里改键（KeyMapping 就是原版的改键机制）
         KeyBindingHelper.registerKeyBinding(OPEN_BROWSER);
