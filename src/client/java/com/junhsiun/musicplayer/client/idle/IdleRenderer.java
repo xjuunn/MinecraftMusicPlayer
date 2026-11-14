@@ -20,7 +20,6 @@ import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPassLayouts;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.util.Util;
 import org.lwjgl.BufferUtils;
@@ -147,11 +146,11 @@ public final class IdleRenderer {
 
             // 1. 世界降采样：复用液态玻璃的模糊管线，spread = 0 等价于一次双线性采样。
             RenderPass downsample = encoder.createRenderPass(
-                    () -> "musicplayer idle world", RenderPassLayouts.COLOR_ONLY,
+                    () -> "musicplayer idle world",
                     worldView, Optional.empty());
             try {
                 downsample.setPipeline(RenderSystem.getCompiledPipeline(
-                        GlassPipelines.blur(0.0F, false), downsample.activeSubpass()));
+                        GlassPipelines.blur(0.0F, false)));
                 downsample.setUniform("Sampler0", main.getColorTextureView(), linear);
                 downsample.setVertexBuffer(0, quadBuffer.slice());
                 downsample.draw(6, 1, 0, 0);
@@ -166,11 +165,11 @@ public final class IdleRenderer {
 
             // 3. 特效写回主渲染目标。这里只读取 worldView，不会与主目标形成采样反馈。
             RenderPass pass = encoder.createRenderPass(
-                    () -> "musicplayer idle effect", RenderPassLayouts.COLOR_ONLY,
+                    () -> "musicplayer idle effect",
                     main.getColorTextureView(), Optional.empty());
             try {
                 pass.setPipeline(RenderSystem.getCompiledPipeline(
-                        IdlePipelines.effect(effect, hasCover), pass.activeSubpass()));
+                        IdlePipelines.effect(effect, hasCover)));
                 pass.setUniform("Sampler0", worldView, linear);
                 if (hasCover) {
                     pass.setUniform("Sampler1", cover.view(), cover.sampler());

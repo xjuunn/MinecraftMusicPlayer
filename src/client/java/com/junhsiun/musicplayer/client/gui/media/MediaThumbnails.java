@@ -9,7 +9,7 @@ import com.mojang.renderpearl.api.textures.GpuSampler;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.GuiPipeline;
+import net.minecraft.client.renderer.pipeline.RenderPipelines;
 import net.minecraft.client.renderer.texture.TextureResources;
 import net.minecraft.resources.Identifier;
 import okhttp3.OkHttpClient;
@@ -224,7 +224,7 @@ public final class MediaThumbnails {
         }
         // 带 tint 的版本需要按纹理注册 ID 走 TextureManager，才能把颜色（含 alpha）
         // 传给 BlitRenderState；GpuTextureView 的 blit 重载没有颜色参数。
-        graphics.blit(GuiPipeline.TEXTURED, thumb.id(),
+        graphics.blit(RenderPipelines.GUI_TEXTURED, thumb.id(),
                 offsetX, offsetY, 0.0F, 0.0F,
                 drawWidth, drawHeight,
                 thumb.width(), thumb.height(),

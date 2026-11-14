@@ -3,6 +3,7 @@ package com.junhsiun.musicplayer.client.idle;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.renderpearl.api.GpuFormat;
 import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
 import com.mojang.renderpearl.api.pipeline.ColorTargetState;
 import com.mojang.renderpearl.api.pipeline.DepthStencilState;
@@ -56,7 +57,8 @@ public final class IdlePipelines {
                     .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
                     .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
                     .withBindGroupLayout(hasCover ? LAYOUT_COVER : LAYOUT_PLAIN)
-                    .withColorTargetState(new ColorTargetState(Optional.empty(), ColorTargetState.WRITE_ALL))
+                    .withColorTargetState(new ColorTargetState(Optional.empty(), GpuFormat.RGBA8_UNORM,
+                            ColorTargetState.WRITE_ALL))
                     .withDepthStencilState(Optional.<DepthStencilState>empty())
                     .withCull(false)
                     .withShaderDefine("IDLE_MODE", effect.shaderMode());
