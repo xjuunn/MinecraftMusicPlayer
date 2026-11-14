@@ -157,7 +157,7 @@ public final class MusicDiscHelper {
         }
         root.put(URLS_KEY, urls);
 
-        burnedDisc.getOrCreateTag().putBoolean(MASTER_KEY, true);
+        burnedDisc.getOrCreateTag().remove(MASTER_KEY);
         burnedDisc.getOrCreateTag().put(ROOT_KEY, root);
         burnedDisc.setHoverName(buildDisplayName(track));
         ListTag lore = buildLore(track, urls.size());
