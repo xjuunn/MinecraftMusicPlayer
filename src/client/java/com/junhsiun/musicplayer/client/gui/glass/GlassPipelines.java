@@ -147,6 +147,10 @@ public final class GlassPipelines {
                             "pipeline/glass_blur_" + Float.floatToIntBits(spread) + (verticalBlur ? "_v" : "_h")))
                     .withVertexShader(BLUR_VERTEX_SHADER)
                     .withFragmentShader(BLUR_FRAGMENT_SHADER)
+                    // 同样必须显式声明：GlProgram.setupUniforms 只给声明过的 sampler 建立
+                    // 名字→纹理单元映射，未声明时 texture(Sampler0) 恒读到 0。GUI_SNIPPET 本身
+                    // 不含 sampler（原版只有 GUI_TEXTURED_SNIPPET 才带 withSampler("Sampler0")）。
+                    .withSampler("Sampler0")
                     .withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.TRIANGLES)
                     // 离屏颜色目标没有深度附件，管线必须声明"不需要深度"
                     .withCull(false)
