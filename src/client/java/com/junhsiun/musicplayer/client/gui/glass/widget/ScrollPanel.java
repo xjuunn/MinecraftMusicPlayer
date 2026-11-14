@@ -1,6 +1,7 @@
 package com.junhsiun.musicplayer.client.gui.glass.widget;
 
 import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.events.ContainerEventHandler;
@@ -199,7 +200,7 @@ public class ScrollPanel extends AbstractWidget implements ContainerEventHandler
         boolean handled = target.mouseClicked(event, doubled);
         if (handled) {
             setFocused(target);
-            dragging = event.button() == 0;
+            dragging = event.button() == InputConstants.MOUSE_BUTTON_LEFT;
         }
         return handled;
     }
@@ -216,7 +217,8 @@ public class ScrollPanel extends AbstractWidget implements ContainerEventHandler
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
-        if (!dragging || focusedChild == null || event.button() != 0) {
+        if (!dragging || focusedChild == null
+                || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         return focusedChild.mouseDragged(event, dragX, dragY);
