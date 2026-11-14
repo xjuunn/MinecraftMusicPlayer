@@ -10,7 +10,6 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.Prediction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 
@@ -68,7 +67,7 @@ public final class DiscMasterService {
         } else {
             held.shrink(1);
             if (!player.getInventory().add(burnedDisc)) {
-                player.drop(burnedDisc, false, Prediction.SERVER_ONLY);
+                player.drop(burnedDisc, false, true);
             }
         }
 

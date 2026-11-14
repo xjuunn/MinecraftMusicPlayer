@@ -1,6 +1,6 @@
 package com.junhsiun.musicplayer.client.gui.glass.widget;
 
-import net.minecraft.util.Util;
+import net.minecraft.Util;
 
 /**
  * 带惯性的平滑滚动。

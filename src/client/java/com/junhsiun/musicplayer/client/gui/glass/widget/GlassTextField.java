@@ -4,9 +4,8 @@ import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
@@ -32,9 +31,7 @@ public class GlassTextField extends EditBox {
                 Component.empty());
         setBordered(false);
         setMaxLength(512);
-        setTextColor(FlatTheme.TEXT);
-        setTextShadow(false);
-        setHint(hint);
+        setTextColor(FlatTheme.TEXT);        setHint(hint);
         setResponder(responder);
     }
 
@@ -57,32 +54,30 @@ public class GlassTextField extends EditBox {
     }
 
     @Override
-    public boolean keyPressed(KeyEvent event) {
-        if (isFocused() && onSubmit != null && isEnter(event)) {
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (isFocused() && onSubmit != null && isEnter(keyCode)) {
             onSubmit.run();
             return true;
         }
-        if (super.keyPressed(event)) {
+        if (super.keyPressed(keyCode, scanCode, modifiers)) {
             return true;
         }
         if (!isFocused()) {
             return false;
         }
-        if (event.key() == InputConstants.KEY_TAB || event.keycode() == InputConstants.KEYCODE_TAB) {
+        if (keyCode == InputConstants.KEY_TAB) {
             return false;
         }
         return true;
     }
 
-    private static boolean isEnter(KeyEvent event) {
-        return event.key() == InputConstants.KEY_RETURN
-                || event.key() == InputConstants.KEY_NUMPADENTER
-                || event.keycode() == InputConstants.KEYCODE_RETURN
-                || event.keycode() == InputConstants.KEYCODE_NUMPADENTER;
+    private static boolean isEnter(int keyCode) {
+        return keyCode == InputConstants.KEY_RETURN
+                || keyCode == InputConstants.KEY_NUMPADENTER;
     }
 
     @Override
-    public void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         boolean usable = isActive();
         hover.tick((isHovered() || isFocused()) && usable, GlassTheme.Motion.HOVER);
         float lift = hover.eased();
@@ -100,9 +95,9 @@ public class GlassTextField extends EditBox {
         // 极淡的暗底：输入框要在窗口表面上有明确边界，否则和卡片底色糊在一起（不透明度压得很低，保持清澈）。
         GlassWidgets.roundedFill(graphics, x0, y0, x1, y1, 0x000000, 0x000000, radius, 0.06F, 1.0F);
 
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(0, Math.round((height - 8) / 2.0F));
-        super.extractWidgetRenderState(graphics);
-        graphics.pose().popMatrix();
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0F, Math.round((height - 8) / 2.0F), 0.0F);
+        super.renderWidget(graphics, mouseX, mouseY, partialTick);
+        graphics.pose().popPose();
     }
 }

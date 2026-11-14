@@ -4,12 +4,11 @@ import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Util;
+import net.minecraft.Util;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -110,21 +109,21 @@ public class GlassTabs extends AbstractWidget {
     // ── 交互 ────────────────────────────────────────────────────────────
 
     @Override
-    public void onClick(MouseButtonEvent event, boolean doubled) {
+    public void onClick(double mouseX, double mouseY) {
         if (count() == 0) {
             return;
         }
-        pressed = indexAt(event.x());
+        pressed = indexAt(mouseX);
     }
 
     @Override
-    public void onRelease(MouseButtonEvent event) {
+    public void onRelease(double mouseX, double mouseY) {
         boolean armed = pressed >= 0;
         pressed = -1;
-        if (!armed || count() == 0 || !isMouseOver(event.x(), event.y())) {
+        if (!armed || count() == 0 || !isMouseOver(mouseX, mouseY)) {
             return;
         }
-        int index = indexAt(event.x());
+        int index = indexAt(mouseX);
         if (index != selected) {
             selected = index;
             if (onSelect != null) {
@@ -141,7 +140,7 @@ public class GlassTabs extends AbstractWidget {
     // ── 绘制 ────────────────────────────────────────────────────────────
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (count() == 0 || width <= 0 || height <= 0) {
             return;
         }
@@ -163,8 +162,8 @@ public class GlassTabs extends AbstractWidget {
 
         // 悬停段
         int hoveredIndex = -1;
-        if (usable && pressed < 0 && isMouseOver(graphics.mouseX(), graphics.mouseY())) {
-            hoveredIndex = indexAt(graphics.mouseX());
+        if (usable && pressed < 0 && isMouseOver(mouseX, mouseY)) {
+            hoveredIndex = indexAt(mouseX);
         }
         hovered = hoveredIndex;
         updateHover(hoveredIndex);

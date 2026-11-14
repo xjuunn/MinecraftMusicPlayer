@@ -8,7 +8,6 @@ import com.junhsiun.musicplayer.platform.api.MusicApiMode;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -61,8 +60,7 @@ public final class ServerConfigSync {
     }
 
     public static boolean canEdit(ServerPlayer player) {
-        return player != null && player.createCommandSourceStack().permissions()
-                .hasPermission(Permissions.COMMANDS_ADMIN);
+        return player != null && player.createCommandSourceStack().hasPermission(2);
     }
 
     /** 发给单个玩家。 */

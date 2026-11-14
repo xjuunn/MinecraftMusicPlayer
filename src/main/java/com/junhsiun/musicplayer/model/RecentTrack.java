@@ -2,6 +2,9 @@ package com.junhsiun.musicplayer.model;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.nbt.CompoundTag;
+
+import java.util.Optional;
 
 /**
  * 一条「最近播放」记录。
@@ -30,5 +33,32 @@ public record RecentTrack(String id, String title, String artist, String coverUr
         coverUrl = coverUrl == null ? "" : coverUrl;
         playedAtMillis = Math.max(0L, playedAtMillis);
         durationMillis = Math.max(0L, durationMillis);
+    }
+
+    /** 1.21.1 没有 Codec 存储，最近播放走手写 NBT。 */
+    public CompoundTag encode() {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("id", id);
+        tag.putString("title", title);
+        tag.putString("artist", artist);
+        tag.putString("cover", coverUrl);
+        tag.putLong("played_at", playedAtMillis);
+        tag.putLong("duration", durationMillis);
+        return tag;
+    }
+
+    public static Optional<RecentTrack> decode(CompoundTag tag) {
+        String trackId = tag.getString("id");
+        if (trackId.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(new RecentTrack(
+                trackId,
+                tag.getString("title"),
+                tag.getString("artist"),
+                tag.getString("cover"),
+                tag.getLong("played_at"),
+                tag.getLong("duration")
+        ));
     }
 }

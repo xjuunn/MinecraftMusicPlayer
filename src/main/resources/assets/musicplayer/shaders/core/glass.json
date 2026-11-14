@@ -1,0 +1,28 @@
+{
+    "vertex": "glass",
+    "fragment": "glass",
+    "samplers": [
+        { "name": "Sampler0" },
+        { "name": "Sampler1" },
+        { "name": "Sampler2" }
+    ],
+    "uniforms": [
+        { "name": "ModelViewMat", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
+        { "name": "ProjMat", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
+        { "name": "GlassRadius", "type": "float", "count": 1, "values": [ 8.0 ] },
+        { "name": "GlassTint", "type": "float", "count": 4, "values": [ 1.0, 1.0, 1.0, 0.0 ] },
+        { "name": "GlassMaxLuma", "type": "float", "count": 1, "values": [ 0.85 ] },
+        { "name": "GlassSaturation", "type": "float", "count": 1, "values": [ 1.1 ] },
+        { "name": "GlassHighlight", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "GlassEdgeLight", "type": "float", "count": 1, "values": [ 0.12 ] },
+        { "name": "GlassOpacity", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "GlassBlur", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "GlassWindowTint", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "GlassWindowTintColor", "type": "float", "count": 3, "values": [ 1.0, 1.0, 1.0 ] },
+        { "name": "GlassShadowMode", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "GlassShadowSize", "type": "float", "count": 1, "values": [ 24.0 ] },
+        { "name": "GlassShadowAlpha", "type": "float", "count": 1, "values": [ 0.35 ] },
+        { "name": "GlassShadowOffset", "type": "float", "count": 2, "values": [ 0.0, 4.0 ] },
+        { "name": "GlassShadowPadding", "type": "float", "count": 1, "values": [ 16.0 ] }
+    ]
+}

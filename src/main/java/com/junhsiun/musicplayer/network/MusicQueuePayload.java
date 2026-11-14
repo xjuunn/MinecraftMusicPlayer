@@ -5,7 +5,7 @@ import com.junhsiun.musicplayer.model.QueueEntry;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +28,7 @@ public record MusicQueuePayload(List<QueueEntry> entries, int playlistRemaining,
     private static final int MAX_ENTRIES = 512;
 
     public static final Type<MusicQueuePayload> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_queue"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_queue"));
     public static final StreamCodec<RegistryFriendlyByteBuf, MusicQueuePayload> CODEC =
             CustomPacketPayload.codec(MusicQueuePayload::write, MusicQueuePayload::new);
 

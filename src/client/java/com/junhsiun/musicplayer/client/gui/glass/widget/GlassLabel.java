@@ -3,7 +3,7 @@ package com.junhsiun.musicplayer.client.gui.glass.widget;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
@@ -53,7 +53,7 @@ public class GlassLabel extends AbstractWidget {
      * 保证标签永远不会越界。</p>
      */
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         Font font = Minecraft.getInstance().font;
         Component text = getMessage();
         // 控件宽度是屏幕像素，文字按 scale 缩小后画，可用宽度要换算回字体像素

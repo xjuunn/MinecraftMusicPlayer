@@ -1,16 +1,13 @@
 package com.junhsiun.musicplayer.client.gui.glass.widget;
 
 import com.junhsiun.musicplayer.client.gui.glass.theme.FlatTheme;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.events.ContainerEventHandler;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.CharacterEvent;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Util;
+import net.minecraft.Util;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -109,7 +106,7 @@ public class ScrollPanel extends AbstractWidget implements ContainerEventHandler
     private AbstractWidget childAt(double mouseX, double mouseY) {
         for (int index = children.size() - 1; index >= 0; index--) {
             AbstractWidget widget = children.get(index).widget();
-            if (widget.isVisible() && widget.isMouseOver(mouseX, mouseY)) {
+            if (widget.visible && widget.isMouseOver(mouseX, mouseY)) {
                 return widget;
             }
         }
@@ -124,7 +121,7 @@ public class ScrollPanel extends AbstractWidget implements ContainerEventHandler
     // ── 绘制 ────────────────────────────────────────────────────────────
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (width <= 0 || height <= 0) {
             return;
         }
@@ -140,7 +137,7 @@ public class ScrollPanel extends AbstractWidget implements ContainerEventHandler
         GlassWidgets.beginClip(graphics, x0, y0, x1, y1);
         for (Child child : children) {
             AbstractWidget widget = child.widget();
-            if (!widget.isVisible()) {
+            if (!widget.visible) {
                 continue;
             }
             int top = widget.getY();
@@ -149,14 +146,14 @@ public class ScrollPanel extends AbstractWidget implements ContainerEventHandler
             if (bottom <= y0 || top >= y1) {
                 continue;
             }
-            widget.extractRenderState(graphics);
+            widget.render(graphics, 0, 0, 0.0F);
         }
         GlassWidgets.endClip(graphics);
 
         drawScrollbar(graphics, x0, y0, x1, y1);
     }
 
-    private void drawScrollbar(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1) {
+    private void drawScrollbar(GuiGraphics graphics, int x0, int y0, int x1, int y1) {
         double max = maxScroll();
         if (max <= 0.0D) {
             return;
@@ -187,39 +184,39 @@ public class ScrollPanel extends AbstractWidget implements ContainerEventHandler
     // ── 输入转发 ────────────────────────────────────────────────────────
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
-        if (!isMouseOver(event.x(), event.y())) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (!isMouseOver(mouseX, mouseY)) {
             return false;
         }
-        AbstractWidget target = childAt(event.x(), event.y());
+        AbstractWidget target = childAt(mouseX, mouseY);
         if (target == null) {
             setFocused(null);
             return false;
         }
-        boolean handled = target.mouseClicked(event, doubled);
+        boolean handled = target.mouseClicked(mouseX, mouseY, button);
         if (handled) {
             setFocused(target);
-            dragging = event.isLeftMouse();
+            dragging = button == 0;
         }
         return handled;
     }
 
     @Override
-    public boolean mouseReleased(MouseButtonEvent event) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (!dragging) {
             return false;
         }
         dragging = false;
         GuiEventListener focused = focusedChild;
-        return focused != null && focused.mouseReleased(event);
+        return focused != null && focused.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
-        if (!dragging || focusedChild == null || !event.isLeftMouse()) {
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (!dragging || focusedChild == null || button != 0) {
             return false;
         }
-        return focusedChild.mouseDragged(event, dragX, dragY);
+        return focusedChild.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override
@@ -237,18 +234,18 @@ public class ScrollPanel extends AbstractWidget implements ContainerEventHandler
     }
 
     @Override
-    public boolean keyPressed(KeyEvent event) {
-        return focusedChild != null && focusedChild.keyPressed(event);
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        return focusedChild != null && focusedChild.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override
-    public boolean keyReleased(KeyEvent event) {
-        return focusedChild != null && focusedChild.keyReleased(event);
+    public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+        return focusedChild != null && focusedChild.keyReleased(keyCode, scanCode, modifiers);
     }
 
     @Override
-    public boolean charTyped(CharacterEvent event) {
-        return focusedChild != null && focusedChild.charTyped(event);
+    public boolean charTyped(char codePoint, int modifiers) {
+        return focusedChild != null && focusedChild.charTyped(codePoint, modifiers);
     }
 
     // ── 焦点 / 拖拽 ──────────────────────────────────────────────────────

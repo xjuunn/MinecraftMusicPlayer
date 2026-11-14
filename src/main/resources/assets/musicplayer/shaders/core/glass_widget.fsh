@@ -1,19 +1,16 @@
-#version 330
-#extension GL_ARB_separate_shader_objects : require
+#version 150
 
-#include <minecraft:projection.glsl>
+uniform sampler2D Sampler0;
 
-layout(location = 0) in vec2 vPos;
-layout(location = 1) in vec2 vLocal;
-layout(location = 2) in vec4 vColor;
+uniform vec4 WidgetFill;
+uniform vec4 WidgetBorder;
+uniform float WidgetRadius;
+uniform float WidgetGloss;
 
-layout(location = 0) out vec4 fragColor;
+in vec2 vPos;
+in vec2 vLocal;
 
-const vec3 FILL = vec3(GLASS_WIDGET_FILL_R, GLASS_WIDGET_FILL_G, GLASS_WIDGET_FILL_B);
-const vec3 BORDER = vec3(GLASS_WIDGET_BORDER_R, GLASS_WIDGET_BORDER_G, GLASS_WIDGET_BORDER_B);
-const float RADIUS = float(GLASS_WIDGET_RADIUS);
-const float GLOSS = GLASS_WIDGET_GLOSS;
-const float BORDER_ALPHA = GLASS_WIDGET_BORDER_A;
+out vec4 fragColor;
 
 float sdRoundBox(vec2 p, vec2 b, float r) {
     vec2 q = abs(p) - b + r;
@@ -21,7 +18,7 @@ float sdRoundBox(vec2 p, vec2 b, float r) {
 }
 
 void main() {
-    // GUI 的 y 向下、dFdy 向上，导数取绝对值即可得到像素尺寸
+    // GUI 的 y 向下、dFdy 向上，导数取绝对值即可得到像素尺度
     vec2 size = vec2(
         abs(dFdx(vPos.x)) / max(abs(dFdx(vLocal.x)), 1e-5),
         abs(dFdy(vPos.y)) / max(abs(dFdy(vLocal.y)), 1e-5)
@@ -30,7 +27,7 @@ void main() {
 
     vec2 halfSize = size * 0.5;
     vec2 p = (vLocal - 0.5) * size;
-    float radius = min(RADIUS, min(halfSize.x, halfSize.y));
+    float radius = min(WidgetRadius, min(halfSize.x, halfSize.y));
 
     float dist = sdRoundBox(p, halfSize, radius);
     // 屏幕空间中 SDF 每前进一个像素的变化量：抗锯齿与描边宽度的唯一正确依据
@@ -42,9 +39,9 @@ void main() {
 
     // 顶部柔光：macOS 控件的微妙纵向渐变
     float grad = clamp((p.y + halfSize.y) / max(size.y, 1.0), 0.0, 1.0);
-    vec3 fill = FILL + vec3(GLOSS * (1.0 - grad));
-    vec3 rgb = mix(fill, BORDER, borderMask);
+    vec3 fill = WidgetFill.rgb + vec3(WidgetGloss * (1.0 - grad));
+    vec3 rgb = mix(fill, WidgetBorder.rgb, borderMask);
     // 描边极淡，只作为边缘收口的暗示
-    float alpha = max(fillMask, borderMask * BORDER_ALPHA * 1.6) * vColor.a;
+    float alpha = max(fillMask, borderMask * WidgetBorder.a * 1.6) * WidgetFill.a;
     fragColor = vec4(rgb, alpha);
 }

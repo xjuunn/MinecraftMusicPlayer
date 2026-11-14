@@ -4,7 +4,7 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * 服务端 → 客户端：刻录请求的处理结果。
@@ -18,7 +18,7 @@ import net.minecraft.resources.Identifier;
  */
 public record DiscMasterBurnResultPayload(boolean success, String message) implements CustomPacketPayload {
     public static final Type<DiscMasterBurnResultPayload> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "disc_master_burn_result"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "disc_master_burn_result"));
     public static final StreamCodec<RegistryFriendlyByteBuf, DiscMasterBurnResultPayload> CODEC =
             CustomPacketPayload.codec(DiscMasterBurnResultPayload::write, DiscMasterBurnResultPayload::new);
 

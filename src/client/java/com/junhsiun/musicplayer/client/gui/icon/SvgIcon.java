@@ -1,7 +1,7 @@
 package com.junhsiun.musicplayer.client.gui.icon;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * 可配置的 SVG 图标：把 {@code <path d="...">} 解析成一组实心矩形，绘制时按目标尺寸缩放填充。
  *
- * <p><b>为什么是矩形：</b>原版界面只有 {@link GuiGraphicsExtractor#fill} 能画形状，它只接受轴对齐
+ * <p><b>为什么是矩形：</b>原版界面只有 {@link GuiGraphics#fill} 能画形状，它只接受轴对齐
  * 矩形，没有描边、没有曲线填充。本项目的图标都是像素画——每个色块本身就是一个小矩形，
  * 所以按矩形还原是无损的，而且小尺寸下边缘是硬的，正是像素画该有的样子。</p>
  *
@@ -75,18 +75,18 @@ public final class SvgIcon {
      *
      * <p>颜色相当于 SVG 的 {@code currentColor}；alpha 为 0 时直接跳过，连位姿都不压。</p>
      */
-    public void draw(GuiGraphicsExtractor graphics, int x, int y, int size, int color) {
+    public void draw(GuiGraphics graphics, int x, int y, int size, int color) {
         if (((color >>> 24) & 0xFF) == 0 || size <= 0 || rects.length == 0) {
             return;
         }
         float scale = size / viewBox;
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(x, y);
-        graphics.pose().scale(scale, scale);
+        graphics.pose().pushPose();
+        graphics.pose().translate(x, y, 0.0);
+        graphics.pose().scale(scale, scale, 1.0F);
         for (int index = 0; index < rects.length; index += 4) {
             graphics.fill(rects[index], rects[index + 1], rects[index + 2], rects[index + 3], color);
         }
-        graphics.pose().popMatrix();
+        graphics.pose().popPose();
     }
 
     /**
@@ -96,7 +96,7 @@ public final class SvgIcon {
      * 上下只留 3 个），按 viewBox 居中会让图形在按钮里看着偏。原点取整到像素，
      * 这样缩放后的边缘不会落在两个像素中间，避免"整体偏半个像素"的观感。</p>
      */
-    public void drawCentered(GuiGraphicsExtractor graphics, int x, int y, int boxSize, int iconSize, int color) {
+    public void drawCentered(GuiGraphics graphics, int x, int y, int boxSize, int iconSize, int color) {
         if (rects.length == 0 || iconSize <= 0) {
             return;
         }

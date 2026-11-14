@@ -4,7 +4,7 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -21,7 +21,7 @@ public record MusicConfigSnapshotPayload(boolean canEdit, Map<String, String> va
         implements CustomPacketPayload {
 
     public static final Type<MusicConfigSnapshotPayload> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_config_snapshot"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_config_snapshot"));
     public static final StreamCodec<RegistryFriendlyByteBuf, MusicConfigSnapshotPayload> CODEC =
             CustomPacketPayload.codec(MusicConfigSnapshotPayload::write, MusicConfigSnapshotPayload::new);
 

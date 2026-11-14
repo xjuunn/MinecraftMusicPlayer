@@ -2,7 +2,6 @@ package com.junhsiun.musicplayer.mixin.client;
 
 import com.junhsiun.musicplayer.client.idle.IdleController;
 import net.minecraft.client.MouseHandler;
-import net.minecraft.client.input.MouseButtonInfo;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -17,8 +16,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(MouseHandler.class)
 public abstract class MouseHandlerMixin {
 
-    @Inject(method = "onButton", at = @At("HEAD"))
-    private void musicplayer$onButton(long window, MouseButtonInfo buttonInfo, int action,
+    @Inject(method = "onPress", at = @At("HEAD"))
+    private void musicplayer$onButton(long window, int button, int action, int modifiers,
                                       CallbackInfo callbackInfo) {
         IdleController.getInstance().onRawInput();
     }

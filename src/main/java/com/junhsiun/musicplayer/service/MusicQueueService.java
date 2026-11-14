@@ -589,9 +589,9 @@ public final class MusicQueueService {
 
     public void initLyricsState(MinecraftServer server) {
         lyricsPreferenceState = server.overworld().getDataStorage()
-                .computeIfAbsent(LyricsPreferenceState.TYPE);
+                .computeIfAbsent(LyricsPreferenceState.FACTORY, LyricsPreferenceState.storageId());
         recentState = server.overworld().getDataStorage()
-                .computeIfAbsent(RecentPlaybackState.TYPE);
+                .computeIfAbsent(RecentPlaybackState.FACTORY, RecentPlaybackState.storageId());
     }
 
     private void ensureRecentState(ServerPlayer player) {
@@ -601,7 +601,7 @@ public final class MusicQueueService {
         MinecraftServer server = player.level().getServer();
         if (server != null) {
             recentState = server.overworld().getDataStorage()
-                    .computeIfAbsent(RecentPlaybackState.TYPE);
+                    .computeIfAbsent(RecentPlaybackState.FACTORY, RecentPlaybackState.storageId());
         }
     }
 
@@ -1368,7 +1368,7 @@ public final class MusicQueueService {
                 track.artist(),
                 track.artistId() == null || track.artistId().isBlank() ? "" : "/music view artist " + track.artistId(),
                 requester.getUUID(),
-                requester.getGameProfile().name(),
+                requester.getGameProfile().getName(),
                 track.sourceUrls(),
                 track.coverUrl()
         ));

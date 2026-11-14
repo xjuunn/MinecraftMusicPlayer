@@ -5,7 +5,7 @@ import com.junhsiun.musicplayer.model.RecentTrack;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +14,7 @@ import java.util.List;
 public record MusicRecentPayload(List<RecentTrack> entries) implements CustomPacketPayload {
 
     public static final Type<MusicRecentPayload> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_recent"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_recent"));
     public static final StreamCodec<RegistryFriendlyByteBuf, MusicRecentPayload> CODEC =
             CustomPacketPayload.codec(MusicRecentPayload::write, MusicRecentPayload::new);
 

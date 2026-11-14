@@ -168,7 +168,7 @@ public final class ClientMusicController {
         lastPositionReportTime = 0L;
         if (reason != null && !reason.isBlank()) {
             // 只有带原因的停止才算「真的停了」，供纯享模式区分换曲空档。
-            explicitStopMillis = net.minecraft.util.Util.getMillis();
+            explicitStopMillis = net.minecraft.Util.getMillis();
             MusicPlayerMod.LOGGER.info("客户端已停止播放: {}", reason);
         }
     }

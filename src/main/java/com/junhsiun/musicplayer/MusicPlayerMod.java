@@ -144,9 +144,9 @@ public final class MusicPlayerMod implements ModInitializer {
                 return InteractionResultHolder.pass(player.getItemInHand(hand));
             }
             if (MusicDiscHelper.isDiscMaster(player.getItemInHand(hand))) {
-                // 右键空气时吞掉这次使用，避免母版被当成普通物品走后续流程；
+                // 右键空气时吞掉这次使用，避免母版被当成普通物品走后续流程。
                 // 界面在客户端打开，这里不需要做任何事。
-                return InteractionResult.SUCCESS;
+                return InteractionResultHolder.success(player.getItemInHand(hand));
             }
             if (MusicDiscHelper.isPendingDisc(player.getItemInHand(hand))) {
                 LOOT_MUSIC_DISC_SERVICE.useRandomDisc(serverPlayer, hand);

@@ -4,16 +4,14 @@ import com.junhsiun.musicplayer.client.gui.glass.GlassPanel;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Util;
+import net.minecraft.Util;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -93,7 +91,7 @@ public abstract class GlassWindowScreen extends Screen {
         if (minecraft.gui == null) {
             return;
         }
-        minecraft.gui.setScreen(screen);
+        minecraft.setScreen(screen);
     }
 
     /**
@@ -166,19 +164,19 @@ public abstract class GlassWindowScreen extends Screen {
      * 只拦鼠标；键盘仍走 {@link #keyPressed}，否则中途想再按一次 E 也没反应。</p>
      */
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (closingStartMillis >= 0L) {
             return true;
         }
-        return super.mouseClicked(event, doubleClick);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean mouseReleased(MouseButtonEvent event) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (closingStartMillis >= 0L) {
             return true;
         }
-        return super.mouseReleased(event);
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
@@ -290,12 +288,12 @@ public abstract class GlassWindowScreen extends Screen {
      * 界面内控件的按键处理都在基类里，抢在前面会把它们全部吃掉。</p>
      */
     @Override
-    public boolean keyPressed(KeyEvent event) {
-        if (super.keyPressed(event)) {
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (super.keyPressed(keyCode, scanCode, modifiers)) {
             return true;
         }
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.options != null && minecraft.options.keyInventory.matches(event)) {
+        if (minecraft.options != null && minecraft.options.keyInventory.matches(keyCode, scanCode)) {
             onClose();
             return true;
         }
@@ -303,12 +301,12 @@ public abstract class GlassWindowScreen extends Screen {
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics) {
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         // 背景交给液态玻璃自己抓取：这里画原版暗色遮罩会让玻璃采样到被压暗的画面
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics) {
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         WindowTransform transform = currentTransform();
         WindowBounds animated = transform.apply(baseBounds);
 
@@ -343,7 +341,7 @@ public abstract class GlassWindowScreen extends Screen {
                 animated.x1(), animated.y1(), GlassTheme.Sizes.WINDOW_RADIUS);
 
         // 控件必须在玻璃之后提交，才会落在玻璃上层（见类注释）
-        super.extractRenderState(graphics);
+        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     /**

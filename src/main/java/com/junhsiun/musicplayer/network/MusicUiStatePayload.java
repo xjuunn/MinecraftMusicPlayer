@@ -4,7 +4,7 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * 服务端 → 客户端：底部播放栏需要的实时状态。
@@ -18,7 +18,7 @@ public record MusicUiStatePayload(boolean playing, boolean paused, String trackI
                                   int queueSize, int playlistRemaining) implements CustomPacketPayload {
 
     public static final Type<MusicUiStatePayload> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_ui_state"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(MusicPlayerMod.MOD_ID, "music_ui_state"));
     public static final StreamCodec<RegistryFriendlyByteBuf, MusicUiStatePayload> CODEC =
             CustomPacketPayload.codec(MusicUiStatePayload::write, MusicUiStatePayload::new);
 

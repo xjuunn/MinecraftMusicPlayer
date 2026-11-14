@@ -5,9 +5,8 @@ import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.icon.SvgIcons;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
@@ -54,9 +53,7 @@ public class GlassSearchField extends EditBox {
                 height, Component.empty());
         setBordered(false);
         setMaxLength(64);
-        setTextColor(GlassTheme.TEXT);
-        setTextShadow(false);
-        setHint(hint);
+        setTextColor(GlassTheme.TEXT);        setHint(hint);
         setResponder(responder);
     }
 
@@ -93,21 +90,21 @@ public class GlassSearchField extends EditBox {
      * <p>F1/F3/F11 这类全局键由 {@code KeyboardHandler} 处理，不经过界面，不受影响。</p>
      */
     @Override
-    public boolean keyPressed(KeyEvent event) {
-        if (super.keyPressed(event)) {
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (super.keyPressed(keyCode, scanCode, modifiers)) {
             return true;
         }
         if (!isFocused()) {
             return false;
         }
-        if (event.key() == InputConstants.KEY_TAB || event.keycode() == InputConstants.KEYCODE_TAB) {
+        if (keyCode == InputConstants.KEY_TAB) {
             return false;
         }
         return true;
     }
 
     @Override
-    public void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         boolean usable = isActive();
         hover.tick(isHoveredOrFocused() && usable, GlassTheme.Motion.HOVER);
         float lift = hover.eased();
@@ -137,9 +134,9 @@ public class GlassSearchField extends EditBox {
                         : (flat ? FlatTheme.TEXT : GlassTheme.TEXT));
 
         // 文字垂直居中：EditBox 关掉边框后文字画在 getY()，把画笔整体下移即可
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(0, Math.round((height - 8) / 2.0F));
-        super.extractWidgetRenderState(graphics);
-        graphics.pose().popMatrix();
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0F, Math.round((height - 8) / 2.0F), 0.0F);
+        super.renderWidget(graphics, mouseX, mouseY, partialTick);
+        graphics.pose().popPose();
     }
 }

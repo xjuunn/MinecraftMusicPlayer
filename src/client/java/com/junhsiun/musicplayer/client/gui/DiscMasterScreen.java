@@ -26,7 +26,6 @@ import com.junhsiun.musicplayer.util.Messages;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 
@@ -386,12 +385,10 @@ public final class DiscMasterScreen extends GlassWindowScreen implements MediaLi
 
     /** 回车直接搜：EditBox 自己不处理回车，落到这里。 */
     @Override
-    public boolean keyPressed(KeyEvent event) {
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         // key() 是 GLFW 原始键码，keycode() 是快捷方式键码，两者对回车各有一套常量
-        boolean enter = event.key() == InputConstants.KEY_RETURN
-                || event.key() == InputConstants.KEY_NUMPADENTER
-                || event.keycode() == InputConstants.KEYCODE_RETURN
-                || event.keycode() == InputConstants.KEYCODE_NUMPADENTER;
+        boolean enter = keyCode == InputConstants.KEY_RETURN
+                || keyCode == InputConstants.KEY_NUMPADENTER;
         boolean typing = searchField != null && searchField.isFocused();
         if (enter && typing) {
             search(1);
@@ -399,9 +396,9 @@ public final class DiscMasterScreen extends GlassWindowScreen implements MediaLi
         }
         // 不在输入框里时，方向键 / PgUp / PgDn / Home / End 直接滚列表：
         // 列表是窗口里唯一可滚的东西，不必先点一下才能用键盘
-        if (!typing && listView != null && listView.keyPressed(event)) {
+        if (!typing && listView != null && listView.keyPressed(keyCode, scanCode, modifiers)) {
             return true;
         }
-        return super.keyPressed(event);
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 }

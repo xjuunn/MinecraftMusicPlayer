@@ -10,10 +10,9 @@ import com.junhsiun.musicplayer.client.gui.media.CoverFade;
 import com.junhsiun.musicplayer.model.LyricLine;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -118,6 +117,10 @@ public final class SongDetailView extends AbstractWidget {
     private int burnButtonY1 = -1;
     /** 这一帧底部是否稳定处于「按钮」状态：按钮正在离场/已经换成歌词时为 {@code false}。 */
     private boolean playButtonClickable;
+    /** renderWidget 每帧记录的鼠标位置，供深层绘制方法判断悬停。 */
+    private double lastMouseX;
+    private double lastMouseY;
+
     /** 这一帧刻录按钮是否可见且可点。 */
     private boolean burnButtonClickable;
 
@@ -141,8 +144,7 @@ public final class SongDetailView extends AbstractWidget {
      * 过渡文字从起点到终点始终是同一串，不会在落地时突然变完整或变截断。</p>
      */
     public HeroElement heroTarget() {
-        Font font = Minecraft.getInstance().font;
-        int centerX = getX() + width / 2;
+        Font font = Minecraft.getInstance().font;        int centerX = getX() + width / 2;
         int contentWidth = Math.max(80, Math.min(width - 32, CONTENT_MAX_WIDTH));
         int coverTop = getY() + 8;
         int titleTop = coverTop + COVER_SIZE + 12;
@@ -182,7 +184,9 @@ public final class SongDetailView extends AbstractWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        lastMouseX = mouseX;
+        lastMouseY = mouseY;
         Font font = Minecraft.getInstance().font;
         int centerX = getX() + width / 2;
         int contentWidth = Math.max(80, Math.min(width - 32, CONTENT_MAX_WIDTH));
@@ -316,7 +320,7 @@ public final class SongDetailView extends AbstractWidget {
      * 同一个矩形，只用裁剪把上下边界收干净：登场是从下方滑入、退场是向上滑出。纯几何的
      * 位移不会改变任何一个像素的取整结果，也就没有可抖的东西。</p>
      */
-    private void drawBottom(GuiGraphicsExtractor graphics, Font font, int centerX, int top) {
+    private void drawBottom(GuiGraphics graphics, Font font, int centerX, int top) {
         // 入场进度由 extractWidgetRenderState 每帧推进，这里只读值。
         float presence = GlassWidgets.clamp01(bottomPresence.eased());
 
@@ -381,10 +385,10 @@ public final class SongDetailView extends AbstractWidget {
                 // 歌词不是玻璃，可以正常淡入，所以登场时也一起乘上 presence。
                 float lyrics = GlassWidgets.clamp01((t - 0.30F) / 0.70F);
                 int rise = Math.round(8.0F * (1.0F - lyrics));
-                graphics.pose().pushMatrix();
-                graphics.pose().translate(0.0F, rise);
+                graphics.pose().pushPose();
+                graphics.pose().translate(0.0F, rise, 0.0);
                 drawLyrics(graphics, font, centerX, top, lyrics * presence);
-                graphics.pose().popMatrix();
+                graphics.pose().popPose();
             }
         } finally {
             GlassWidgets.endClip(graphics);
@@ -416,14 +420,14 @@ public final class SongDetailView extends AbstractWidget {
      * 移出视野，从不做半透明淡入淡出。玻璃底的不透明度是编译期常量，硬做淡出只能在
      * "近似填充"和"真玻璃"之间来回切材质，反而会闪。</p>
      */
-    private void drawPlayButton(GuiGraphicsExtractor graphics, Font font, int centerX, int top) {
+    private void drawPlayButton(GuiGraphics graphics, Font font, int centerX, int top) {
         String label = Component.translatable("musicplayer.song.play").getString();
         int textWidth = Math.round(font.width(label) * PLAY_TEXT_SCALE);
         int contentWidth = PLAY_ICON_BOX + PLAY_ICON_GAP + textWidth;
         int buttonWidth = playButtonWidth(font);
 
-        boolean hovered = isMouseOver(graphics.mouseX(), graphics.mouseY())
-                && overPlayButton(graphics.mouseX(), graphics.mouseY());
+        boolean hovered = isMouseOver(lastMouseX, lastMouseY)
+                && overPlayButton(lastMouseX, lastMouseY);
         playHover.tick(hovered, GlassTheme.Motion.HOVER);
         playPress.tickSpring(playHeld, playHeld ? GlassTheme.Motion.PRESS : GlassTheme.Motion.RELEASE);
         float lift = playHover.eased();
@@ -482,14 +486,14 @@ public final class SongDetailView extends AbstractWidget {
      * <p>与播放按钮共用同一套玻璃材质与弹簧手感，但高度和最小宽度都更小，也不再铺主题色层：
      * 它是「手持唱片时顺手刻一张」的补充入口，不该抢走播放按钮的视觉重量。</p>
      */
-    private void drawBurnButton(GuiGraphicsExtractor graphics, Font font, int centerX, int top) {
+    private void drawBurnButton(GuiGraphics graphics, Font font, int centerX, int top) {
         String label = Component.translatable("musicplayer.discmaster.burn").getString();
         int textWidth = Math.round(font.width(label) * BURN_TEXT_SCALE);
         int contentWidth = BURN_ICON_BOX + BURN_ICON_GAP + textWidth;
         int buttonWidth = burnButtonWidth(font);
 
-        boolean hovered = isMouseOver(graphics.mouseX(), graphics.mouseY())
-                && overBurnButton(graphics.mouseX(), graphics.mouseY());
+        boolean hovered = isMouseOver(lastMouseX, lastMouseY)
+                && overBurnButton(lastMouseX, lastMouseY);
         burnHover.tick(hovered, GlassTheme.Motion.HOVER);
         burnPress.tickSpring(burnHeld, burnHeld ? GlassTheme.Motion.PRESS : GlassTheme.Motion.RELEASE);
         float lift = burnHover.eased();
@@ -555,18 +559,18 @@ public final class SongDetailView extends AbstractWidget {
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
         // 本控件铺满整块详情区域，不能直接把点击交给基类：那会让点空白处也响一下。
         // 只有真的点在按钮上才接受这次点击。
-        if (!isActive() || !event.isLeftMouse()) {
+        if (!isActive() || button == 0) {
             return false;
         }
-        if (overBurnButton(event.x(), event.y())) {
+        if (overBurnButton(mouseX, mouseY)) {
             burnHeld = true;
             playDownSound(Minecraft.getInstance().getSoundManager());
             return true;
         }
-        if (!overPlayButton(event.x(), event.y())) {
+        if (!overPlayButton(mouseX, mouseY)) {
             return false;
         }
         playHeld = true;
@@ -576,10 +580,10 @@ public final class SongDetailView extends AbstractWidget {
     }
 
     @Override
-    public boolean mouseReleased(MouseButtonEvent event) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (burnHeld) {
             burnHeld = false;
-            if (overBurnButton(event.x(), event.y())) {
+            if (overBurnButton(mouseX, mouseY)) {
                 page.burnThis();
             }
             return true;
@@ -588,13 +592,13 @@ public final class SongDetailView extends AbstractWidget {
             return false;
         }
         playHeld = false;
-        if (overPlayButton(event.x(), event.y())) {
+        if (overPlayButton(mouseX, mouseY)) {
             page.playThis();
         }
         return true;
     }
 
-    private void drawLyrics(GuiGraphicsExtractor graphics, Font font, int centerX, int top,
+    private void drawLyrics(GuiGraphics graphics, Font font, int centerX, int top,
                             float reveal) {
         if (reveal <= 0.01F) {
             return;
@@ -673,7 +677,7 @@ public final class SongDetailView extends AbstractWidget {
         return (alpha << 24) | (argb & 0xFFFFFF);
     }
 
-    private void drawCover(GuiGraphicsExtractor graphics, int x, int y, String url) {
+    private void drawCover(GuiGraphics graphics, int x, int y, String url) {
         if (coverFade.draw(graphics, url, x, y, x + COVER_SIZE, y + COVER_SIZE)) {
             return;
         }
