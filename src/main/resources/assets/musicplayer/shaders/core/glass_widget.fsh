@@ -1,7 +1,7 @@
 #version 330
 #extension GL_ARB_separate_shader_objects : require
 
-#include <minecraft:projection.glsl>
+#moj_import <minecraft:projection.glsl>
 
 layout(location = 0) in vec2 vPos;
 layout(location = 1) in vec2 vLocal;
