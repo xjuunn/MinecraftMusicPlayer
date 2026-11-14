@@ -73,7 +73,7 @@ public class GlassButton extends AbstractButton {
     }
 
     @Override
-    protected void extractContents(GuiGraphicsExtractor graphics) {
+    protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         boolean usable = isActive();
         hover.tick(isHoveredOrFocused() && usable, GlassTheme.Motion.HOVER);
         // 按下快、松开带回弹

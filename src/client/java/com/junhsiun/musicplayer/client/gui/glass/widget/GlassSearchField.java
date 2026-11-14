@@ -107,7 +107,7 @@ public class GlassSearchField extends EditBox {
     }
 
     @Override
-    public void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    public void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         boolean usable = isActive();
         hover.tick(isHoveredOrFocused() && usable, GlassTheme.Motion.HOVER);
         float lift = hover.eased();
@@ -139,7 +139,7 @@ public class GlassSearchField extends EditBox {
         // 文字垂直居中：EditBox 关掉边框后文字画在 getY()，把画笔整体下移即可
         graphics.pose().pushMatrix();
         graphics.pose().translate(0, Math.round((height - 8) / 2.0F));
-        super.extractWidgetRenderState(graphics);
+        super.extractWidgetRenderState(graphics, mouseX, mouseY, partialTick);
         graphics.pose().popMatrix();
     }
 }

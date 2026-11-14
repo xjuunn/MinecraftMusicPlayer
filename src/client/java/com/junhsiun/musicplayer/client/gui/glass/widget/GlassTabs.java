@@ -141,7 +141,7 @@ public class GlassTabs extends AbstractWidget {
     // ── 绘制 ────────────────────────────────────────────────────────────
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
+    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         if (count() == 0 || width <= 0 || height <= 0) {
             return;
         }
@@ -163,8 +163,8 @@ public class GlassTabs extends AbstractWidget {
 
         // 悬停段
         int hoveredIndex = -1;
-        if (usable && pressed < 0 && isMouseOver(graphics.mouseX(), graphics.mouseY())) {
-            hoveredIndex = indexAt(graphics.mouseX());
+        if (usable && pressed < 0 && isMouseOver(mouseX, mouseY)) {
+            hoveredIndex = indexAt(mouseX);
         }
         hovered = hoveredIndex;
         updateHover(hoveredIndex);

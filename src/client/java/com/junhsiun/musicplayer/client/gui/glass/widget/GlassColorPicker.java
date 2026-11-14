@@ -102,8 +102,8 @@ public final class GlassColorPicker extends AbstractWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics) {
-        hoveredIndex = indexAt(graphics.mouseX(), graphics.mouseY());
+    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        hoveredIndex = indexAt(mouseX, mouseY);
         hover.tick(hoveredIndex >= 0, 0.09F);
         float lift = hover.eased();
 

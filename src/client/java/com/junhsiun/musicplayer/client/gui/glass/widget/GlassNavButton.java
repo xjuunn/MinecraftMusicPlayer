@@ -72,7 +72,7 @@ public class GlassNavButton extends AbstractButton {
     }
 
     @Override
-    protected void extractContents(GuiGraphicsExtractor graphics) {
+    protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         boolean usable = isActive();
         hover.tick((isHovered() || isFocused()) && usable, GlassTheme.Motion.HOVER);
         press.tickSpring(held && usable, held ? GlassTheme.Motion.PRESS : GlassTheme.Motion.RELEASE);

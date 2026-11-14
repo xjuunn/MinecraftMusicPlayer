@@ -411,11 +411,11 @@ public final class MusicBrowserScreen extends GlassWindowScreen implements Brows
      * 盖住页面内容与行尾按钮；也不能在页面内部画，否则会被列表的 scissor 裁掉。</p>
      */
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         // 先锁住本帧时间：页面控件与最上层 overlay 必须用同一个时间点判断「还在不在飞」，
         // 否则两者对动画结束的判断可能相差一毫秒，出现封面谁也不画的一帧（就是那下闪）。
         hero.beginFrame();
-        super.extractRenderState(graphics);
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         if (hero.isActive()) {
             // 页面控件各自套 scissor；万一某一帧有控件在中途返回留下裁剪区，
             // 最上层的共享元素也会被裁掉。画之前先清一次，保证它总是完整可见。
@@ -644,7 +644,7 @@ public final class MusicBrowserScreen extends GlassWindowScreen implements Brows
             return;
         }
         boolean show = top() instanceof DetailPage page && page.kind() == MediaKind.PLAYLIST;
-        favoriteButton.setVisible(show);
+        favoriteButton.visible = show;
         if (!show) {
             return;
         }

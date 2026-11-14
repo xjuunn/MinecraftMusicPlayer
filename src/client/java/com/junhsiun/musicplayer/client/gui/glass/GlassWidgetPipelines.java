@@ -1,7 +1,7 @@
 package com.junhsiun.musicplayer.client.gui.glass;
 
 import com.junhsiun.musicplayer.MusicPlayerMod;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.renderpearl.api.pipeline.BlendFunction;

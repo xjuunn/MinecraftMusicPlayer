@@ -3,7 +3,6 @@ package com.junhsiun.musicplayer.service;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper;
 import com.junhsiun.musicplayer.disc.MusicDiscHelper.DiscTrackData;
-import com.junhsiun.musicplayer.mixin.JukeboxBlockEntityInvoker;
 import com.junhsiun.musicplayer.model.TrackInfo;
 import com.junhsiun.musicplayer.network.JukeboxMusicPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -116,23 +115,13 @@ public final class JukeboxPlaybackService {
         if (active == null) {
             return;
         }
-        if (!JukeboxBlockEntity.isInPlaylistMode(level, active.pos())) {
-            // 非歌单模式：这张唱片就播这一首，播完应当收尾停止。
-            // 如果只是 return，activeJukeboxes 里会一直留着这个条目，
-            // isPlayerListening 恒为 true，服务端就会每 tick 把最后一句歌词
-            // 重新发到 action bar 上，导致歌词永远不消失。
-            MusicPlayerMod.LOGGER.info("Custom jukebox track finished at {}: trackId={}", active.pos(), trackId);
-            activeJukeboxes.remove(active.key());
-            stopPlayback(level.getServer(), active);
-            return;
-        }
-        BlockEntity blockEntity = level.getBlockEntity(active.pos());
-        if (!(blockEntity instanceof JukeboxBlockEntity jukebox)
-                || !MusicDiscHelper.isMusicPlayerDisc(jukebox.getTheItem())) {
-            return;
-        }
+        // 26.3 的原版唱片机没有播放列表模式：这张唱片播完就收尾停止。
+        // 如果只是 return，activeJukeboxes 里会一直留着这个条目，
+        // isPlayerListening 恒为 true，服务端就会每 tick 把最后一句歌词
+        // 重新发到 action bar 上，导致歌词永远不消失。
         MusicPlayerMod.LOGGER.info("Custom jukebox track finished at {}: trackId={}", active.pos(), trackId);
-        ((JukeboxBlockEntityInvoker) jukebox).musicplayer$tryToAdvancePlaylist(true);
+        activeJukeboxes.remove(active.key());
+        stopPlayback(level.getServer(), active);
     }
 
     public void tick(MinecraftServer server) {

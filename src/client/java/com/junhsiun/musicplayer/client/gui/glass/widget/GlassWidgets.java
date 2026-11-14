@@ -5,7 +5,7 @@ import com.junhsiun.musicplayer.client.gui.glass.GlassPanel;
 import com.junhsiun.musicplayer.client.gui.glass.GlassStyle;
 import com.junhsiun.musicplayer.client.gui.glass.GlassWidgetPipelines;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
