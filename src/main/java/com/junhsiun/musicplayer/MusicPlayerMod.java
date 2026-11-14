@@ -89,17 +89,10 @@ public final class MusicPlayerMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(DiscMasterBurnResultPayload.TYPE, DiscMasterBurnResultPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(DiscMasterBurnPayload.TYPE, DiscMasterBurnPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(MusicControlPayload.TYPE, MusicControlPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(JukeboxMusicPayload.TYPE, JukeboxMusicPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(OpenUrlPayload.TYPE, OpenUrlPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(BgmConfigPayload.TYPE, BgmConfigPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(DiscMasterBurnResultPayload.TYPE, DiscMasterBurnResultPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MusicUiStatePayload.TYPE, MusicUiStatePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MusicRecentPayload.TYPE, MusicRecentPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MusicQueuePayload.TYPE, MusicQueuePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MusicConfigSnapshotPayload.TYPE, MusicConfigSnapshotPayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(MusicPlaybackReportPayload.TYPE, MusicPlaybackReportPayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(DiscMasterBurnPayload.TYPE, DiscMasterBurnPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(MusicUiRequestPayload.TYPE, MusicUiRequestPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(MusicConfigUpdatePayload.TYPE, MusicConfigUpdatePayload.CODEC);
 
