@@ -273,7 +273,11 @@ public final class GlassBackdrop {
             pass.setPipeline(GlassPipelines.blur(spread, vertical));
             pass.bindTexture("Sampler0", source, linear);
             pass.setVertexBuffer(0, quadBuffer);
-            pass.draw(6, 1);
+            // 26.1 的 draw(firstVertex, vertexCount) 直接映射到 glDrawArrays(mode, first, count)。
+            // 写成 draw(6, 1) 会变成"从第 6 个顶点起画 1 个顶点"，等于什么都没画，
+            // 8 张离屏贴图全部保持未初始化（全 0），玻璃采样出来就是纯黑。
+            // 对照原版 PostPass：全屏三角形用的是 draw(0, 3)。
+            pass.draw(0, 6);
         } finally {
             pass.close();
         }

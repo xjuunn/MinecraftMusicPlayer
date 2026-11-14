@@ -152,7 +152,8 @@ public final class IdleRenderer {
                 downsample.setPipeline(GlassPipelines.blur(0.0F, false));
                 downsample.bindTexture("Sampler0", main.getColorTextureView(), linear);
                 downsample.setVertexBuffer(0, quadBuffer);
-                downsample.draw(6, 1);
+                // 26.1 的 draw(firstVertex, vertexCount)，必须与 glDrawArrays 的参数一致
+                downsample.draw(0, 6);
             } finally {
                 downsample.close();
             }
@@ -174,7 +175,8 @@ public final class IdleRenderer {
                 }
                 pass.setUniform("IdleParams", paramSlice);
                 pass.setVertexBuffer(0, quadBuffer);
-                pass.draw(6, 1);
+                // 同上：draw(firstVertex, vertexCount)
+                pass.draw(0, 6);
             } finally {
                 pass.close();
             }
