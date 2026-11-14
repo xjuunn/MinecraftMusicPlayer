@@ -1,7 +1,7 @@
 #version 330
 #extension GL_ARB_separate_shader_objects : require
 
-#include <minecraft:projection.glsl>
+#moj_import <minecraft:projection.glsl>
 
 #ifndef GLASS_SHADOW
 uniform sampler2D Sampler0; // 模糊度为 0 时是原图（1:1），否则是清透层（1/2）
@@ -81,14 +81,14 @@ struct Tuning {
 Tuning unpackTuning(vec4 c) {
     // 必须用 uint 运算：最高位在有符号 int 下是符号位，右移会补符号位、取位域就错了。
     uvec4 bytes = uvec4(round(clamp(c, 0.0, 1.0) * 255.0));
-    uint packed = bytes.x | (bytes.y << 8u) | (bytes.z << 16u) | (bytes.w << 24u);
+    uint bits = bytes.x | (bytes.y << 8u) | (bytes.z << 16u) | (bytes.w << 24u);
     Tuning t;
-    t.refraction = float(packed & 63u);
-    t.aDist      = float((packed >> 6u) & 63u);
-    t.contra     = float((packed >> 12u) & 31u) / 31.0 * 2.0;
-    t.shrink     = float((packed >> 17u) & 31u) / 31.0 * 24.0;
-    t.dispersion = float((packed >> 22u) & 31u) / 31.0;
-    t.centerDisp = float((packed >> 27u) & 31u);
+    t.refraction = float(bits & 63u);
+    t.aDist      = float((bits >> 6u) & 63u);
+    t.contra     = float((bits >> 12u) & 31u) / 31.0 * 2.0;
+    t.shrink     = float((bits >> 17u) & 31u) / 31.0 * 24.0;
+    t.dispersion = float((bits >> 22u) & 31u) / 31.0;
+    t.centerDisp = float((bits >> 27u) & 31u);
     return t;
 }
 
