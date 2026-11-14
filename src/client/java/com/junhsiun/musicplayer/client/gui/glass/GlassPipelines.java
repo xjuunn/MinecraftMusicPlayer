@@ -82,6 +82,20 @@ public final class GlassPipelines {
                     .withShaderDefine("GLASS_WINDOW_TINT_R", tintColor[0])
                     .withShaderDefine("GLASS_WINDOW_TINT_G", tintColor[1])
                     .withShaderDefine("GLASS_WINDOW_TINT_B", tintColor[2]);
+            // 三张背景层必须在这里声明。GlProgram.setupUniforms 只给管线声明过的 sampler
+            // 建立名字→纹理单元的映射，未声明的 sampler 在 draw 时找不到对应 Uniform，
+            // 纹理单元永远不会被真正绑定，texture() 恒读到 0（背景就是纯黑）。
+            //
+            // 只声明该模糊档位真正采样的那几张：GLASS_BLUR_LEVEL 是编译期常量，着色器里
+            // 多余的 sampler 会被整段折掉，声明了反而触发 "does not use sampler" 告警。
+            int level = blurLevel(look.quantizedBlur());
+            builder.withSampler("Sampler0");
+            if (level >= 1) {
+                builder.withSampler("Sampler1");
+            }
+            if (level >= 2) {
+                builder.withSampler("Sampler2");
+            }
             return builder.build();
         });
     }
