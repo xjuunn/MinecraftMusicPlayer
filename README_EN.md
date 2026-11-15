@@ -1,9 +1,5 @@
 # Minecraft Music Player
 
-<p align="center">
-  <img src="src/main/resources/assets/musicplayer/icon.png" width="128" alt="Minecraft Music Player icon">
-</p>
-
 [![中文](https://img.shields.io/badge/README-中文-blue)](README.md) [![English](https://img.shields.io/badge/README-English-orange)](README_EN.md)
 
 Minecraft Music Player is a Fabric mod for both the server and the client: browse and request NetEase Cloud Music in game, with playlists and podcasts, real-time lyrics, network background music, burnable music discs, and jukebox playback.
@@ -11,6 +7,26 @@ Minecraft Music Player is a Fabric mod for both the server and the client: brows
 The server handles commands, queues, configuration, and synchronization. The client handles audio playback and the UI. Install the mod on the server and on every client that needs to hear music.
 
 [Demo](https://www.youtube.com/watch?v=4kOa9Ak62Bk)
+
+## Screenshots
+
+![Playlist detail](assets/screenshots/01-playlist-detail.png)
+
+![Now playing with lyrics](assets/screenshots/02-now-playing-lyrics.png)
+
+![Settings: client and idle immersive](assets/screenshots/03-settings.png)
+
+![Idle immersive mode](assets/screenshots/04-idle-immersive.png)
+
+![Command output: playlist](assets/screenshots/05-command-playlist.png)
+
+![Command output: artist](assets/screenshots/06-command-artist.png)
+
+![Crafting the music disc master](assets/screenshots/07-record-master-crafting.png)
+
+![Search results](assets/screenshots/08-search-results.png)
+
+![Jukebox cover art](assets/screenshots/09-jukebox-cover.png)
 
 ## Features
 
