@@ -1,9 +1,5 @@
 # Minecraft Music Player
 
-<p align="center">
-  <img src="src/main/resources/assets/musicplayer/icon.png" width="128" alt="Minecraft Music Player 图标">
-</p>
-
 [![中文](https://img.shields.io/badge/README-中文-blue)](README.md) [![English](https://img.shields.io/badge/README-English-orange)](README_EN.md)
 
 Minecraft Music Player 是一个 Fabric 双端音乐模组：在游戏内浏览、点播网易云音乐，支持歌单与播客、实时歌词、网络背景音乐、可刻录的音乐唱片和唱片机播放。
@@ -11,6 +7,26 @@ Minecraft Music Player 是一个 Fabric 双端音乐模组：在游戏内浏览�
 服务端负责命令、队列、配置与同步，客户端负责音频播放与界面。服务端和需要听歌的客户端都需要安装本模组。
 
 [演示视频](https://www.youtube.com/watch?v=4kOa9Ak62Bk)
+
+## 截图
+
+![歌单详情](assets/screenshots/01-playlist-detail.png)
+
+![正在播放与实时歌词](assets/screenshots/02-now-playing-lyrics.png)
+
+![设置：客户端与挂机纯享](assets/screenshots/03-settings.png)
+
+![挂机纯享模式](assets/screenshots/04-idle-immersive.png)
+
+![命令输出：歌单](assets/screenshots/05-command-playlist.png)
+
+![命令输出：歌手](assets/screenshots/06-command-artist.png)
+
+![唱片母版合成](assets/screenshots/07-record-master-crafting.png)
+
+![搜索结果](assets/screenshots/08-search-results.png)
+
+![唱片机封面](assets/screenshots/09-jukebox-cover.png)
 
 ## 功能
 
