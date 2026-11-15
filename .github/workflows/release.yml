@@ -46,19 +46,34 @@ jobs:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           set -euo pipefail
+          MC=$(sed -n 's/^minecraft_version=//p' gradle.properties | head -n1 | tr -d '[:space:]')
           if [ "$EVENT" = "push" ]; then
             TAG="$REF_NAME"
             BASE="${TAG#v}"
             SUFFIX=""
-            case "$BASE" in
-              *-[0-9]*)
-                CAND="${BASE##*-}"
-                if echo "$CAND" | grep -Eq '^[0-9]+(\.[0-9]+)*$'; then
-                  SUFFIX="$CAND"
-                  BASE="${BASE%-*}"
-                fi
-                ;;
-            esac
+            # 版本分支的 tag 形如 v2.3.0-26.4-snapshot-5，后缀是完整的 Minecraft 版本，
+            # 可能自带连字符（26.4-snapshot-5），不能只取最后一段数字。
+            if [ -n "$MC" ]; then
+              case "$BASE" in
+                *-"$MC")
+                  SUFFIX="$MC"
+                  BASE="${BASE%-"$MC"}"
+                  ;;
+              esac
+            fi
+            # 兜底：后缀与当前提交的 Minecraft 版本不符时仍按旧规则切出后缀，
+            # 交给下一步校验报错，而不是把它当成版本号的一部分。
+            if [ -z "$SUFFIX" ]; then
+              case "$BASE" in
+                *-[0-9]*)
+                  CAND="${BASE##*-}"
+                  if echo "$CAND" | grep -Eq '^[0-9]+(\.[0-9]+)*$'; then
+                    SUFFIX="$CAND"
+                    BASE="${BASE%-*}"
+                  fi
+                  ;;
+              esac
+            fi
           else
             VERSION="${INPUT_VERSION#v}"
             if [ -z "$VERSION" ]; then
@@ -90,12 +105,13 @@ jobs:
         if: ${{ steps.meta.outputs.event == 'push' && steps.meta.outputs.suffix != '' }}
         shell: bash
         env:
+          TAG: ${{ steps.meta.outputs.tag }}
           SUFFIX: ${{ steps.meta.outputs.suffix }}
         run: |
           set -euo pipefail
-          MC=$(sed -n 's/^minecraft_version=//p' gradle.properties | head -n1 | tr -d ' ')
+          MC=$(sed -n 's/^minecraft_version=//p' gradle.properties | head -n1 | tr -d '[:space:]')
           if [ "$MC" != "$SUFFIX" ]; then
-            echo "::error::tag 后缀 -$SUFFIX 与所标记提交的 Minecraft 版本 ($MC) 不一致，请确认在正确分支上打 tag"
+            echo "::error::tag $TAG 的后缀 (-$SUFFIX) 与所标记提交的 Minecraft 版本 ($MC) 不一致，请确认在正确分支上打 tag"
             exit 1
           fi
 
