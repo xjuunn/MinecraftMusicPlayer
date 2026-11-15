@@ -222,7 +222,11 @@ public final class GlassWidgets {
             }
             VertexBuffer.unbind();
         }
-        RenderSystem.disableBlend();
+        // 见 GlassPanel#drawGlassQuad：1.20.1 的 BlendMode 会缓存「是否非 opaque」，
+        // 这里关掉混合而不改写缓存，后续原版绘制会因为状态未变而跳过 enableBlend，
+        // 半透明内容全变成不透明色块。所以结束时要把混合还原成开着的样子。
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
     }
 
     /** 把圆角填充参数写进 {@code glass_widget} 着色器的 uniforms。 */

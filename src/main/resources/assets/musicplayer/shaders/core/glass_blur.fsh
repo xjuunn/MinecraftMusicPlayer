@@ -3,6 +3,11 @@
 
 uniform sampler2D Sampler0;
 
+// x = 高斯扩散（texel），y = 1.0 表示纵向模糊。
+// 26.x 用 GLASS_BLUR_VERTICAL / GLASS_BLUR_SPREAD 两个 define 拆成两份管线，
+// 1.20.1 单管线只能走运行时分支，由 Java 侧每次 draw 前写入。
+uniform vec2 SpreadVertical;
+
 layout(location = 0) in vec2 vUv;
 
 layout(location = 0) out vec4 fragColor;
@@ -18,11 +23,9 @@ void main() {
     vec2 texel = 1.0 / vec2(textureSize(Sampler0, 0));
 
     // spread = 0 时五次采样重合，权重和为 1，等价于一次双线性降采样
-#ifdef GLASS_BLUR_VERTICAL
-    vec2 dir = vec2(0.0, texel.y) * GLASS_BLUR_SPREAD;
-#else
-    vec2 dir = vec2(texel.x, 0.0) * GLASS_BLUR_SPREAD;
-#endif
+    vec2 dir = SpreadVertical.y > 0.5
+            ? vec2(0.0, texel.y) * SpreadVertical.x
+            : vec2(texel.x, 0.0) * SpreadVertical.x;
 
     vec3 color = texture(Sampler0, vUv).rgb * WEIGHT_CENTER;
     color += texture(Sampler0, vUv + dir * OFFSET_NEAR).rgb * WEIGHT_NEAR;

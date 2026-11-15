@@ -1,13 +1,14 @@
 #version 330
 #extension GL_ARB_separate_shader_objects : require
 
-#moj_import <minecraft:projection.glsl>
+// 1.20.1 没有 dynamictransforms.glsl，这两个矩阵由原版作为全局 uniform 提供，
+// 在本版本必须自行声明（1.21.1 起才有对应的 include 可用）。
+uniform mat4 ModelViewMat;
+uniform mat4 ProjMat;
 
-#ifndef GLASS_SHADOW
-uniform sampler2D Sampler0; // 模糊度为 0 时是原图（1:1），否则是清透层（1/2）
+uniform sampler2D Sampler0; // 裸背景：GlassBlur 为 0 时是原图（1:1），否则是清透层（1/2）
 uniform sampler2D Sampler1; // 磨砂层（1/4 分辨率）
 uniform sampler2D Sampler2; // 重度层（1/8 分辨率）
-#endif
 
 layout(location = 0) in vec2 vPos;
 layout(location = 1) in vec2 vLocal;
@@ -15,29 +16,29 @@ layout(location = 2) in vec4 vTuning;
 
 layout(location = 0) out vec4 fragColor;
 
-// ── 编译期常量：由 RenderPipeline 的 shader define 注入，一种材质一份管线 ──
-const float RADIUS = float(GLASS_RADIUS);
+// 材质参数全部是运行时 uniform：Java 侧每帧通过 safeGetUniform 写入。
+// 26.x 用 shader define 在构造期注入，1.20.1 的 ShaderInstance 走 uniform，两者不能混用。
+uniform float GlassRadius;
+uniform vec4 GlassTint;
+uniform float GlassMaxLuma;
+uniform float GlassSaturation;
+uniform float GlassHighlight;
+uniform float GlassEdgeLight;
+uniform float GlassOpacity;
+uniform float GlassBlur;
+uniform float GlassWindowTint;
+uniform vec3 GlassWindowTintColor;
+uniform float GlassBackdropOnly;
 
-#ifndef GLASS_SHADOW
-const vec4 TINT = vec4(GLASS_TINT_R, GLASS_TINT_G, GLASS_TINT_B, GLASS_TINT_A);
-const float MAX_LUMA = GLASS_MAX_LUMA;
-const float SATURATION = GLASS_SATURATION;
-const float HIGHLIGHT = GLASS_HIGHLIGHT;
-const float OPACITY = GLASS_OPACITY;
-const float BLUR = GLASS_BLUR;
-const float EDGE_LIGHT = GLASS_EDGE_LIGHT;
-const float WINDOW_TINT = GLASS_WINDOW_TINT;
-const vec3 WINDOW_TINT_COLOR = vec3(GLASS_WINDOW_TINT_R, GLASS_WINDOW_TINT_G, GLASS_WINDOW_TINT_B);
+uniform float GlassShadowMode;
+uniform float GlassShadowSize;
+uniform float GlassShadowAlpha;
+uniform vec2 GlassShadowOffset;
+uniform float GlassShadowPadding;
 
-// 边缘高光的高斯 σ（GUI 像素）。Apple 未公开具体值，按"贴着轮廓的一圈柔光"标定：
-// σ 太大就糊成一整片白，太小就退化成 1px 硬描边。3.0 在 1x 与 2x DPI 下都在合适区间。
+// 边缘高光的方差。高斯 sigma（GUI 像素）：Apple 未公开具体值，这里按“轮廓内一圈柔光”标定。
+// sigma 太大就糊成一圈白边，太小就退化成 1px 硬边。3.0 在 1x 与 2x DPI 下都在合理区间。
 const float EDGE_SIGMA = 3.0;
-#else
-const float SHADOW_SIZE = GLASS_SHADOW_SIZE;
-const float SHADOW_ALPHA = GLASS_SHADOW_ALPHA;
-const vec2 SHADOW_OFFSET = vec2(GLASS_SHADOW_OFFSET_X, GLASS_SHADOW_OFFSET_Y);
-const float SHADOW_PADDING = float(GLASS_SHADOW_PADDING);
-#endif
 
 const float PI = 3.14159265;
 
@@ -50,7 +51,6 @@ float luma(vec3 color) {
     return dot(color, vec3(0.2126, 0.7152, 0.0722));
 }
 
-#ifndef GLASS_SHADOW
 // ── 逐 draw 光学参数：32 位位域 ────────────────────────────────────
 // 界面渲染路径拿不到 RenderPass，无法绑定逐 draw uniform；顶点格式只有一路 color，
 // 即 4 个 RGBA8 通道共 32 位。
@@ -68,7 +68,7 @@ float luma(vec3 color) {
 // 5px 会被编码成 6px、6.4px 被编码成 6px；移除 b 位置后省出的位
 // 刚好把这两项提成 1px 步进。
 //
-// 边缘高光强度是材质级常量，直接走 shader define，不占位域。
+// 边缘高光强度是材质级 uniform，同样不占位域。
 struct Tuning {
     float refraction;
     float aDist;
@@ -95,32 +95,21 @@ Tuning unpackTuning(vec4 c) {
 // ── 原理一：背景透射与模糊 ────────────────────────────────────────
 // 直接在 UV 处取混合后的背景。
 //
-// 性能要点：色散要把同一段代码跑三遍（R/G/B 各一个采样点），如果每次都把
-// 三张贴图全采一遍就是 9 次采样。这里按 BLUR 的<b>编译期</b>取值做静态分支，
-// 每个档位只保留真正需要的采样：
-//   BLUR = 0        → 只采 Sampler0（原图，锐利）
-//   BLUR ≤ 0.5      → Sampler0 + Sampler1 两层
-//   BLUR >  0.5     → 三层全采
-// BLUR 是 shader define 注入的常量，GLSL 编译器会把整个分支折掉，
-// 所以这不是运行时分支，而是三份互斥的代码。
+// 1.20.1 只有一条管线，GlassBlur 是运行时 uniform，无法像 26.x 那样按
+// 编译期常量折掉分支，因此这里三层贴图一律采样、用连续 mix 过渡：
+//   GlassBlur = 0    → 只剩 Sampler0（原图，锐利）
+//   GlassBlur = 0.5  → Sampler0 与 Sampler1 各半
+//   GlassBlur = 1    → 三层全采，重度模糊
+// 这是 1.21.1 上的既有实现，1.20.1 与之保持一致。
 vec3 backdrop(vec2 uv) {
     uv = clamp(uv, vec2(0.001), vec2(0.999));
-#if GLASS_BLUR_LEVEL == 0
-    return texture(Sampler0, uv).rgb;
-#elif GLASS_BLUR_LEVEL == 1
-    vec3 soft = texture(Sampler0, uv).rgb;
-    vec3 frost = texture(Sampler1, uv).rgb;
-    return mix(soft, frost, clamp(BLUR * 2.0, 0.0, 1.0));
-#else
     vec3 soft = texture(Sampler0, uv).rgb;
     vec3 frost = texture(Sampler1, uv).rgb;
     vec3 heavy = texture(Sampler2, uv).rgb;
-    // 三层连续混合：BLUR = 0 时只剩纯降采样，1 时是重度模糊
-    vec3 mid = mix(soft, frost, clamp(BLUR * 2.0, 0.0, 1.0));
-    return mix(mid, heavy, clamp(BLUR * 2.0 - 1.0, 0.0, 1.0));
-#endif
+    // 三层连续混合：GlassBlur = 0 时只剩纯降采样，1 时是重度模糊
+    vec3 mid = mix(soft, frost, clamp(GlassBlur * 2.0, 0.0, 1.0));
+    return mix(mid, heavy, clamp(GlassBlur * 2.0 - 1.0, 0.0, 1.0));
 }
-#endif
 
 // ── 圆角矩形的解析梯度 ────────────────────────────────────────────
 // 早期用 4 次额外 SDF 求差分法线，这里改成解析解，省掉 4 次 SDF 求值。
@@ -156,33 +145,45 @@ void main() {
     vec2 halfSize = size * 0.5;
     vec2 p = (vLocal - 0.5) * size;
 
+    // GUI 尺寸从 ProjMat 反推（正交投影）
     vec2 guiSize = vec2(2.0 / ProjMat[0][0], -2.0 / ProjMat[1][1]);
     if (guiSize.x < 1.0 || guiSize.y < 1.0) {
         guiSize = vec2(1920.0, 1080.0);
     }
 
+    // 投影开关走 uniform：1.20.1 单管线无法像 26.x 那样拆成两份编译期变体
+    bool shadowMode = GlassShadowMode > 0.5;
+
     // 面板自身的 SDF 与覆盖度：玻璃和投影共用，保证两者边界严格互补。
-    vec2 panelHalf = halfSize;
-#ifdef GLASS_SHADOW
-    panelHalf = max(halfSize - vec2(SHADOW_PADDING), vec2(0.5));
-#endif
-    float radius = min(RADIUS, min(panelHalf.x, panelHalf.y));
+    vec2 panelHalf = shadowMode
+            ? max(halfSize - vec2(GlassShadowPadding), vec2(0.5))
+            : halfSize;
+    float radius = min(GlassRadius, min(panelHalf.x, panelHalf.y));
     float d = sdRoundBox(p, panelHalf, radius);
     float aa = max(fwidth(d), 1e-4);
     float mask = 1.0 - smoothstep(-aa, 0.0, d);
 
-#ifdef GLASS_SHADOW
-    // 投影轮廓取面板矩形，按偏移平移后做柔和衰减。
-    // 再乘 (1 - mask) 抹掉面板自身覆盖的区域：26.x 的界面元素是按管线排序后合批绘制的，
-    // 投影和玻璃面板谁先画并不由提交顺序决定，一旦投影排在后面就会整块压暗玻璃。
-    vec2 shadowLocal = p - SHADOW_OFFSET;
-    float shadowDistance = sdRoundBox(shadowLocal, panelHalf, radius);
-    float shadowAlpha = (1.0 - smoothstep(0.0, SHADOW_SIZE, shadowDistance)) * SHADOW_ALPHA;
-    fragColor = vec4(0.0, 0.0, 0.0, clamp(shadowAlpha, 0.0, 1.0) * (1.0 - mask));
-    return;
-#else
+    if (shadowMode) {
+        // 投影轮廓取面板矩形，按偏移平移后做柔和衰减。
+        // 再乘 (1 - mask) 抹掉面板自身覆盖的区域：界面元素是按提交顺序绘制的，
+        // 投影和玻璃面板谁先画并不固定，一旦投影排在后面就会整块压暗玻璃。
+        vec2 shadowLocal = p - GlassShadowOffset;
+        float shadowDistance = sdRoundBox(shadowLocal, panelHalf, radius);
+        float shadowAlpha = (1.0 - smoothstep(0.0, GlassShadowSize, shadowDistance)) * GlassShadowAlpha;
+        fragColor = vec4(0.0, 0.0, 0.0, clamp(shadowAlpha, 0.0, 1.0) * (1.0 - mask));
+        return;
+    }
+
     if (mask <= 0.0) {
         discard;
+    }
+
+    // 只铺模糊背景（垫在控件下面那一层）：不透明、不做边缘高光与柔光。
+    // 玻璃只是调色层，输出的 alpha 由材质决定；按钮、开关这类半透明控件
+    // 在任意画面上都能读，靠的就是底下这层不透明背景兜底。
+    if (GlassBackdropOnly > 0.5) {
+        fragColor = vec4(backdrop(vec2(vPos.x / guiSize.x, 1.0 - vPos.y / guiSize.y)), 1.0);
+        return;
     }
 
     Tuning tuning = unpackTuning(vTuning);
@@ -325,13 +326,13 @@ void main() {
     // ── 原理一（续）：vibrancy 与亮度调整 ──────────────────────────
     // 饱和度提升 + 亮度封顶：保证雪地 / 天空前面文字依旧可读。
     // 封顶时只压缩亮度、保留原有彩度，否则室外画面会整体发灰。
-    color = max(mix(vec3(luma(color)), color, SATURATION), 0.0);
+    color = max(mix(vec3(luma(color)), color, GlassSaturation), 0.0);
     float brightness = luma(color);
-    if (brightness > MAX_LUMA) {
-        color = max(vec3(MAX_LUMA) + (color - vec3(brightness)), 0.0);
+    if (brightness > GlassMaxLuma) {
+        color = max(vec3(GlassMaxLuma) + (color - vec3(brightness)), 0.0);
     }
     // C_out = α·C_glass + (1−α)·C_blur
-    color = mix(color, TINT.rgb, TINT.a);
+    color = mix(color, GlassTint.rgb, GlassTint.a);
 
     // ── 原理二：边缘高光与轮廓 ─────────────────────────────────────
     // H(p) = e^(−d²/2σ²)，d 是到轮廓的距离。
@@ -342,19 +343,18 @@ void main() {
     // 法线 y 分量在 GUI 里向下为正，取负得到"朝上"的权重
     float upward = clamp(-normal.y, 0.0, 1.0);
     float directional = 0.35 + 0.65 * upward;
-    color += vec3(edgeH * directional * EDGE_LIGHT);
+    color += vec3(edgeH * directional * GlassEdgeLight);
 
     // 顶部柔光：整块面板自上而下的极淡渐变
     float fy = (p.y + halfSize.y) / max(size.y, 1.0);
-    color += vec3(0.035 * (1.0 - fy) * HIGHLIGHT);
+    color += vec3(0.035 * (1.0 - fy) * GlassHighlight);
 
     // ── 把所在的窗口当作背景（子控件用）──────────────────────────────
     // 按钮、滑块、开关在视觉上都位于窗口玻璃之内，它们折射的应该是
     // "世界背景 + 窗口那层浅色叠加"，而不是裸的世界画面。
     // 合成位置必须和窗口真实的绘制顺序一致：窗口的叠加层是在玻璃全部处理完之后
     // 才盖上去的，所以这里也放在最后做同样的 alpha 混合。
-    color = mix(color, WINDOW_TINT_COLOR, WINDOW_TINT);
+    color = mix(color, GlassWindowTintColor, GlassWindowTint);
 
-    fragColor = vec4(clamp(color, 0.0, 1.0), mask * OPACITY);
-#endif
+    fragColor = vec4(clamp(color, 0.0, 1.0), mask * GlassOpacity);
 }

@@ -3,17 +3,16 @@ package com.junhsiun.musicplayer.client.gui.glass;
 import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.client.gui.glass.theme.GlassTheme;
 import com.junhsiun.musicplayer.client.gui.glass.widget.GlassWidgets;
-import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.ShaderInstance;
 import org.joml.Matrix4f;
+import org.lwjgl.opengl.GL11;
 
 import com.mojang.blaze3d.vertex.VertexFormat.Mode;
 
@@ -114,16 +113,45 @@ public final class GlassPanel {
         }
     }
 
+
     /**
-     * 在界面绘制之前由 {@code GameRendererMixin} 调用：此时主渲染目标里是
-     * 本帧已经画好的世界、且界面尚未绘制，正是抓取背景的唯一正确时机。
+     * 界面绘制之前由 {@code GameRendererMixin} 调用：此时主渲染目标里是本帧已经画好的
+     * 世界、且界面尚未绘制，正是抓取玻璃背景的唯一正确时机。
      */
     public static void beforeGui() {
+        // 只有本帧确实要画玻璃的界面才需要抓；纯享模式、普通界面都不碰这里
         if (!requested) {
             return;
         }
         requested = false;
         GlassBackdrop.getInstance().captureFrame();
+    }
+
+    /** 释放玻璃背景的离屏资源（退世界 / 关客户端）。 */
+    public static void resetScene() {
+        GlassBackdrop.getInstance().reset();
+    }
+
+    /**
+     * 把模糊背景铺在整块面板下面（不画玻璃本身，也不投影）。
+     *
+     * <p>玻璃只是调色层：{@code glass.fsh} 输出的 alpha 由材质决定，按钮、开关这类
+     * 半透明控件在任意画面上都清楚可读，靠的就是底下先垫一层不透明的模糊背景。
+     * 窗口本身不垫（它自己已经够浑厚），窗口内的子控件靠这层定住对比度。</p>
+     *
+     * @return 是否真的铺了
+     */
+    public static boolean drawBackdrop(GuiGraphics graphics, int x0, int y0, int x1, int y1,
+                                       GlassStyle style) {
+        if (x1 <= x0 || y1 <= y0) {
+            return false;
+        }
+        GlassBackdrop backdrop = GlassBackdrop.getInstance();
+        if (unavailable || !prepared || backdrop.hasFailed() || !backdrop.isReady()) {
+            return false;
+        }
+        drawBackdropQuad(graphics, x0, y0, x1, y1);
+        return true;
     }
 
     /**
@@ -200,6 +228,17 @@ public final class GlassPanel {
      */
     private static void drawQuad(GuiGraphics graphics, int x0, int y0, int x1, int y1,
                                  boolean shadow, GlassStyle style, int color) {
+        drawGlassQuad(graphics, x0, y0, x1, y1, shadow, style, color, false);
+    }
+
+    /** 铺一块不透明的模糊背景：完整走一遍玻璃着色器，只跳过边缘高光与顶部柔光。 */
+    private static void drawBackdropQuad(GuiGraphics graphics, int x0, int y0, int x1, int y1) {
+        drawGlassQuad(graphics, x0, y0, x1, y1, false, GlassTheme.BADGE, 0, true);
+    }
+
+    private static void drawGlassQuad(GuiGraphics graphics, int x0, int y0, int x1, int y1,
+                                      boolean shadow, GlassStyle style, int color,
+                                      boolean backdropOnly) {
         ShaderInstance shader = GlassPipelines.glass();
         if (shader == null) {
             return;
@@ -212,17 +251,26 @@ public final class GlassPanel {
 
         // 材质常量 → uniforms（26.x 用 shader define，这里逐帧写入，成本可忽略）
         setStyleUniforms(shader, style, useLook);
-        shader.safeGetUniform("ShadowMode").set(shadow ? 1.0F : 0.0F);
+        shader.safeGetUniform("GlassBackdropOnly").set(backdropOnly ? 1.0F : 0.0F);
+        // 片元着色器里这个开关叫 GlassShadowMode；写 ShadowMode 会命中空 uniform，
+        // 投影就会被当成普通玻璃再画一遍
+        shader.safeGetUniform("GlassShadowMode").set(shadow ? 1.0F : 0.0F);
         shader.safeGetUniform("GuiSize").set(
                 (float) graphics.guiWidth(), (float) graphics.guiHeight());
 
-        // 三层背景贴图
-        shader.setSampler("Sampler0", shadow ? 0
+        // 三层背景贴图。
+        // 注意：`drawWithShader()` 内部会先按 `RenderSystem.getShaderTexture(i)` 重写
+        // Sampler0..11，因此必须写 `RenderSystem.setShaderTexture`；用 `shader.setSampler`
+        // 会在下一步被覆盖，采到纹理 0（黑）。
+        int saved0 = RenderSystem.getShaderTexture(0);
+        int saved1 = RenderSystem.getShaderTexture(1);
+        int saved2 = RenderSystem.getShaderTexture(2);
+        RenderSystem.setShaderTexture(0, shadow ? 0
                 : (useLook.quantizedBlur() <= 0.0F ? backdrop.sharpTextureId()
                 : backdrop.softTextureId()));
         if (!shadow) {
-            shader.setSampler("Sampler1", backdrop.frostTextureId());
-            shader.setSampler("Sampler2", backdrop.heavyTextureId());
+            RenderSystem.setShaderTexture(1, backdrop.frostTextureId());
+            RenderSystem.setShaderTexture(2, backdrop.heavyTextureId());
             shader.safeGetUniform("SamplerSizes").set(
                     backdrop.softWidth(), backdrop.softHeight(),
                     backdrop.frostWidth(), backdrop.frostHeight());
@@ -236,6 +284,15 @@ public final class GlassPanel {
         float right = x1;
         float bottom = y1;
 
+        // 深度测试必须是关的。glass.fsh 靠 `discard` 把圆角之外的片元丢掉，
+        // 而 discard 不看深度：一旦开了深度测试、它自己也不写深度，面板就只是一层
+        // 按颜色混合的半透明色块 —— 圆角会消失、半透明区域会把整个四边形染上色。
+        //
+        // 1.20.1 的 GuiGraphics.flush()（画完 vignette 之后）会把深度测试重新打开，
+        // 而 1.21.1 没有这个行为，所以这里必须自己按玻璃的语义设置，并在结束后还原，
+        // 免得污染后续 GUI 绘制。
+        boolean depthTestWasEnabled = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
+        RenderSystem.disableDepthTest();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(() -> shader);
@@ -255,7 +312,24 @@ public final class GlassPanel {
             }
             VertexBuffer.unbind();
         }
-        RenderSystem.disableBlend();
+        // shaderTextures 是全局状态，画完立刻还原，避免污染后续 GUI 绘制
+        RenderSystem.setShaderTexture(0, saved0);
+        RenderSystem.setShaderTexture(1, saved1);
+        RenderSystem.setShaderTexture(2, saved2);
+        if (depthTestWasEnabled) {
+            RenderSystem.enableDepthTest();
+        }
+        // 混合状态必须还原。
+        //
+        // 1.20.1 的 BlendMode.apply() 有两层提前返回：lastApplied 相同就直接 return，
+        // 且只有 opaque 标志发生变化时才去 enable/disable 混合。玻璃着色器的 blend 节点
+        // 与原版 GUI 用的完全相同（src_alpha / 1-src_alpha），于是它已把 lastApplied
+        // 记成「非 opaque」；这里若把混合关掉，后续原版绘制 apply() 会认为状态没变、
+        // 不再打开混合，文字与半透明填充全部变成不透明色块。
+        // 1.21.1 的 GuiGraphics 是立即渲染、逐 draw 设置状态，不存在这个缓存，所以必须
+        // 在本方法内归还一个「混合开着、且与 lastApplied 一致」的状态。
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
     }
 
     /** 把材质常量写进着色器 uniforms（每次 draw 前调用）。 */
@@ -272,7 +346,8 @@ public final class GlassPanel {
         shader.safeGetUniform("GlassBlur").set(useLook.quantizedBlur());
         shader.safeGetUniform("GlassWindowTint").set(useLook.quantizedWindowTint());
         float[] tint = GlassTheme.overlayColorRgb();
-        shader.safeGetUniform("GlassWindowTintColor").set(tint[0], tint[1], tint[2], 0.0F);
+        // 着色器里是 vec3，json 也声明 count=3；多传一个分量会写爆 Uniform 的 FloatBuffer
+        shader.safeGetUniform("GlassWindowTintColor").set(tint[0], tint[1], tint[2]);
         shader.safeGetUniform("GlassShadowMode").set(0.0F);
         shader.safeGetUniform("GlassShadowSize").set(shadow.size());
         shader.safeGetUniform("GlassShadowAlpha").set(shadow.alpha());

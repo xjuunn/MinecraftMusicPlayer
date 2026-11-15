@@ -1,8 +1,10 @@
 #version 330
 #extension GL_ARB_separate_shader_objects : require
 
-#moj_import <minecraft:dynamictransforms.glsl>
-#moj_import <minecraft:projection.glsl>
+// 1.20.1 没有 dynamictransforms.glsl，这两个矩阵由原版作为全局 uniform 提供，
+// 在本版本必须自行声明（1.21.1 起才有对应的 include 可用）。
+uniform mat4 ModelViewMat;
+uniform mat4 ProjMat;
 
 layout(location = 0) in vec3 Position;
 layout(location = 1) in vec2 UV0;

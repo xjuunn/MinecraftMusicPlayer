@@ -241,6 +241,21 @@ public abstract class GlassWindowScreen extends Screen {
     }
 
     /**
+     * 这个界面是不是「正在播关闭动画的液态玻璃窗口」。
+     *
+     * <p>关闭动画有两百多毫秒，这段时间 {@code minecraft.screen} 仍然非空，但画面上
+     * 窗口正在往屏幕外滑走、世界已经重新成为主体。如果纯享模式把这段也算成「界面打开」，
+     * 它会每帧硬切一次状态：等动画播完、预览刚激活，下一帧又被打掉，表现就是
+     * 「特效闪现 → 消失 → 又出现」。</p>
+     *
+     * <p>因此纯享状态机与渲染层都用它把这段窗口排除掉，让特效可以在窗口滑走的同时
+     * 正常淡入。</p>
+     */
+    public static boolean isDismissing(Screen screen) {
+        return screen instanceof GlassWindowScreen glass && glass.closing();
+    }
+
+    /**
      * 每帧推进关闭动画，播完后再真正退出界面。
      *
      * <p>放在 {@code tick} 而不是 {@code extractRenderState} 里：提取阶段只该做
@@ -302,7 +317,10 @@ public abstract class GlassWindowScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics graphics) {
-        // 背景交给液态玻璃自己抓取：这里画原版暗色遮罩会让玻璃采样到被压暗的画面
+        // 背景交给液态玻璃自己抓取：这里画原版暗色遮罩会让玻璃采样到被压暗的画面。
+        //
+        // 1.20.1 的 {@code Screen.render} 不调用本方法（只有子类显式调用时才画），
+        // 所以这个空实现是兜底：万一某个子类照搬了高版本写法，也不会把世界压暗。
     }
 
     @Override
@@ -326,6 +344,11 @@ public abstract class GlassWindowScreen extends Screen {
         GlassPanel.beginFrame(GlassTheme.ROW);
         GlassPanel.beginFrame(GlassTheme.BADGE);
         applyTransformToChildren(transform);
+
+        // 模糊背板只铺在窗口范围里：窗口外要保持清晰的世界，不需要任何额外处理
+        // ——1.20.1 的 {@code renderLevel} 每帧都把世界画进主目标，这里只是叠加上去。
+        GlassPanel.drawBackdrop(graphics,
+                animated.x0(), animated.y0(), animated.x1(), animated.y1(), window.style());
         boolean glassDrawn = GlassPanel.draw(graphics, animated.x0(), animated.y0(),
                 animated.x1(), animated.y1(), window.style());
         if (!glassDrawn) {

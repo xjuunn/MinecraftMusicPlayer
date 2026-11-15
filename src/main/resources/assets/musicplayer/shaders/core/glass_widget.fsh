@@ -1,19 +1,22 @@
 #version 330
 #extension GL_ARB_separate_shader_objects : require
 
-#moj_import <minecraft:projection.glsl>
+// 1.20.1 没有 dynamictransforms.glsl 的 projection.glsl 也不含 uniform 声明，
+// 原版把矩阵作为全局 uniform 提供；片元阶段只需要采样器与控件参数。
+uniform sampler2D Sampler0;
+
+// 控件填充参数：Java 侧每次 draw 前通过 safeGetUniform 写入。
+// 26.x 用 GLASS_WIDGET_* 编译期 define 注入，1.20.1 的 ShaderInstance 走 uniform。
+uniform vec4 WidgetFill;
+uniform vec4 WidgetBorder;
+uniform float WidgetRadius;
+uniform float WidgetGloss;
 
 layout(location = 0) in vec2 vPos;
 layout(location = 1) in vec2 vLocal;
 layout(location = 2) in vec4 vColor;
 
 layout(location = 0) out vec4 fragColor;
-
-const vec3 FILL = vec3(GLASS_WIDGET_FILL_R, GLASS_WIDGET_FILL_G, GLASS_WIDGET_FILL_B);
-const vec3 BORDER = vec3(GLASS_WIDGET_BORDER_R, GLASS_WIDGET_BORDER_G, GLASS_WIDGET_BORDER_B);
-const float RADIUS = float(GLASS_WIDGET_RADIUS);
-const float GLOSS = GLASS_WIDGET_GLOSS;
-const float BORDER_ALPHA = GLASS_WIDGET_BORDER_A;
 
 float sdRoundBox(vec2 p, vec2 b, float r) {
     vec2 q = abs(p) - b + r;
@@ -30,7 +33,7 @@ void main() {
 
     vec2 halfSize = size * 0.5;
     vec2 p = (vLocal - 0.5) * size;
-    float radius = min(RADIUS, min(halfSize.x, halfSize.y));
+    float radius = min(WidgetRadius, min(halfSize.x, halfSize.y));
 
     float dist = sdRoundBox(p, halfSize, radius);
     // 屏幕空间中 SDF 每前进一个像素的变化量：抗锯齿与描边宽度的唯一正确依据
@@ -42,9 +45,9 @@ void main() {
 
     // 顶部柔光：macOS 控件的微妙纵向渐变
     float grad = clamp((p.y + halfSize.y) / max(size.y, 1.0), 0.0, 1.0);
-    vec3 fill = FILL + vec3(GLOSS * (1.0 - grad));
-    vec3 rgb = mix(fill, BORDER, borderMask);
+    vec3 fill = WidgetFill.rgb + vec3(WidgetGloss * (1.0 - grad));
+    vec3 rgb = mix(fill, WidgetBorder.rgb, borderMask);
     // 描边极淡，只作为边缘收口的暗示
-    float alpha = max(fillMask, borderMask * BORDER_ALPHA * 1.6) * vColor.a;
+    float alpha = max(fillMask, borderMask * WidgetBorder.a * 1.6) * WidgetFill.a * vColor.a;
     fragColor = vec4(rgb, alpha);
 }

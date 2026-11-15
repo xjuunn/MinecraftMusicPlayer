@@ -1,6 +1,6 @@
 {
-    "vertex": "idle",
-    "fragment": "idle",
+    "vertex": "musicplayer:idle",
+    "fragment": "musicplayer:idle",
     "samplers": [
         { "name": "Sampler0" },
         { "name": "Sampler1" }

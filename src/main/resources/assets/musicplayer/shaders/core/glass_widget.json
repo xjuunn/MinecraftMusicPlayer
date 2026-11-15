@@ -1,6 +1,11 @@
 {
-    "vertex": "glass_widget",
-    "fragment": "glass_widget",
+    "blend": {
+        "func": "add",
+        "srcrgb": "srcalpha",
+        "dstrgb": "1-srcalpha"
+    },
+    "vertex": "musicplayer:glass_widget",
+    "fragment": "musicplayer:glass_widget",
     "samplers": [
         { "name": "Sampler0" }
     ],

@@ -4,7 +4,9 @@ import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.VertexBuffer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ShaderInstance;
 import org.joml.Matrix4f;
 
 /**
@@ -250,15 +252,34 @@ public final class GlassBackdrop {
         }
         RenderSystem.assertOnRenderThread();
         destination.clear(true);
+        drawInto(destination, source, spread, vertical, quad, shader);
+        minecraft.getMainRenderTarget().bindWrite(true);
+        RenderSystem.viewport(0, 0, minecraft.getMainRenderTarget().width,
+                minecraft.getMainRenderTarget().height);
+        // 深度测试在 GuiGraphics.flush() 之后是开着的：这里只做「离屏拷贝」，
+        // 不参与深度比较也不写深度，按 GUI 的语义关掉。不关的话后面的玻璃 quad
+        // 会被上一次世界的深度值裁掉一大块。
+        RenderSystem.disableDepthTest();
+    }
+
+    private void drawInto(RenderTarget destination, RenderTarget source, float spread, boolean vertical,
+                          com.mojang.blaze3d.vertex.VertexBuffer quad,
+                          net.minecraft.client.renderer.ShaderInstance shader) {
         destination.bindWrite(true);
         RenderSystem.viewport(0, 0, destination.width, destination.height);
         shader.safeGetUniform("SamplerSize").set((float) source.width, (float) source.height);
         shader.safeGetUniform("SpreadVertical").set(spread, vertical ? 1.0F : 0.0F);
-        shader.setSampler("Sampler0", source.getColorTextureId());
+        // drawWithShader 里会按 shaderTextures 重写 Sampler0，必须走 RenderSystem
+        int saved0 = RenderSystem.getShaderTexture(0);
+        RenderSystem.setShaderTexture(0, source.getColorTextureId());
         Matrix4f identity = new Matrix4f();
+        // drawWithShader 只负责 apply() + draw()，不会绑定 VAO。
+        // 共享 quad 在创建时已经 unbind 过，这里必须重新绑定，否则
+        // glDrawElements 在没有活跃 VAO 时被调用（GL_INVALID_OPERATION），
+        // 目标贴图只会留下 clear 之后的黑色 —— 玻璃采样出来整屏发黑。
+        quad.bind();
         quad.drawWithShader(identity, identity, shader);
-        minecraft.getMainRenderTarget().bindWrite(true);
-        RenderSystem.viewport(0, 0, minecraft.getMainRenderTarget().width,
-                minecraft.getMainRenderTarget().height);
+        com.mojang.blaze3d.vertex.VertexBuffer.unbind();
+        RenderSystem.setShaderTexture(0, saved0);
     }
 }

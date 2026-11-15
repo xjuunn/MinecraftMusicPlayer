@@ -1,7 +1,9 @@
 package com.junhsiun.musicplayer.client.idle;
 
+import com.junhsiun.musicplayer.MusicPlayerMod;
 import com.junhsiun.musicplayer.client.ClientMusicController;
 import com.junhsiun.musicplayer.client.ClientMusicUiState;
+import com.junhsiun.musicplayer.client.gui.window.GlassWindowScreen;
 import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import net.minecraft.client.KeyMapping;
@@ -162,6 +164,11 @@ public final class IdleController {
         if (now < previewGraceUntilMillis) {
             return;
         }
+        // 预览展示期同样免疫原始输入：点击「预览」时那次按键／关闭界面的位移，
+        // 常会在宽限期结束后才被派发过来，一按就把预览掐掉，看起来像只闪了一下。
+        if (active && now < previewUntilMillis) {
+            return;
+        }
         if (active) {
             deactivate();
         }
@@ -207,7 +214,16 @@ public final class IdleController {
         // 预览不要求总开关打开：展示期与退出的淡出期都要放行，
         // 否则收尾的那几百毫秒会被环境检查硬切掉。
         boolean previewWindow = previewing || now < previewCleanupUntilMillis;
-        boolean environmentOk = (config.enabled || previewWindow) && canIdleEnvironment(client);
+        boolean envBase = canIdleEnvironment(client);
+        boolean environmentOk = (config.enabled || previewWindow) && envBase;
+        if (previewWindow) {
+            LocalPlayer probe = client.player;
+            MusicPlayerMod.LOGGER.info("[verify-state] env base={} screen={} overlay={} dead={} mouse={} enabled={} previewing={} showing={}",
+                    envBase, client.screen, client.getOverlay(),
+                    probe == null ? null : probe.isDeadOrDying(),
+                    client.mouseHandler == null ? null : client.mouseHandler.isMouseGrabbed(),
+                    config.enabled, previewing, previewShowing);
+        }
         trackPosition(client, now, environmentOk);
 
         if (!environmentOk) {
@@ -224,13 +240,21 @@ public final class IdleController {
         // 已经在纯享里时，允许在「换曲空档」内继续：队列换曲靠服务端快照判断队列还没结束，
         // 网络背景音乐没有快照，改用刚才确实有音乐的时间窗兜住。
         // 不在纯享里时不享受这个宽容，否则一首歌放完很久后再点下一首会一响就瞬间进纯享。
-        boolean playing = live || previewing || (active && inTrackSwitch(now));
+        //
+        // 预览的淡出收尾期也必须放行：{@code previewing} 在淡出时已经是 false，
+        // 只看它会走到下面的 {@code !playing -> deactivate()}，第一次调用就把
+        // {@code previewShowing} 清掉，第二次调用直接判定 {@code !active} 返回，
+        // 结果淡出停在半透明、也不再有收尾窗口，特效像是「定格」在那里。
+        boolean playing = live || previewWindow || (active && inTrackSwitch(now));
         // 提前拉取歌词：进入纯享的第一帧就应有歌词，而不是等它联网加载完。
         // 同一首歌重复调用是空操作，代价只有一次字符串比较；关掉歌词显示时不必发请求。
         if (config.showLyrics) {
             IdleLyrics.getInstance().update(IdleNowPlaying.trackId());
         }
         if (anyKeyHeld(client)) {
+            if (previewWindow) {
+                MusicPlayerMod.LOGGER.info("[verify-state] branch=anyKeyHeld");
+            }
             lastActivityMillis = now;
             if (active && now >= previewGraceUntilMillis) {
                 deactivate();
@@ -238,6 +262,9 @@ public final class IdleController {
             return;
         }
         if (!playing) {
+            if (previewWindow) {
+                MusicPlayerMod.LOGGER.info("[verify-state] branch=!playing live={}", live);
+            }
             // 没有音乐就不该进入纯享：把正在显示的特效淡出，并刷新空闲计时。
             if (active) {
                 deactivate();
@@ -269,6 +296,7 @@ public final class IdleController {
         previewGraceUntilMillis = 0L;
         previewCleanupUntilMillis = 0L;
         previewShowing = false;
+        lastPreviewDurationMillis = 0L;
         IdleLyrics.getInstance().clear();
         IdleNowPlaying.clear();
     }
@@ -285,6 +313,7 @@ public final class IdleController {
         // 预览不依赖总开关：给它留出完整的淡出窗口，别让下一帧的环境检查硬切。
         previewCleanupUntilMillis = previewShowing ? deactivatedAtMillis + FADE_OUT_MILLIS : 0L;
         previewShowing = false;
+        lastPreviewDurationMillis = 0L;
     }
 
     /** 立刻结束，不留淡出：用于界面打开、死亡、鼠标释放这类必须马上让位给原版界面的情况。 */
@@ -303,7 +332,12 @@ public final class IdleController {
         if (client == null || client.player == null || client.level == null) {
             return false;
         }
-        if (client.screen != null || client.getOverlay() != null) {
+        // 「正在播关闭动画的液态玻璃窗口」不算界面打开：画面上窗口正在滑走、世界已经
+        // 是主体。把它算成界面打开会让预览刚激活就被下一帧硬切，表现为特效反复闪。
+        if (client.screen != null && !GlassWindowScreen.isDismissing(client.screen)) {
+            return false;
+        }
+        if (client.getOverlay() != null) {
             return false;
         }
         LocalPlayer player = client.player;
@@ -375,6 +409,10 @@ public final class IdleController {
             double dy = y - lastY;
             double dz = z - lastZ;
             if (dx * dx + dy * dy + dz * dz > MOVE_EPSILON_SQ) {
+                if (now < previewCleanupUntilMillis + PREVIEW_MILLIS || active) {
+                    MusicPlayerMod.LOGGER.info("[verify-state] branch=move dx={} dy={} dz={}",
+                            dx, dy, dz);
+                }
                 lastActivityMillis = now;
                 // 与 onRawInput 一致：预览刚开始时忽略关闭界面带出的位置抖动。
                 if (active && now >= previewGraceUntilMillis) {

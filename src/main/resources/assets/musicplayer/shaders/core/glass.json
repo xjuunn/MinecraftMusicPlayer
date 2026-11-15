@@ -1,6 +1,11 @@
 {
-    "vertex": "glass",
-    "fragment": "glass",
+    "blend": {
+        "func": "add",
+        "srcrgb": "srcalpha",
+        "dstrgb": "1-srcalpha"
+    },
+    "vertex": "musicplayer:glass",
+    "fragment": "musicplayer:glass",
     "samplers": [
         { "name": "Sampler0" },
         { "name": "Sampler1" },
@@ -19,6 +24,7 @@
         { "name": "GlassBlur", "type": "float", "count": 1, "values": [ 1.0 ] },
         { "name": "GlassWindowTint", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "GlassWindowTintColor", "type": "float", "count": 3, "values": [ 1.0, 1.0, 1.0 ] },
+        { "name": "GlassBackdropOnly", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "GlassShadowMode", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "GlassShadowSize", "type": "float", "count": 1, "values": [ 24.0 ] },
         { "name": "GlassShadowAlpha", "type": "float", "count": 1, "values": [ 0.35 ] },

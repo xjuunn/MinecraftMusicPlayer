@@ -6,6 +6,7 @@ import com.junhsiun.musicplayer.client.CoverArtTextureCache;
 import com.junhsiun.musicplayer.client.ClientJukeboxController;
 import com.junhsiun.musicplayer.client.ClientMusicController;
 import com.junhsiun.musicplayer.client.JukeboxCoverRenderer;
+import com.junhsiun.musicplayer.client.VerifyHarness;
 import com.junhsiun.musicplayer.client.config.MusicPlayerClientConfigManager;
 import com.junhsiun.musicplayer.client.gui.DiscMasterScreen;
 import com.junhsiun.musicplayer.client.gui.browser.MusicBrowserScreen;
@@ -70,6 +71,8 @@ public final class MusicPlayerClientMod implements ClientModInitializer {
     public void onInitializeClient() {
         // 客户端本地配置（BGM 音量/开关）独立于服务端共享配置
         MusicPlayerClientConfigManager.load();
+        // 临时自动化验证（仅 MUSICPLAYER_VERIFY=1 时生效）
+        VerifyHarness.install();
         // 注册液态玻璃 / 纯享特效的自定义 core shader（1.21.1 老 ShaderInstance 体系）
         GlassPipelines.registerShaders();
         ClientPlayNetworking.registerGlobalReceiver(MusicControlPayload.ID, (client, handler, buffer, responseSender) -> {

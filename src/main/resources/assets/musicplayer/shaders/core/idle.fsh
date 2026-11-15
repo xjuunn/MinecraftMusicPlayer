@@ -1,33 +1,26 @@
 #version 330
 #extension GL_ARB_separate_shader_objects : require
 
-// 逐帧参数。必须声明在采样器之前：Renderpearl 按「bind group layout 里 uniform 的先后」
-// 分配 binding 编号，而 GLSL 的 binding 也按声明顺序递增，两者顺序不一致会直接校验失败。
-layout(std140) uniform IdleParams {
-    // xy = 主渲染目标尺寸（像素），z = 秒，w = 淡入淡出 0-1
-    vec4 ResolutionTime;
-    // x = 低频，y = 中频，z = 高频，w = 总响度
-    vec4 AudioParams;
-    // rgb = 主题色，a = 强度倍率
-    vec4 ColorIntensity;
-    // x = 播放进度 0-1，y = 封面宽高比，z = 预设编号，w = 节拍脉冲
-    vec4 Meta;
-};
-
 // 世界画面（已降采样到 1/2）
 uniform sampler2D Sampler0;
 
-#ifdef IDLE_HAS_COVER
-// 当前曲目的封面（可能尚未下载完成，此时走无封面管线）
+// 当前曲目的封面（可能尚未下载完成，此时由 IdleMeta.y = 0 跳过封面分支）
 uniform sampler2D Sampler1;
-#endif
+
+// 逐帧参数。26.x 用一个 std140 的 IdleParams uniform buffer 记录这四组数据，
+// 1.20.1 的 ShaderInstance 没有 uniform buffer，只能拆成四个独立的 vec4 uniform，
+// 由 IdleRenderer 在每次绘制前写入（json 里也必须同名声明，否则 GLSL 侧拿不到）。
+// xy = 主渲染目标尺寸（像素），z = 秒，w = 淡入淡出 0-1
+uniform vec4 IdleResolutionTime;
+// x = 低频，y = 中频，z = 高频，w = 总响度
+uniform vec4 IdleAudioParams;
+// rgb = 主题色，a = 强度倍率
+uniform vec4 IdleColorIntensity;
+// x = 播放进度 0-1，y = 封面宽高比（0 = 无封面），z = 预设编号 + 4*滤镜编号，w = 节拍脉冲
+uniform vec4 IdleMeta;
 
 layout(location = 0) in vec2 vUv;
 layout(location = 0) out vec4 fragColor;
-
-#ifndef IDLE_MODE
-#define IDLE_MODE 0
-#endif
 
 const float PI = 3.14159265359;
 
@@ -407,53 +400,57 @@ vec3 cinematic(vec3 world, vec2 uv, vec2 screenUv, float time, float energy,
 
 void main() {
     vec2 uv = vec2(vUv.x, 1.0 - vUv.y);
-    float aspect = ResolutionTime.x / max(ResolutionTime.y, 1.0);
+    float aspect = IdleResolutionTime.x / max(IdleResolutionTime.y, 1.0);
     vec2 p = (uv - 0.5) * vec2(aspect, 1.0);
 
-    float time = ResolutionTime.z;
-    float fade = clamp(ResolutionTime.w, 0.0, 1.0);
-    float bass = AudioParams.x;
-    float mid = AudioParams.y;
-    float treble = AudioParams.z;
-    float energy = clamp(AudioParams.w * 0.72 + bass * 0.28, 0.0, 1.0);
-    float intensity = ColorIntensity.a;
-    vec3 accent = ColorIntensity.rgb;
-    float beat = clamp(Meta.w, 0.0, 1.0);
-    float progress = clamp(Meta.x, 0.0, 1.0);
-    // Meta.z = 预设编号 + 4 * 滤镜编号；预设由 IDLE_MODE 宏决定，这里只取滤镜。
-    int filterMode = int(floor(Meta.z * 0.25));
+    float time = IdleResolutionTime.z;
+    float fade = clamp(IdleResolutionTime.w, 0.0, 1.0);
+    float bass = IdleAudioParams.x;
+    float mid = IdleAudioParams.y;
+    float treble = IdleAudioParams.z;
+    float energy = clamp(IdleAudioParams.w * 0.72 + bass * 0.28, 0.0, 1.0);
+    float intensity = IdleColorIntensity.a;
+    vec3 accent = IdleColorIntensity.rgb;
+    float beat = clamp(IdleMeta.w, 0.0, 1.0);
+    float progress = clamp(IdleMeta.x, 0.0, 1.0);
+    // IdleMeta.z = 预设编号 + 4 * 滤镜编号。26.x 用 IDLE_MODE 宏在编译期定死预设，
+    // 1.20.1 只有一份着色器，预设与滤镜都改走运行时分支。
+    float modeFloat = IdleMeta.z;
+    int filterMode = int(floor(modeFloat * 0.25));
+    int idleMode = int(floor(modeFloat)) - filterMode * 4;
+    // IdleMeta.y 是封面宽高比：0 表示没有封面（或封面还没下载完）
+    bool hasCover = IdleMeta.y > 0.0;
 
     vec3 world = texture(Sampler0, vUv).rgb;
 
-#if IDLE_MODE == 1
-    vec3 color = aurora(world, uv, p, time, energy, intensity, accent);
-#elif IDLE_MODE == 2
-    vec3 color = cinematic(world, uv, vUv, time, energy, intensity, accent);
-#else
-    vec3 color = liquid(world, vUv, uv, p, aspect, time,
-            bass, mid, treble, energy, beat, intensity, accent);
-#endif
+    vec3 color;
+    if (idleMode == 1) {
+        color = aurora(world, uv, p, time, energy, intensity, accent);
+    } else if (idleMode == 2) {
+        color = cinematic(world, uv, vUv, time, energy, intensity, accent);
+    } else {
+        color = liquid(world, vUv, uv, p, aspect, time,
+                bass, mid, treble, energy, beat, intensity, accent);
+    }
 
-#ifdef IDLE_HAS_COVER
-    // 封面配色：取四个点近似平均色，让整体色调随专辑封面轻微偏移。
-    //
-    // 这里必须让<b>所有</b>预设都真正采样 Sampler1：
-    // 着色器编译器会剔除未被使用的采样器，一旦剔除，自动绑定的编号就会
-    // 从 2 回落到 0，与 IdleParams 的 binding 0 撞车，管线校验直接失败。
-    vec3 coverTint = textureLod(Sampler1, vec2(0.30, 0.30), 0.0).rgb
-            + textureLod(Sampler1, vec2(0.70, 0.30), 0.0).rgb
-            + textureLod(Sampler1, vec2(0.30, 0.70), 0.0).rgb
-            + textureLod(Sampler1, vec2(0.70, 0.70), 0.0).rgb;
-    coverTint = saturateColor(coverTint * 0.25, 1.15);
-    color = mix(color, color * (0.72 + coverTint * 0.55), 0.14 * intensity);
-#endif
+    if (hasCover) {
+        // 封面配色：取四个点近似平均色，让整体色调随专辑封面轻微偏移。
+        //
+        // 无封面时 Sampler1 可能绑定的是任意纹理，这里的判断保证不会被采样到。
+        vec3 coverTint = textureLod(Sampler1, vec2(0.30, 0.30), 0.0).rgb
+                + textureLod(Sampler1, vec2(0.70, 0.30), 0.0).rgb
+                + textureLod(Sampler1, vec2(0.30, 0.70), 0.0).rgb
+                + textureLod(Sampler1, vec2(0.70, 0.70), 0.0).rgb;
+        coverTint = saturateColor(coverTint * 0.25, 1.15);
+        color = mix(color, color * (0.72 + coverTint * 0.55), 0.14 * intensity);
+    }
 
     // 高频只做很轻微的星点/闪光，避免画面发脏。
     // 这里用单次噪声而不是 fbm：星点只需要稀疏，省下的四次噪声在 1080p 下就是几帧的开销。
     color += accent * treble * 0.008 * smoothstep(0.78, 0.99, valueNoise(p * 8.0 + time * 0.4));
 
     // 让所有预设都能感知节拍与播放进度：一点整体呼吸 + 随进度轻微偏暖。
-    // 这也保证 IdleParams 的 Meta 分量在所有管线里都是活跃的，不会被编译器整个剔除。
+    // 这也保证 IdleMeta 的各个分量始终被用到，不会被编译器整个剔除。
     float breath = 0.5 + 0.5 * sin(time * 1.3 + progress * 6.2831853);
     color *= 1.0 + 0.018 * beat * breath;
     color = mix(color, color * vec3(1.05, 1.0, 0.94), progress * 0.12);

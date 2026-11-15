@@ -5,6 +5,7 @@ import com.junhsiun.musicplayer.client.gui.glass.GlassBackdrop;
 import com.junhsiun.musicplayer.client.gui.glass.GlassBlurQuads;
 import com.junhsiun.musicplayer.client.gui.glass.GlassPipelines;
 import com.junhsiun.musicplayer.client.gui.media.MediaThumbnails;
+import com.junhsiun.musicplayer.client.gui.window.GlassWindowScreen;
 import com.junhsiun.musicplayer.config.MusicPlayerConfig;
 import com.junhsiun.musicplayer.config.MusicPlayerConfigManager;
 import com.junhsiun.musicplayer.model.LyricLine;
@@ -69,17 +70,19 @@ public final class IdleRenderer {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null || minecraft.level == null || minecraft.player == null) {
             return;
-        }
-        // 界面/覆盖层打开时不出特效：此时画面主体是界面，全屏着色会把界面压花。
+        }        // 界面/覆盖层打开时不出特效：此时画面主体是界面，全屏着色会把界面压花。
         // 顺便把状态收掉——单机暂停时客户端 tick 不跑，不在这里收的话关掉菜单的
         // 第一帧会把特效整块弹回来。
-        if (minecraft.screen != null || minecraft.getOverlay() != null) {
+        //
+        // 例外是「正在播关闭动画的液态玻璃窗口」：那时画面主体已经是世界，窗口只是
+        // 在滑走。也算成界面打开的话，每帧都会硬切一次，等动画结束预览刚激活就被
+        // 下一帧打掉，看起来就是「闪现 → 消失 → 又出现」。
+        if ((minecraft.screen != null && !GlassWindowScreen.isDismissing(minecraft.screen))
+                || minecraft.getOverlay() != null) {
             controller.cancelImmediate();
             return;
         }
         INSTANCE.drawEffect(minecraft, now, fade);
-        // 纯享期间隐藏 HUD（1.21.1：Minecraft.options.hideGui）
-        com.junhsiun.musicplayer.mixin.client.HudMixin.musicplayer$updateHudHidden(minecraft);
         try {
             INSTANCE.drawOverlay(minecraft, now, fade);
         } catch (Throwable throwable) {
@@ -93,11 +96,6 @@ public final class IdleRenderer {
         GlassBlurQuads.reset();
         failed = false;
         timeOriginMillis = Util.getMillis();
-    }
-
-    /** 恢复 HUD 显示（退世界时由 MusicPlayerClientMod 调用）。 */
-    public void restoreHud(Minecraft minecraft) {
-        com.junhsiun.musicplayer.mixin.client.HudMixin.musicplayer$restoreHud(minecraft);
     }
 
     // ── 全屏特效 ────────────────────────────────────────────────────────
@@ -139,14 +137,22 @@ public final class IdleRenderer {
 
             // 3. 特效写回主渲染目标。这里只采样 worldTarget，不会与主目标形成采样反馈。
             RenderSystem.assertOnRenderThread();
-            shader.setSampler("Sampler0", worldTarget.getColorTextureId());
+            // drawWithShader 里会按 shaderTextures 重写 Sampler0/1，必须走 RenderSystem
+            int saved0 = RenderSystem.getShaderTexture(0);
+            int saved1 = RenderSystem.getShaderTexture(1);
+            RenderSystem.setShaderTexture(0, worldTarget.getColorTextureId());
             if (hasCover) {
-                shader.setSampler("Sampler1", cover.id());
+                RenderSystem.setShaderTexture(1, cover.id());
             }
             RenderSystem.enableBlend();
             RenderSystem.disableBlend();
             Matrix4f identity = new Matrix4f();
+            // 与 GlassBackdrop 同理：drawWithShader 不会绑定 VAO，必须先 bind
+            quad.bind();
             quad.drawWithShader(identity, identity, shader);
+            VertexBuffer.unbind();
+            RenderSystem.setShaderTexture(0, saved0);
+            RenderSystem.setShaderTexture(1, saved1);
         } catch (Throwable throwable) {
             failed = true;
             MusicPlayerMod.LOGGER.warn("纯享特效初始化失败，本次仅显示文字", throwable);
@@ -165,9 +171,14 @@ public final class IdleRenderer {
         RenderSystem.viewport(0, 0, worldTarget.width, worldTarget.height);
         blur.safeGetUniform("SamplerSize").set((float) main.width, (float) main.height);
         blur.safeGetUniform("SpreadVertical").set(0.0F, 0.0F);
-        blur.setSampler("Sampler0", main.getColorTextureId());
+        // drawWithShader 里会按 shaderTextures 重写 Sampler0，必须走 RenderSystem
+        int saved0 = RenderSystem.getShaderTexture(0);
+        RenderSystem.setShaderTexture(0, main.getColorTextureId());
         Matrix4f identity = new Matrix4f();
+        quad.bind();
         quad.drawWithShader(identity, identity, blur);
+        VertexBuffer.unbind();
+        RenderSystem.setShaderTexture(0, saved0);
         Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
         RenderSystem.viewport(0, 0,
                 Minecraft.getInstance().getMainRenderTarget().width,

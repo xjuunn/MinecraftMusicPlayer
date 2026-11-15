@@ -2,47 +2,39 @@ package com.junhsiun.musicplayer.mixin.client;
 
 import com.junhsiun.musicplayer.client.idle.IdleController;
 import net.minecraft.Util;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.Options;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.GuiGraphics;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 纯享模式期间隐藏 HUD，效果等同于按住 F1。
+ * 纯享模式期间不画 HUD。
  *
- * <p>1.20.1 里 F1 开关是 {@code Minecraft.options.hideGui}（26.x 才移到 {@code Hud.isHidden}）。
- * 特效出现前把它置真、淡出后恢复。这里做成挂靠在 {@code Options} 上的静态工具类，
- * 由 {@code IdleRenderer.beforeGui} 每帧调用。</p>
+ * <p><b>刻意不碰 {@code Minecraft.options.hideGui}（也就是 F1 的那个开关）。</b>
+ * F1 是全局状态：一旦置真，{@code GameRenderer.render} 会认为「玩家要求隐藏界面」，
+ * 打开液态玻璃窗口的瞬间也处在隐藏态，窗口会被一起吞掉；而且纯享是在
+ * {@code beforeGui} 里按帧恢复的，玩家在淡出期间打开界面时那条恢复路径根本不跑，
+ * {@code hideGui} 就会一直卡在 true。</p>
  *
- * <p>玩家自己按 F1 会把 {@code hideGui} 改成常驻状态，所以接管前必须先记下原值，
- * 结束纯享时还原，否则「退出纯享后强制显示 HUD」会覆盖玩家原本的设置。</p>
+ * <p>这里改成只跳过 {@code Gui.render} 本身：HUD（血条、快捷栏、准星、聊天）全部不画，
+ * 但主渲染目标和界面绘制完全不受影响，液态玻璃窗口照常出现。效果上与 F1 一致。</p>
+ *
+ * <p>注意本类只注入、不提供任何公开静态方法：Mixin 类不允许被普通代码直接引用
+ * （会触发 {@code IllegalClassLoadError: ... is in a defined mixin package}），
+ * 所以判定逻辑留在 {@link IdleController#shouldHideHud(long)} 里，这里只调用。</p>
  */
-@Mixin(Options.class)
+@Mixin(Gui.class)
 public abstract class HudMixin {
 
-    /** 接管前玩家自己的 {@code hideGui}：{@code -1} 表示当前没有接管。 */
-    @Unique
-    private static int musicplayer$savedHideGui = -1;
-
-    /** 每帧调用：纯享期间隐藏 HUD，其余时间保持玩家自己的 F1 状态不动。 */
-    public static void musicplayer$updateHudHidden(Minecraft minecraft) {
-        boolean shouldHide = IdleController.getInstance().shouldHideHud(Util.getMillis());
-        if (!shouldHide) {
-            musicplayer$restoreHud(minecraft);
-            return;
+    @Inject(method = "render", at = @At("HEAD"), cancellable = true)
+    private void musicplayer$hideHudForIdle(GuiGraphics graphics, float partialTick,
+                                            CallbackInfo callbackInfo) {
+        // 从特效淡入的第一帧就隐藏，一直保持到淡出彻底结束，
+        // 否则会出现「HUD 浮在半透明特效上，然后突然消失」的突兀感。
+        if (IdleController.getInstance().shouldHideHud(Util.getMillis())) {
+            callbackInfo.cancel();
         }
-        if (musicplayer$savedHideGui < 0) {
-            musicplayer$savedHideGui = minecraft.options.hideGui ? 1 : 0;
-        }
-        minecraft.options.hideGui = true;
-    }
-
-    /** 退还 HUD 控制权：恢复成接管前玩家自己的 F1 状态；从未接管时什么都不做。 */
-    public static void musicplayer$restoreHud(Minecraft minecraft) {
-        if (musicplayer$savedHideGui < 0) {
-            return;
-        }
-        minecraft.options.hideGui = musicplayer$savedHideGui == 1;
-        musicplayer$savedHideGui = -1;
     }
 }
