@@ -1,137 +1,120 @@
-﻿# Minecraft Music Player
+# Minecraft Music Player
+
+<p align="center">
+  <img src="src/main/resources/assets/musicplayer/icon.png" width="128" alt="Minecraft Music Player icon">
+</p>
 
 [![中文](https://img.shields.io/badge/README-中文-blue)](README.md) [![English](https://img.shields.io/badge/README-English-orange)](README_EN.md)
 
-Minecraft Music Player is a Fabric dual-side music mod that provides NetEase Cloud Music search, song requests, shared queue playback, batched playlist/podcast playback, custom music disc burning, and jukebox URL playback.
+Minecraft Music Player is a Fabric mod for both the server and the client: browse and request NetEase Cloud Music in game, with playlists and podcasts, real-time lyrics, network background music, burnable music discs, and jukebox playback.
 
-The server handles commands, queue, sync, and jukebox control. The client handles audio playback. Both sides are required for full functionality.
+The server handles commands, queues, configuration, and synchronization. The client handles audio playback and the UI. Install the mod on the server and on every client that needs to hear music.
+
+[Demo](https://www.youtube.com/watch?v=4kOa9Ak62Bk)
 
 ## Features
 
-- Search songs, artists, playlists, podcasts (radio), users
-- Request single songs; auto-queues or plays immediately
-- Playlist/Podcast mode: loads tracks in batches in the background, plays through the entire playlist seamlessly
-- **Podcast (Radio) support**: browse podcast details, program list, play single programs or entire podcasts
-- **Play order**: Sequential / Reverse / Shuffle, applies to both playlists and podcasts
-- Dual-queue system: request queue (high priority) plays first, playlist queue (low priority) fills in when empty
-- Skip: requester/admin skips instantly, others vote
-- **Playback control**: Seek forward/backward, pause/resume, visual progress bar
-- Click song/podcast titles to open in browser
-- **URL detection**: Auto-parse `music.163.com` links for songs, playlists, and podcasts
-- Burn custom music discs, play URL-based music in jukeboxes
-- Jukebox music switches automatically based on distance (leave range → global audio, re-enter → resume jukebox)
-- Real-time lyrics for both global and jukebox music, per-player toggle
-- Loot container random music discs
-- Paginated lists with clickable navigation
+- Liquid glass UI: the music browser, settings, and disc burning share one visual style and animation set.
+- Music browsing: search songs, playlists, artists, users, and podcasts; save playlists and view recently played.
+- Requests and queue: request single songs, priority request queue, automatic playlist refill, vote skip.
+- Playlists and podcasts: loaded in batches in the background, with sequential, reverse, and shuffle order.
+- Real-time lyrics: supported for global playback and jukeboxes, toggled per player.
+- Network background music: takes over vanilla background music, with a separate toggle and volume.
+- Idle immersive: hides the HUD after a period of inactivity and overlays configurable effects and lyrics.
+- Music discs: burn songs onto discs and play them in jukeboxes, with cover art and distance-based volume.
+- Sharing: send playlists, artists, users, podcasts, or links to other players.
+- Simplified Chinese, English, and Japanese included.
 
-## Requirements
+### Music Browser
 
-- Minecraft `26.1`
-- Fabric Loader `0.19.3` or newer
-- Fabric API `0.145.1+26.1` or compatible
-- Java `25`
-- A reachable NetEase music API service, default `https://mycelis.dpdns.org/`
+Open with the default key `M`; rebindable in `Options → Controls`.
 
-## Installation
+- Left navigation: search, current queue, saved playlists, recently played, settings.
+- Enter keywords in the search field, or paste a `music.163.com` song, playlist, or podcast link directly.
+- The search page switches between songs, playlists, artists, users, and podcasts.
+- List rows support play and add to queue; playlists can be saved from their detail page, and song details show lyrics.
 
-Install the mod and Fabric API on both server and clients that need to hear music.
+### Idle Immersive
 
-## Player Commands
+Enable it on the Client tab of the settings. After 60 seconds without keyboard or mouse input while music is playing, the mod hides the HUD and shows effects and lyrics; move the mouse or press any key to exit. The effect preset, background filter, idle delay, effect intensity, and lyric scale are configurable, and a preview is available.
 
-### Playback Control
+### Music Discs
 
-| Command | Description |
+- Craft a **Music Disc Master** from an iron ingot and an amethyst shard.
+- Right-click the air while holding the master to open the burning screen, then search for and burn a song.
+- Burned discs play in jukeboxes; the jukebox shows cover art and its volume fades with distance.
+- Loot containers can generate random music discs; the chance and count are configurable.
+
+### Network Background Music
+
+- The server picks the playlist through `bgmPlaylistId`; it starts playing when players join.
+- Clients can toggle network background music and adjust its volume in `Options → Sound`.
+- Falls back to vanilla background music when the API is unavailable.
+
+### Sharing
+
+`/music share <player> <playlist|artist|user|podcast|program|link>` sends the content as a clickable message; recipients can click it to open it in the music browser.
+
+## Commands
+
+Player commands:
+
+| Purpose | Command |
 | --- | --- |
-| `/music now` | Show current track, progress bar, and paused state |
-| `/music seek <seconds>` | Seek forward/backward (positive = forward, negative = backward) |
-| `/music skip` | Skip current track (requester/admin skips, others vote) |
-| `/music mute once` | Mute current song |
+| Playback control | `/music now`, `/music seek <seconds>`, `/music skip`, `/music mute once` |
+| Requests | `/music play song <song ID>`, `/music play playlist <playlist ID> [reverse]`, `/music play program <program ID>`, `/music play radio <podcast ID> [reverse]` |
+| Queue | `/music queue [page]`, `/music queue promote <song ID>`, `/music queue remove <song ID>` |
+| Playback mode | `/music playlist`, `/music playlist list`, `/music playlist stop`, `/music playlist order [sequential\|reverse\|shuffle]` |
+| Search | `/music search <song\|artist\|playlist\|user\|radio> <keyword> [page <page>]` |
+| View | `/music view <playlist\|artist\|user\|radio\|program> <ID> [page <page>]`, `/music view <link>` |
+| Sharing | `/music share <player> <same arguments as view>` |
+| Discs | `/music burn song <song ID>` |
+| Other | `/music random [refresh]`, `/music join`, `/music leave`, `/music lyrics [on\|off\|status]`, `/music help` |
 
-### Request
+Admin commands:
 
-| Command | Description |
+| Purpose | Command |
 | --- | --- |
-| `/music play song <ID>` | Request a single song |
-| `/music play playlist <ID>` | Start playlist mode |
-| `/music play program <ID>` | Play a single podcast program |
-| `/music play radio <ID>` | Play an entire podcast (all programs queued) |
-
-### Queue Management
-
-| Command | Description |
-| --- | --- |
-| `/music queue` | View request queue |
-| `/music queue promote <ID>` | Move to the top of the queue |
-| `/music queue remove <ID>` | Remove from queue |
-
-### Playlist & Podcast
-
-| Command | Description |
-| --- | --- |
-| `/music playlist` | View playlist status and play order |
-| `/music playlist list` | View loaded playlist tracks |
-| `/music playlist stop` | Stop playlist mode |
-| `/music playlist order sequential` | Set sequential playback order |
-| `/music playlist order reverse` | Set reverse playback order |
-| `/music playlist order shuffle` | Set shuffle playback order |
-| `/music radio` | Podcast center |
-| `/music radio hot [page]` | Hot podcasts |
-| `/music radio categories` | Browse podcast categories |
-
-### Search
-
-| Command | Description |
-| --- | --- |
-| `/music search song <keyword>` | Search songs |
-| `/music search artist <keyword>` | Search artists |
-| `/music search playlist <keyword>` | Search playlists |
-| `/music search radio <keyword>` | Search podcasts |
-| `/music search user <keyword>` | Search users |
-
-### View Details
-
-| Command | Description |
-| --- | --- |
-| `/music view playlist <ID>` | View playlist details |
-| `/music view artist <ID>` | View artist details |
-| `/music view user <ID>` | View user playlists |
-| `/music view radio <ID>` | View podcast details and program list |
-| `/music view program <ID>` | View program details |
-| `/music view <URL>` | Auto-detect `music.163.com` links (supports `/song`, `/playlist`, `/djradio`, `/dj`) |
-
-### Other
-
-| Command | Description |
-| --- | --- |
-| `/music random` | Generate 10 random hot songs |
-| `/music burn song <ID>` | Burn disc |
-| `/music join` | Join current playback |
-| `/music leave` | Leave current playback |
-| `/music lyrics` | Toggle real-time lyrics |
-| `/music lyrics on/off` | Enable/disable lyrics |
-| `/music lyrics status` | Check lyrics status |
-| `/music help [subcommand]` | Show help |
-
-## Admin Commands
-
-| Command | Description |
-| --- | --- |
-| `/music skip` | Skip instantly |
-| `/music pause` | Pause playback |
-| `/music resume` | Resume playback |
-| `/music queue clear` | Clear request queue |
-| `/music config reload` | Reload config and clear URL cache |
-| `/music config status` | View config |
-| `/music config clearqueue` | Clear queue |
-
-Config values are changed via `/music config set <key> <value>`.
+| Playback management | `/music pause`, `/music resume`, `/music skip`, `/music queue clear` |
+| Configuration | `/music config reload`, `/music config status`, `/music config clearqueue`, `/music config set <key> <value>`, `/music config reset <key\|bgmPlaylist\|all>` |
 
 ## Configuration
 
-`config/minecraft-music-player.json`. See default values in the file.
+All settings live in `config/minecraft-music-player.json`, split into shared server fields plus `client`, `glass`, and `idle` sections. Common keys:
 
-## Build
+| Key | Default | Description |
+| --- | --- | --- |
+| `neteaseBaseUrl` | `https://mycelis.dpdns.org/` | Backend API address |
+| `apiMode` | `auto` | `auto` prefers direct connection, `direct` uses it only, `proxy` uses the backend only |
+| `bgmPlaylistId` | `18481322122` | Network background music playlist; empty disables it |
+| `proxy` / `useSystemProxy` | empty / `true` | Manual proxy and system proxy |
+| `preferIpv4` | `true` | Prefer IPv4 |
+| `allowSongRequest` / `allowPlaylistRequest` | `true` | Allow players to request songs / playlists and podcasts |
+| `autoAdvance` | `true` | Advance to the next track automatically |
+| `searchLimit` | `8` | Items per page |
+| `maxQueueSize` / `maxSongsPerPlayer` | `40` / `5` | Request queue limit and requests per player |
+| `voteSkipPercent` | `0.6` | Vote skip ratio |
+| `enableLootMusicDiscs` | `true` | Random music discs in loot containers |
+
+Changes made in the UI or through commands take effect immediately and are written back to the file. See the [configuration docs](docs/configuration.md) for the full reference.
+
+## Documentation
+
+- [Configuration](docs/configuration.md)
+- [UI and liquid glass](docs/glass-window.md)
+- [Music browser](docs/music-browser.md)
+- [Version porting](docs/version-porting.md)
+
+## Building
+
+Java 25 is required:
 
 ```powershell
 .\gradlew.bat clean build
 ```
+
+Artifacts are placed in `build/libs`. For a local release build, use `release.bat`.
+
+## License
+
+MIT
