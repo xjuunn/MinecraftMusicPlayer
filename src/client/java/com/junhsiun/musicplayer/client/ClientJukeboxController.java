@@ -21,8 +21,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.block.JukeboxBlock;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
 import okhttp3.OkHttpClient;
 import okhttp3.Call;
 import okhttp3.Request;
@@ -35,8 +33,10 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.SocketTimeoutException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import javax.sound.sampled.AudioFormat;
@@ -93,7 +93,9 @@ public final class ClientJukeboxController {
     }
 
     public void stopAll(String reason) {
-        playbackHandles.keySet().forEach(this::stop);
+        for (Long key : List.copyOf(playbackHandles.keySet())) {
+            stop(key);
+        }
         pendingInsertions.clear();
         lastPositionReportTime.clear();
         if (reason != null && !reason.isBlank()) {
@@ -196,8 +198,15 @@ public final class ClientJukeboxController {
 
     private void play(long jukeboxPos, List<String> urls, String title, String subtitle, String coverUrl, long offsetMillis) {
         pendingInsertions.remove(jukeboxPos);
-        PlaybackHandle handle = playbackHandles.computeIfAbsent(jukeboxPos, ignored -> new PlaybackHandle());
-        stopPlaybackOnly(handle);
+        // 每次都换一个新的 handle：旧线程即使在下载/建流阶段被 stop，也只会看到旧的
+        // closed 标记然后退出，不会把新一次播放的 player 字段清掉，也不会在 stop 之后
+        // 才把音频流建起来（那种线程不在 playbackHandles 里，退世界也停不掉）。
+        PlaybackHandle previous = playbackHandles.remove(jukeboxPos);
+        if (previous != null) {
+            stopPlaybackOnly(previous);
+        }
+        PlaybackHandle handle = new PlaybackHandle();
+        playbackHandles.put(jukeboxPos, handle);
         handle.finishedAtMillis = 0L;
         handle.urls = urls == null ? List.of() : List.copyOf(urls);
         handle.title = title == null ? "" : title;
@@ -214,8 +223,15 @@ public final class ClientJukeboxController {
         silenceVanillaJukeboxSound(jukeboxPos, "custom play payload");
         showNowPlaying(handle.title, handle.subtitle);
         stopVanillaBackgroundMusic();
+        if (handle.urls.isEmpty()) {
+            // 没有直链时先不启动线程：服务端解析完会推 refresh，等那时再开始，
+            // 避免线程打一行 warn 就退出、正好和 refresh 错开，最后一直没声音。
+            MusicPlayerMod.LOGGER.debug("Jukebox {} playback waits for resolved urls: {} - {}",
+                    jukeboxPos, handle.title, handle.subtitle);
+            return;
+        }
         long startOffset = offsetMillis;
-        Thread playbackThread = new Thread(() -> playWithFallback(jukeboxPos, handle, urls, title, subtitle, startOffset), "musicplayer-jukebox-" + jukeboxPos);
+        Thread playbackThread = new Thread(() -> playWithFallback(jukeboxPos, handle, title, subtitle, startOffset), "musicplayer-jukebox-" + jukeboxPos);
         playbackThread.setDaemon(true);
         handle.thread = playbackThread;
         playbackThread.start();
@@ -228,8 +244,11 @@ public final class ClientJukeboxController {
             play(jukeboxPos, urls, title, subtitle, coverUrl, offsetMillis);
             return;
         }
+        boolean urlsChanged = false;
         if (urls != null && !urls.isEmpty()) {
-            handle.urls = List.copyOf(urls);
+            List<String> refreshed = List.copyOf(urls);
+            urlsChanged = !refreshed.equals(handle.urls);
+            handle.urls = refreshed;
         }
         if (title != null && !title.isBlank()) {
             handle.title = title;
@@ -246,11 +265,17 @@ public final class ClientJukeboxController {
         }
         silenceVanillaJukeboxSound(jukeboxPos, "custom refresh payload");
         stopVanillaBackgroundMusic();
+        if (urlsChanged && handle.player == null) {
+            // 新直链到达时还没有真正出声（旧链接下载失败、或一直在等解析）：
+            // 用新链接重开一次。旧线程持有的是旧 handle，会看到 closed 标记后退出。
+            play(jukeboxPos, handle.urls, handle.title, handle.subtitle, handle.coverUrl, offsetMillis);
+            return;
+        }
         Thread thread = handle.thread;
         if (thread == null || !thread.isAlive()) {
             long startOffset = offsetMillis;
             Thread playbackThread = new Thread(
-                    () -> playWithFallback(jukeboxPos, handle, handle.urls, handle.title, handle.subtitle, startOffset),
+                    () -> playWithFallback(jukeboxPos, handle, handle.title, handle.subtitle, startOffset),
                     "musicplayer-jukebox-" + jukeboxPos
             );
             playbackThread.setDaemon(true);
@@ -273,17 +298,23 @@ public final class ClientJukeboxController {
         if (handle == null) {
             return;
         }
-        if (handle.player != null) {
-            handle.player.close();
-            handle.player = null;
+        // 先置位再关流：播放线程下载完成后会先检查 closed，保证不会在 stop 之后
+        // 又建出一条没人持有、退世界也停不掉的音频流。
+        handle.closed = true;
+        Player player = handle.player;
+        handle.player = null;
+        if (player != null) {
+            player.close();
         }
-        if (handle.currentCall != null) {
-            handle.currentCall.cancel();
-            handle.currentCall = null;
+        Call call = handle.currentCall;
+        handle.currentCall = null;
+        if (call != null) {
+            call.cancel();
         }
-        if (handle.thread != null) {
-            handle.thread.interrupt();
-            handle.thread = null;
+        Thread thread = handle.thread;
+        handle.thread = null;
+        if (thread != null) {
+            thread.interrupt();
         }
     }
 
@@ -298,38 +329,75 @@ public final class ClientJukeboxController {
         }
     }
 
-    private void playWithFallback(long jukeboxPos, PlaybackHandle handle, List<String> urls, String title, String subtitle, long startOffset) {
-        if (urls == null || urls.isEmpty()) {
-            MusicPlayerMod.LOGGER.warn("Jukebox {} has no playable urls: {} - {}", jukeboxPos, title, subtitle);
-            handle.thread = null;
-            handle.player = null;
-            return;
-        }
-
-        for (String url : urls) {
-            if (Thread.currentThread().isInterrupted()) {
-                handle.thread = null;
-                handle.player = null;
-                handle.currentCall = null;
+    /**
+     * 按 handle 里当前的直链列表依次尝试播放。
+     *
+     * <p>不把 urls 当参数固定下来：服务端解析出新的直链后会推 refresh，如果这时旧链接
+     * 还在 403/超时里打转，原来的实现会一直用启动时那份旧列表，全部失败后线程退出，
+     * 而 refresh 又因为线程还活着没有重启——表现就是唱片已经在播（有歌词），客户端却
+     * 始终没有声音。这里每轮都重新读取 {@link PlaybackHandle#urls}，刷新到新链接后
+     * 继续尝试。</p>
+     */
+    private void playWithFallback(long jukeboxPos, PlaybackHandle handle, String title, String subtitle, long startOffset) {
+        Set<String> failedUrls = new HashSet<>();
+        boolean warnedEmpty = false;
+        while (true) {
+            if (handle.closed || Thread.currentThread().isInterrupted()) {
+                clearThreadState(handle);
                 return;
             }
-            try {
-                playSingle(jukeboxPos, handle, url, title, subtitle, startOffset);
-                handle.finishedAtMillis = completionTime(handle.startedAtMillis);
-                handle.thread = null;
-                handle.player = null;
-                handle.currentCall = null;
+            List<String> urls = handle.urls;
+            if (urls.isEmpty()) {
+                if (!warnedEmpty) {
+                    warnedEmpty = true;
+                    MusicPlayerMod.LOGGER.warn("Jukebox {} has no playable urls: {} - {}", jukeboxPos, title, subtitle);
+                }
+                clearThreadState(handle);
                 return;
-            } catch (Exception exception) {
-                if (Thread.currentThread().isInterrupted() || exception instanceof InterruptedIOException) {
-                    handle.thread = null;
-                    handle.player = null;
-                    handle.currentCall = null;
+            }
+            boolean urlsRefreshed = false;
+            for (String url : urls) {
+                if (failedUrls.contains(url)) {
+                    continue;
+                }
+                if (handle.closed || Thread.currentThread().isInterrupted()) {
+                    clearThreadState(handle);
                     return;
                 }
-                logSourceFallback(url, exception);
+                try {
+                    playSingle(jukeboxPos, handle, url, title, subtitle, startOffset);
+                    if (handle.closed) {
+                        // 播放期间唱片被取走：已经在 stop 里结束，不要再上报"播放结束"，
+                        // 否则服务端会按歌单规则切到下一张。
+                        clearThreadState(handle);
+                        return;
+                    }
+                    handle.finishedAtMillis = completionTime(handle.startedAtMillis);
+                    clearThreadState(handle);
+                    return;
+                } catch (Exception exception) {
+                    if (handle.closed || Thread.currentThread().isInterrupted() || exception instanceof InterruptedIOException) {
+                        clearThreadState(handle);
+                        return;
+                    }
+                    failedUrls.add(url);
+                    logSourceFallback(url, exception);
+                    if (!urls.equals(handle.urls)) {
+                        // 失败期间收到 refresh：换用新直链，已失败的地址不再重试。
+                        urlsRefreshed = true;
+                        break;
+                    }
+                }
             }
+            if (urlsRefreshed) {
+                continue;
+            }
+            clearThreadState(handle);
+            return;
         }
+    }
+
+    private static void clearThreadState(PlaybackHandle handle) {
         handle.thread = null;
         handle.player = null;
         handle.currentCall = null;
@@ -345,7 +413,11 @@ public final class ClientJukeboxController {
 
         Call call = client.newCall(request);
         handle.currentCall = call;
+        Player currentPlayer = null;
         try (Response response = call.execute()) {
+            if (handle.closed) {
+                throw new InterruptedIOException("jukebox playback cancelled");
+            }
             if (!response.isSuccessful()) {
                 throw new IOException("HTTP " + response.code());
             }
@@ -364,17 +436,33 @@ public final class ClientJukeboxController {
             if (audioBytes.length > MAX_AUDIO_BYTES) {
                 throw new IOException("Audio too large: " + audioBytes.length);
             }
+            if (handle.closed) {
+                throw new InterruptedIOException("jukebox playback cancelled");
+            }
             try (BufferedInputStream inputStream = new BufferedInputStream(new ByteArrayInputStream(audioBytes))) {
                 SpatialAudioDevice audioDevice = new SpatialAudioDevice(jukeboxPos);
                 audioDevice.setSeekPosition(startOffset);
-                Player currentPlayer = new Player(inputStream, audioDevice);
+                currentPlayer = new Player(inputStream, audioDevice);
+                // 下载期间可能已经被 stop：此时绝不能把音频流建起来，
+                // 否则这条流不在 playbackHandles 里，退出存档也停不掉。
+                if (handle.closed) {
+                    throw new InterruptedIOException("jukebox playback cancelled");
+                }
                 handle.player = currentPlayer;
+                if (handle.closed) {
+                    throw new InterruptedIOException("jukebox playback cancelled");
+                }
                 MusicPlayerMod.LOGGER.info("Start jukebox playback: {} - {}", title, subtitle);
                 currentPlayer.play();
             }
         } finally {
             handle.currentCall = null;
-            handle.player = null;
+            if (handle.player == currentPlayer) {
+                handle.player = null;
+            }
+            if (currentPlayer != null) {
+                currentPlayer.close();
+            }
         }
     }
 
@@ -390,6 +478,8 @@ public final class ClientJukeboxController {
         private volatile Player player;
         private volatile Thread thread;
         private volatile Call currentCall;
+        /** 已被 stop：播放线程在下载/建流的各个阶段都要检查，避免 stop 后冒出孤儿音频流。 */
+        private volatile boolean closed;
         private volatile List<String> urls = List.of();
         private volatile String title = "";
         private volatile String subtitle = "";
@@ -439,13 +529,11 @@ public final class ClientJukeboxController {
         if (!(level.getBlockState(pos).getBlock() instanceof JukeboxBlock)) {
             return "block is no longer a jukebox";
         }
-        if (!level.getBlockState(pos).getValue(JukeboxBlock.HAS_RECORD)) {
-            return "jukebox no longer has a record";
-        }
-        BlockEntity blockEntity = level.getBlockEntity(pos);
-        if (!(blockEntity instanceof JukeboxBlockEntity jukebox)) {
-            return "missing jukebox block entity";
-        }
+        // 不在这里判断 HAS_RECORD / 方块实体内容：唱片是服务端通过 play/stop 载荷
+        // 授权的，而方块状态（尤其是自动化写入、播放列表换碟）到客户端的时间可能比
+        // play 载荷晚。曾经因为这里读到旧的 HAS_RECORD=false，刚插入的唱片被立刻
+        // 判成"已取出"，表现为封面闪一下收回、没有声音，只剩服务端下发的歌词。
+        // 取出唱片时服务端会主动发 stop，服务端 tick 也会兜底，客户端不需要抢先判断。
         return null;
     }
 

@@ -86,8 +86,15 @@ public final class JukeboxPlaybackService {
     /** 由自动化（上方容器播放列表、漏斗等）写入唱片机后同步自定义唱片播放。 */
     public void handleJukeboxItemChanged(ServerLevel level, BlockPos pos, ItemStack itemStack) {
         DiscTrackData discData = MusicDiscHelper.read(itemStack).orElse(null);
-        if (discData == null || discData.urls().isEmpty()) {
+        if (discData == null || discData.trackId().isBlank()) {
             stopCustomPlayback(level, pos);
+            return;
+        }
+        ActiveJukebox active = activeJukeboxes.get(pos.asLong());
+        if (active != null && discData.trackId().equals(active.discData().trackId())) {
+            // 同一张唱片被重复写入（播放列表回写、方块实体重载、自动化重复 setTheItem）：
+            // 不能重新开始播放，否则会先发 stop 再发 play，正在下载/播放的音频会被打断，
+            // 客户端封面也会被收回再滑入。
             return;
         }
         MusicPlayerMod.LOGGER.info("Loaded custom music disc into jukebox at {}: trackId={}", pos, discData.trackId());
