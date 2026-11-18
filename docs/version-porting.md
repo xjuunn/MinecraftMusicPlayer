@@ -120,10 +120,11 @@
 
 ### 快照版本（snapshot）
 
-适配快照版本时注意两点：
+适配快照版本时注意三点：
 
 1. `minecraft_version` 填快照全名（如 `26.4-snapshot-5`），用于 Loom 拉取映射；但 `fabric.mod.json` 的 `minecraft` 依赖不能直接写 `~26.4-snapshot-5`。Fabric Loader 会把游戏版本规范化为 `26.4-alpha.5` 形式，`~26.4-snapshot-5` 解析后不匹配，服务器启动会报 `HARD_DEP_INCOMPATIBLE`。因此 `gradle.properties` 另设 `minecraft_dependency=~26.4-`，由 `build.gradle` 的 `processResources` 展开注入。
 2. Loom 版本要求会随快照提高（如 1.19.x 需要 Gradle 9.8+），升级时同步改 `gradle/wrapper/gradle-wrapper.properties` 的 `distributionUrl`。
+3. Fabric API 不一定为每个快照单独发版：`26.4-snapshot-9` 就没有独立构建，版本号直接从 `26.4-snapshot-8` 的 `0.166.2+26.4` 跳到 `26.4-snapshot-10` 的 `0.166.3+26.4`。适配前先按目标快照查 Maven/Modrinth，命中不到时跳到最近的有构建的快照。
 
 ## 数据包 / 资源格式差异
 
@@ -156,6 +157,7 @@
 | 分支 | Minecraft | Java | Fabric API（示例） |
 |---|---|---|---|
 | `master` | 26.4-snapshot-8 | 25 | `0.166.2+26.4` |
+| `26.4-snapshot-10` | 26.4-snapshot-10 | 25 | `0.166.3+26.4` |
 | `26.4-snapshot-8` | 26.4-snapshot-8 | 25 | `0.166.2+26.4` |
 | `26.4-snapshot-7` | 26.4-snapshot-7 | 25 | `0.165.4+26.4` |
 | `26.4-snapshot-5` | 26.4-snapshot-5 | 25 | — |
